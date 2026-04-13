@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}
+    // Fields: uid, email, displayName, photoURL, theme, currency, createdAt
+    //
+    // Collection: /users/{userId}/accounts/{accountId}
+    // Fields: id, userId, name, type, balance, color, lastDigits, createdAt
+    //
+    // Collection: /users/{userId}/transactions/{transactionId}
+    // Fields: id, userId, accountId, type, amount, categoryId, description, date, isRecurring, recurringId
+    //
+    // Collection: /users/{userId}/recurring/{recurringId}
+    // Fields: id, userId, accountId, type, amount, categoryId, description, frequency, startDate, nextOccurrence, isActive
+    //
+    // Collection: /users/{userId}/categories/{categoryId}
+    // Fields: id, userId, name, icon, color
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             data.email is string &&
+             (!('theme' in data) || data.theme in ['light', 'dark']);
+    }
+
+    function isValidAccount(data) {
+      return data.keys().hasAll(['userId', 'name', 'type', 'balance']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.type in ['cash', 'card', 'bank'] &&
+             data.balance is number;
+    }
+
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['userId', 'accountId', 'type', 'amount', 'categoryId', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.type in ['income', 'expense'] &&
+             data.amount is number &&
+             data.accountId is string &&
+             data.categoryId is string &&
+             data.date is string; // ISO string
+    }
+
+    function isValidRecurring(data) {
+      return data.keys().hasAll(['userId', 'accountId', 'type', 'amount', 'categoryId', 'frequency', 'startDate', 'nextOccurrence', 'isActive']) &&
+             data.userId == request.auth.uid &&
+             data.frequency in ['daily', 'weekly', 'monthly', 'yearly'] &&
+             data.isActive is bool;
+    }
+
+    function isValidCategory(data) {
+      return data.keys().hasAll(['userId', 'name', 'icon', 'color']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 50 &&
+             data.icon is string &&
+             data.color is string;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow delete: if false; // Users cannot delete their profile via app
+      
+      match /accounts/{accountId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidAccount(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+      
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidTransaction(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+      
+      match /recurring/{recurringId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidRecurring(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidCategory(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
