@@ -36,7 +36,33 @@ import {
   Moon,
   ChevronDown,
   User as UserIcon,
-  LogIn
+  LogIn,
+  Coffee,
+  Music,
+  Film,
+  Gift,
+  Plane,
+  Briefcase,
+  GraduationCap,
+  Dumbbell,
+  Zap,
+  Smartphone,
+  Wifi,
+  Tv,
+  Droplets,
+  Flame,
+  Shield,
+  Heart,
+  Star,
+  Camera,
+  Book,
+  Globe,
+  ShoppingBag as ShoppingBagIcon,
+  Home as HomeIcon,
+  Car as CarIcon,
+  Utensils as UtensilsIcon,
+  Gamepad as GamepadIcon,
+  HeartPulse as HeartPulseIcon
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -144,7 +170,9 @@ const ACCOUNT_TYPES = [
 // --- Components ---
 
 const IconMap: Record<string, any> = {
-  Wallet, Utensils, Home, Car, Gamepad, HeartPulse, ShoppingBag, MoreHorizontal, CreditCard, Banknote
+  Wallet, Utensils, Home, Car, Gamepad, HeartPulse, ShoppingBag, MoreHorizontal, CreditCard, Banknote,
+  Coffee, Music, Film, Gift, Plane, Briefcase, GraduationCap, Dumbbell, Zap, Smartphone, Wifi, Tv,
+  Droplets, Flame, Shield, Heart, Star, Camera, Book, Globe
 };
 
 export default function App() {
@@ -164,6 +192,8 @@ export default function App() {
   const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'year'>('month');
   const [searchTerm, setSearchTerm] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [notifications, setNotifications] = useState<{id: string, title: string, content: string, date: string, read: boolean}[]>([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   const allCategories = useMemo(() => [...CATEGORIES, ...customCategories], [customCategories]);
 
@@ -437,6 +467,17 @@ export default function App() {
           }
         }
       }
+      
+      // Notification
+      const newNotif = {
+        id: Math.random().toString(36).substr(2, 9),
+        title: editingTransaction ? 'Transacción Actualizada' : 'Nueva Transacción',
+        content: `${txData.type === 'income' ? 'Ingreso' : 'Gasto'} de ${formatCurrency(txData.amount)} registrado correctamente.`,
+        date: new Date().toISOString(),
+        read: false
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+
       setIsModalOpen(false);
       setEditingTransaction(null);
       showToast(editingTransaction ? 'Transacción actualizada' : 'Transacción registrada');
@@ -474,11 +515,22 @@ export default function App() {
     const path = `users/${user.uid}/accounts`;
     try {
       await addDoc(collection(db, path), { ...data, userId: user.uid, createdAt: new Date().toISOString() });
+      
+      const newNotif = {
+        id: Math.random().toString(36).substr(2, 9),
+        title: 'Nueva Cuenta',
+        content: `Cuenta "${data.name}" creada con éxito.`,
+        date: new Date().toISOString(),
+        read: false
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+      
+      setIsModalOpen(false);
+      showToast('Cuenta agregada');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
+      showToast('Error al crear cuenta');
     }
-    setIsModalOpen(false);
-    showToast('Cuenta agregada');
   };
 
   const handleAddCategory = async (data: any) => {
@@ -486,11 +538,22 @@ export default function App() {
     const path = `users/${user.uid}/categories`;
     try {
       await addDoc(collection(db, path), { ...data, userId: user.uid });
+      
+      const newNotif = {
+        id: Math.random().toString(36).substr(2, 9),
+        title: 'Nueva Categoría',
+        content: `Categoría "${data.name}" añadida.`,
+        date: new Date().toISOString(),
+        read: false
+      };
+      setNotifications(prev => [newNotif, ...prev]);
+
+      setIsModalOpen(false);
+      showToast('Categoría agregada');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
+      showToast('Error al crear categoría');
     }
-    setIsModalOpen(false);
-    showToast('Categoría agregada');
   };
 
   if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-bg"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-primary"></div></div>;
@@ -547,13 +610,6 @@ export default function App() {
           </nav>
 
           <div className="p-4 border-t border-border space-y-4">
-            <button 
-              onClick={toggleTheme}
-              className="w-full flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border hover:border-orange-primary/30 transition-all group"
-            >
-              <span className="text-sm font-medium text-text-secondary group-hover:text-text-primary">Tema {theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
-              {theme === 'dark' ? <Sun size={18} className="text-orange-primary" /> : <Moon size={18} className="text-blue-accent" />}
-            </button>
             <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-2 transition-colors cursor-pointer group" onClick={handleLogout}>
               <img src={user.photoURL || ''} className="w-10 h-10 rounded-full border border-border" alt="Profile" />
               <div className="flex-1 min-w-0">
@@ -582,10 +638,48 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-4">
-              <button className="p-2 text-text-secondary hover:text-text-primary transition-colors relative">
-                <Bell size={20} />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-orange-primary rounded-full border-2 border-sidebar"></span>
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="p-2 text-text-secondary hover:text-text-primary transition-colors relative"
+                >
+                  <Bell size={20} />
+                  {notifications.some(n => !n.read) && (
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-orange-primary rounded-full border-2 border-sidebar"></span>
+                  )}
+                </button>
+                <AnimatePresence>
+                  {isNotificationsOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsNotificationsOpen(false)} />
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 mt-2 w-80 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden"
+                      >
+                        <div className="p-4 border-b border-border bg-sidebar/50 flex items-center justify-between">
+                          <h4 className="font-bold text-sm">Notificaciones</h4>
+                          <button onClick={() => setNotifications([])} className="text-[10px] font-bold uppercase tracking-widest text-orange-primary hover:underline">Limpiar</button>
+                        </div>
+                        <div className="max-h-96 overflow-y-auto divide-y divide-border">
+                          {notifications.length === 0 ? (
+                            <div className="p-8 text-center text-text-dim text-xs">No tienes notificaciones nuevas.</div>
+                          ) : (
+                            notifications.map(n => (
+                              <div key={n.id} className="p-4 hover:bg-surface-2 transition-colors cursor-default">
+                                <p className="text-xs font-bold">{n.title}</p>
+                                <p className="text-[10px] text-text-secondary mt-1">{n.content}</p>
+                                <p className="text-[10px] text-text-dim mt-2">{format(parseISO(n.date), 'HH:mm • dd MMM')}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
               <div className="h-6 w-px bg-border mx-2"></div>
               <button 
                 onClick={() => {
@@ -815,6 +909,25 @@ export default function App() {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
+                      <h3 className="font-bold flex items-center gap-2"><Settings size={18} className="text-orange-primary" /> Preferencias</h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-4 bg-surface-2 rounded-xl border border-border">
+                          <div>
+                            <p className="text-sm font-bold">Tema de la aplicación</p>
+                            <p className="text-[10px] text-text-secondary">Cambia entre modo claro y oscuro</p>
+                          </div>
+                          <button 
+                            onClick={toggleTheme}
+                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-3 border border-border hover:border-orange-primary/50 transition-all"
+                          >
+                            {theme === 'dark' ? <Sun size={16} className="text-orange-primary" /> : <Moon size={16} className="text-blue-accent" />}
+                            <span className="text-xs font-bold">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
                       <h3 className="font-bold flex items-center gap-2"><UserIcon size={18} className="text-orange-primary" /> Perfil</h3>
                       <div className="flex items-center gap-4 p-4 bg-surface-2 rounded-xl border border-border">
                         <img src={user.photoURL || ''} className="w-16 h-16 rounded-full border-2 border-orange-primary/20" alt="Profile" />
@@ -890,37 +1003,44 @@ export default function App() {
                       <label className="flex-1 cursor-pointer"><input type="radio" name="type" value="income" defaultChecked={editingTransaction?.type === 'income'} className="sr-only peer" /><div className="py-2 text-center rounded-lg text-sm font-bold transition-all peer-checked:bg-green-accent peer-checked:text-white text-text-secondary">Ingreso</div></label>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto</label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} /><input required name="amount" type="number" step="0.01" defaultValue={editingTransaction?.amount} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
+                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto</label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} /><input required name="amount" type="number" step="0.01" defaultValue={editingTransaction?.amount || 0} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Fecha</label><div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} /><input required name="date" type="date" defaultValue={editingTransaction ? format(parseISO(editingTransaction.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Cuenta</label><select required name="accountId" defaultValue={editingTransaction?.accountId} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}</select></div>
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Categoría</label><CategorySelect name="categoryId" defaultValue={editingTransaction?.categoryId} categories={allCategories} /></div>
                     </div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción</label><textarea name="description" required defaultValue={editingTransaction?.description} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" defaultValue={editingTransaction?.description} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
                     
                     {!editingTransaction && (
-                      <div className="space-y-4 p-4 bg-surface-2 rounded-xl border border-border">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                          <input type="checkbox" name="isRecurring" className="w-4 h-4 rounded border-border text-orange-primary focus:ring-orange-primary" />
-                          <span className="text-sm font-bold">¿Es un movimiento recurrente?</span>
+                      <div className="space-y-4 p-5 bg-surface-2 rounded-2xl border border-border relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10"><Repeat size={40} className="text-orange-primary" /></div>
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                          <input type="checkbox" name="isRecurring" className="w-5 h-5 rounded-lg border-border text-orange-primary focus:ring-orange-primary transition-all" />
+                          <span className="text-sm font-bold group-hover:text-orange-primary transition-colors">¿Convertir en movimiento recurrente?</span>
                         </label>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-4 pt-2">
                           <div className="space-y-1.5">
                             <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Frecuencia</label>
-                            <select name="frequency" className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-xs focus:outline-none focus:border-orange-primary/50">
-                              <option value="daily">Diario</option>
-                              <option value="weekly">Semanal</option>
-                              <option value="monthly">Mensual</option>
-                              <option value="yearly">Anual</option>
-                            </select>
+                            <div className="relative">
+                              <select name="frequency" className="w-full bg-surface border border-border rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
+                                <option value="daily">Cada día</option>
+                                <option value="weekly">Cada semana</option>
+                                <option value="monthly">Cada mes</option>
+                                <option value="yearly">Cada año</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+                            </div>
                           </div>
                           <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Notificar</label>
-                            <select name="notify" className="w-full bg-surface border border-border rounded-lg py-2 px-3 text-xs focus:outline-none focus:border-orange-primary/50">
-                              <option value="true">Sí</option>
-                              <option value="false">No</option>
-                            </select>
+                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Notificaciones</label>
+                            <div className="relative">
+                              <select name="notify" className="w-full bg-surface border border-border rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
+                                <option value="true">Activadas</option>
+                                <option value="false">Desactivadas</option>
+                              </select>
+                              <Bell size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -942,12 +1062,13 @@ export default function App() {
                     <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre de la Cuenta</label><input required name="name" placeholder="ej. Mi Visa, Efectivo Ahorros..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo</label><select name="type" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">{ACCOUNT_TYPES.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}</select></div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Saldo Inicial</label><input required name="balance" type="number" step="0.01" placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
+                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Saldo Inicial</label><input required name="balance" type="number" step="0.01" defaultValue={0} placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Últimos 4 dígitos</label><input name="lastDigits" maxLength={4} placeholder="Opcional" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#FF5C1A" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
                     </div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Cuenta</button></div>
                   </form>
                 ) : (
@@ -961,15 +1082,24 @@ export default function App() {
                     });
                   }} className="p-6 space-y-6">
                     <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre de la Categoría</label><input required name="name" placeholder="ej. Gimnasio, Mascotas..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Icono</label>
-                        <select name="icon" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
-                          {Object.keys(IconMap).map(iconName => <option key={iconName} value={iconName}>{iconName}</option>)}
-                        </select>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Icono</label>
+                      <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-2 bg-surface-2 border border-border rounded-xl custom-scrollbar">
+                        {Object.keys(IconMap).map(iconName => {
+                          const Icon = IconMap[iconName];
+                          return (
+                            <label key={iconName} className="cursor-pointer group">
+                              <input type="radio" name="icon" value={iconName} defaultChecked={iconName === 'Wallet'} className="sr-only peer" />
+                              <div className="aspect-square rounded-lg flex items-center justify-center border border-transparent peer-checked:border-orange-primary peer-checked:bg-orange-primary/10 hover:bg-surface-3 transition-all">
+                                <Icon size={18} className="text-text-dim group-hover:text-text-primary peer-checked:text-orange-primary" />
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#A855F7" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
                     </div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#A855F7" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Categoría</button></div>
                   </form>
                 )}

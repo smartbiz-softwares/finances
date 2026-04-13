@@ -7,6 +7,7 @@ export interface Category {
   name: string;
   icon: string;
   color: string;
+  description?: string;
 }
 
 export interface Account {
@@ -17,6 +18,7 @@ export interface Account {
   balance: number;
   color: string;
   lastDigits?: string;
+  description?: string;
   createdAt: string;
 }
 
