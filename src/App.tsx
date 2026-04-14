@@ -179,6 +179,29 @@ const IconMap: Record<string, any> = {
   Droplets, Flame, Shield, Heart, Star, Camera, Book, Globe
 };
 
+function AppLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+  const sizes = {
+    sm: { container: 'w-8 h-8', icon: 18, text: 'text-lg' },
+    md: { container: 'w-10 h-10', icon: 24, text: 'text-xl' },
+    lg: { container: 'w-20 h-20', icon: 40, text: 'text-4xl' }
+  };
+  
+  return (
+    <div className="flex items-center gap-3">
+      <div className={cn(sizes[size].container, "bg-orange-primary rounded-xl flex items-center justify-center shadow-lg shadow-orange-primary/20 relative overflow-hidden group")}>
+        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        <Target size={sizes[size].icon} className="text-white relative z-10" />
+      </div>
+      {size !== 'lg' && (
+        <div>
+          <h1 className={cn("font-display font-bold tracking-tight", sizes[size].text)}>Hera</h1>
+          <span className="text-[10px] uppercase tracking-widest text-orange-secondary font-bold">Smart Finance</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -419,30 +442,43 @@ export default function App() {
     if (!user || transactions.length === 0) return;
     
     const newNotifs: any[] = [];
+    const sessionAlerts = (window as any).hera_session_alerts || new Set();
     
     // 1. Category Limits
     allCategories.forEach(c => {
       if (c.budgetLimit) {
         const spent = transactions.filter(t => t.categoryId === c.id && t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
         if (spent > c.budgetLimit) {
+          const alertId = `limit-exceeded-${c.id}`;
           newNotifs.push({
-            id: `limit-exceeded-${c.id}`,
+            id: alertId,
             title: 'Límite Excedido',
             content: `Has superado el presupuesto de ${c.name} (${formatCurrency(spent)} / ${formatCurrency(c.budgetLimit)})`,
             date: new Date().toISOString(),
             read: false
           });
-        } else if (spent > c.budgetLimit * 0.9) {
+          if (!sessionAlerts.has(alertId)) {
+            showToast(`⚠️ ¡Presupuesto excedido en ${c.name}!`);
+            sessionAlerts.add(alertId);
+          }
+        } else if (spent > c.budgetLimit * 0.8) {
+          const alertId = `limit-approaching-${c.id}`;
           newNotifs.push({
-            id: `limit-approaching-${c.id}`,
+            id: alertId,
             title: 'Límite Cercano',
             content: `Estás por alcanzar el presupuesto de ${c.name} (${formatCurrency(spent)} / ${formatCurrency(c.budgetLimit)})`,
             date: new Date().toISOString(),
             read: false
           });
+          if (!sessionAlerts.has(alertId)) {
+            showToast(`💡 Estás cerca del límite en ${c.name}`);
+            sessionAlerts.add(alertId);
+          }
         }
       }
     });
+
+    (window as any).hera_session_alerts = sessionAlerts;
 
     // 2. Negative Accounts
     accounts.forEach(a => {
@@ -678,26 +714,30 @@ export default function App() {
 
   const handleDeleteCategory = async (id: string) => {
     if (!user || !profile) return;
-    if (confirm('¿Estás seguro de eliminar esta categoría?')) {
-      const isDefault = CATEGORIES.some(c => c.id === id);
-      if (isDefault) {
-        // Add to hiddenCategories in profile
-        const newHidden = [...(profile.hiddenCategories || []), id];
-        try {
-          await updateDoc(doc(db, `users/${user.uid}`), { hiddenCategories: newHidden });
-          setProfile({ ...profile, hiddenCategories: newHidden });
-          showToast('Categoría eliminada');
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
-        }
-      } else {
-        const path = `users/${user.uid}/categories/${id}`;
-        try {
-          await deleteDoc(doc(db, path));
-          showToast('Categoría eliminada');
-        } catch (err) {
-          handleFirestoreError(err, OperationType.DELETE, path);
-        }
+    
+    // Custom confirmation dialog instead of window.confirm
+    const confirmed = window.confirm('¿Estás seguro de eliminar esta categoría?');
+    if (!confirmed) return;
+
+    const isDefault = CATEGORIES.some(c => c.id === id);
+    if (isDefault) {
+      // Add to hiddenCategories in profile
+      const newHidden = [...(profile.hiddenCategories || []), id];
+      try {
+        await updateDoc(doc(db, `users/${user.uid}`), { hiddenCategories: newHidden });
+        setProfile({ ...profile, hiddenCategories: newHidden });
+        showToast('Categoría ocultada');
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+      }
+    } else {
+      const path = `users/${user.uid}/categories/${id}`;
+      try {
+        await deleteDoc(doc(db, path));
+        setCustomCategories(prev => prev.filter(c => c.id !== id));
+        showToast('Categoría eliminada');
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, path);
       }
     }
   };
@@ -712,8 +752,8 @@ export default function App() {
           animate={{ opacity: 1, y: 0 }}
           className="max-w-md w-full bg-surface border border-border p-10 rounded-3xl text-center space-y-8 shadow-2xl"
         >
-          <div className="w-20 h-20 bg-orange-primary mx-auto rounded-3xl flex items-center justify-center shadow-2xl shadow-orange-primary/30">
-            <Wallet className="text-white w-10 h-10" />
+          <div className="mx-auto flex justify-center">
+            <AppLogo size="lg" />
           </div>
           <div className="space-y-2">
             <h1 className="text-4xl font-display font-bold tracking-tight">Hera</h1>
@@ -736,14 +776,8 @@ export default function App() {
     <div className={cn("flex h-screen bg-bg text-text-primary overflow-hidden font-sans transition-colors duration-300", theme)}>
         {/* Sidebar */}
         <aside className="hidden lg:flex w-64 bg-sidebar border-r border-border flex-col z-20">
-          <div className="p-6 border-b border-border flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-primary rounded-xl flex items-center justify-center shadow-lg shadow-orange-primary/20">
-              <Wallet className="text-white w-6 h-6" />
-            </div>
-            <div>
-              <h1 className="font-display font-bold text-xl tracking-tight">Hera</h1>
-              <span className="text-[10px] uppercase tracking-widest text-orange-secondary font-bold">Smart Finance</span>
-            </div>
+          <div className="p-6 border-b border-border">
+            <AppLogo />
           </div>
 
           <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
@@ -943,10 +977,17 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
                     <KPICard title="Saldo Total" value={formatCurrency(totalBalance)} trend="up" color="blue" icon={<Wallet size={24} />} />
                     <KPICard title="Ingresos" value={formatCurrency(totalIncome)} trend="up" color="green" icon={<ArrowUpRight size={24} />} />
                     <KPICard title="Gastos" value={formatCurrency(totalExpenses)} trend="down" color="red" icon={<ArrowDownLeft size={24} />} />
+                    <KPICard 
+                      title="Tasa de Ahorro" 
+                      value={`${totalIncome > 0 ? Math.max(0, Math.round(((totalIncome - totalExpenses) / totalIncome) * 100)) : 0}%`} 
+                      trend={totalIncome - totalExpenses > 0 ? 'up' : 'down'} 
+                      color="orange" 
+                      icon={<TrendingUp size={24} />} 
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -988,17 +1029,83 @@ export default function App() {
                         />
                       </div>
 
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="bg-surface border border-border rounded-2xl p-6">
+                          <h3 className="font-bold text-sm mb-6 flex items-center gap-2"><TrendingDown size={16} className="text-red-accent" /> Mayores Gastos</h3>
+                          <div className="space-y-4">
+                            {getPieData(filteredTransactions.filter(t => t.type === 'expense'))
+                              .sort((a, b) => b.value - a.value)
+                              .slice(0, 4)
+                              .map((item, i) => (
+                                <div key={i} className="flex items-center justify-between group">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${item.color}15`, color: item.color }}>
+                                      {(() => {
+                                        const cat = allCategories.find(c => c.name === item.name);
+                                        const Icon = IconMap[cat?.icon || 'Tag'] || Tag;
+                                        return <Icon size={16} />;
+                                      })()}
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-bold">{item.name}</p>
+                                      <div className="w-24 h-1 bg-surface-2 rounded-full mt-1 overflow-hidden">
+                                        <div className="h-full bg-red-accent/50" style={{ width: `${(item.value / totalExpenses) * 100}%` }} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs font-bold">{formatCurrency(item.value)}</p>
+                                    <p className="text-[10px] text-text-dim">{Math.round((item.value / totalExpenses) * 100)}% del total</p>
+                                  </div>
+                                </div>
+                              ))}
+                            {totalExpenses === 0 && <p className="text-center text-text-dim text-xs py-4 italic">Sin gastos registrados</p>}
+                          </div>
+                        </div>
+
+                        <div className="bg-surface border border-border rounded-2xl p-6">
+                          <h3 className="font-bold text-sm mb-6 flex items-center gap-2"><Calendar size={16} className="text-blue-accent" /> Próximos Pagos</h3>
+                          <div className="space-y-4">
+                            {recurring.filter(r => r.type === 'expense').slice(0, 4).map((r, i) => {
+                              const cat = allCategories.find(c => c.id === r.categoryId);
+                              const Icon = IconMap[cat?.icon || 'Tag'] || Tag;
+                              return (
+                                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border hover:border-blue-accent/30 transition-all">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat?.color || '#7A7874'}15`, color: cat?.color || '#7A7874' }}>
+                                      <Icon size={16} />
+                                    </div>
+                                    <div>
+                                      <p className="text-xs font-bold">{r.description}</p>
+                                      <p className="text-[10px] text-text-dim capitalize">{r.frequency}</p>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs font-bold text-red-accent">-{formatCurrency(r.amount)}</p>
+                                </div>
+                              );
+                            })}
+                            {recurring.length === 0 && <p className="text-center text-text-dim text-xs py-4 italic">No hay pagos recurrentes</p>}
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="bg-surface border border-border rounded-2xl overflow-hidden">
                         <div className="p-6 border-b border-border flex items-center justify-between">
                           <h3 className="font-bold">Transacciones Recientes</h3>
                           <button onClick={() => setActiveView('transactions')} className="text-xs text-orange-primary font-bold hover:underline">Ver todo</button>
                         </div>
-                        <div className="divide-y divide-border">
-                          {filteredTransactions.slice(0, 5).map((t) => (
-                            <TransactionItem key={t.id} transaction={t} accounts={accounts} categories={allCategories} onEdit={() => { setEditingTransaction(t); setModalType('transaction'); setIsModalOpen(true); }} onDelete={() => handleDeleteTransaction(t)} />
-                          ))}
-                          {filteredTransactions.length === 0 && <div className="p-12 text-center text-text-dim">No hay movimientos recientes.</div>}
-                        </div>
+                          <div className="divide-y divide-border">
+                            {filteredTransactions.slice(0, 5).map((t) => (
+                              <TransactionItem 
+                                key={t.id} 
+                                transaction={t} 
+                                accounts={accounts} 
+                                categories={allCategories} 
+                                onClick={() => setSelectedTransactionDetails(t)} 
+                              />
+                            ))}
+                            {filteredTransactions.length === 0 && <div className="p-12 text-center text-text-dim">No hay movimientos recientes.</div>}
+                          </div>
                       </div>
                     </div>
 
@@ -1337,6 +1444,24 @@ export default function App() {
                     </div>
 
                     <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
+                      <h3 className="font-bold flex items-center gap-2"><Lightbulb size={18} className="text-orange-primary" /> Productividad</h3>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-2">
+                          <p className="text-xs font-bold text-orange-primary uppercase tracking-widest">Consejo de Uso</p>
+                          <p className="text-sm leading-relaxed">Usa la barra de búsqueda para encontrar rápidamente transacciones por nombre, categoría o cuenta. ¡Incluso puedes buscar por monto!</p>
+                        </div>
+                        <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-2">
+                          <p className="text-xs font-bold text-blue-accent uppercase tracking-widest">Atajos</p>
+                          <p className="text-sm leading-relaxed">Toca cualquier transacción para ver sus detalles y acceder rápidamente a las opciones de edición o eliminación.</p>
+                        </div>
+                        <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-2">
+                          <p className="text-xs font-bold text-green-accent uppercase tracking-widest">Presupuestos</p>
+                          <p className="text-sm leading-relaxed">Establece límites en tus categorías para que Hera te avise cuando estés cerca de superarlos.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
                       <h3 className="font-bold flex items-center gap-2"><UserIcon size={18} className="text-orange-primary" /> Perfil</h3>
                       <div className="flex items-center gap-4 p-4 bg-surface-2 rounded-xl border border-border">
                         <img src={user.photoURL || ''} className="w-16 h-16 rounded-full border-2 border-orange-primary/20" alt="Profile" />
@@ -1466,9 +1591,26 @@ export default function App() {
                       name: fd.get('name'),
                       icon: fd.get('icon'),
                       color: fd.get('color'),
+                      budgetType: fd.get('budgetType'),
+                      budgetLimit: Number(fd.get('budgetLimit')) || undefined,
                     });
                   }} className="p-6 space-y-6">
                     <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre de la Categoría</label><input required name="name" placeholder="ej. Gimnasio, Mascotas..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo de Presupuesto</label>
+                        <select name="budgetType" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">
+                          <option value="">Ninguno</option>
+                          <option value="need">Necesidad</option>
+                          <option value="want">Deseo</option>
+                          <option value="saving">Ahorro</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Límite Mensual</label>
+                        <input name="budgetLimit" type="number" placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" />
+                      </div>
+                    </div>
                     <div className="space-y-1.5">
                       <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Icono</label>
                       <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-2 bg-surface-2 border border-border rounded-xl custom-scrollbar">
