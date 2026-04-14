@@ -37,16 +37,16 @@
   }
 
   :root.light {
-    --bg: #F8F9FA;
-    --sidebar: #FFFFFF;
+    --bg: #FDFDFD;
+    --sidebar: #F8F9FA;
     --surface: #FFFFFF;
     --surface-2: #F1F3F5;
     --surface-3: #E9ECEF;
-    --border: rgba(0, 0, 0, 0.06);
-    --border-2: rgba(0, 0, 0, 0.1);
-    --text-primary: #212529;
-    --text-secondary: #495057;
-    --text-dim: #ADB5BD;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-2: rgba(0, 0, 0, 0.12);
+    --text-primary: #1A1A1C;
+    --text-secondary: #5C5C5E;
+    --text-dim: #9A9A9C;
   }
 
   body {

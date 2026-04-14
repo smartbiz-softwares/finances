@@ -8,6 +8,8 @@ export interface Category {
   icon: string;
   color: string;
   description?: string;
+  budgetLimit?: number;
+  budgetType?: 'need' | 'want' | 'saving';
 }
 
 export interface Account {
@@ -63,5 +65,6 @@ export interface UserProfile {
   photoURL?: string;
   theme: 'light' | 'dark';
   currency: string;
+  hiddenCategories?: string[];
   createdAt: string;
 }

@@ -16,6 +16,7 @@ import {
   Sparkles,
   TrendingUp,
   TrendingDown,
+  Tag,
   DollarSign,
   Filter,
   Download,
@@ -35,6 +36,8 @@ import {
   Sun,
   Moon,
   ChevronDown,
+  Trash2,
+  Target,
   User as UserIcon,
   LogIn,
   Coffee,
@@ -76,7 +79,8 @@ import {
   PieChart as RePieChart,
   Pie,
   AreaChart,
-  Area
+  Area,
+  Legend
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfYear, endOfYear, parseISO } from 'date-fns';
@@ -179,7 +183,7 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'transactions' | 'accounts' | 'recurring' | 'settings'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'transactions' | 'accounts' | 'recurring' | 'categories' | 'settings'>('dashboard');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
@@ -194,8 +198,68 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [notifications, setNotifications] = useState<{id: string, title: string, content: string, date: string, read: boolean}[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isRecurringChecked, setIsRecurringChecked] = useState(false);
+  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
+  const [selectedTransactionDetails, setSelectedTransactionDetails] = useState<Transaction | null>(null);
+  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
+    const saved = localStorage.getItem('hera_search_history');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [filters, setFilters] = useState({
+    type: 'all' as 'all' | 'income' | 'expense',
+    accountId: 'all',
+    categoryId: 'all',
+    minAmount: '',
+    maxAmount: '',
+    dateRange: 'all' as 'all' | 'day' | 'week' | 'month' | 'year'
+  });
 
-  const allCategories = useMemo(() => [...CATEGORIES, ...customCategories], [customCategories]);
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filters.type === 'all' || t.type === filters.type;
+      const matchesAccount = filters.accountId === 'all' || t.accountId === filters.accountId;
+      const matchesCategory = filters.categoryId === 'all' || t.categoryId === filters.categoryId;
+      const matchesMinAmount = !filters.minAmount || t.amount >= Number(filters.minAmount);
+      const matchesMaxAmount = !filters.maxAmount || t.amount <= Number(filters.maxAmount);
+      
+      let matchesDate = true;
+      const tDate = parseISO(t.date);
+      if (filters.dateRange === 'day') matchesDate = isWithinInterval(tDate, { start: startOfDay(new Date()), end: endOfDay(new Date()) });
+      else if (filters.dateRange === 'week') matchesDate = isWithinInterval(tDate, { start: startOfWeek(new Date()), end: endOfWeek(new Date()) });
+      else if (filters.dateRange === 'month') matchesDate = isWithinInterval(tDate, { start: startOfMonth(new Date()), end: endOfMonth(new Date()) });
+      else if (filters.dateRange === 'year') matchesDate = isWithinInterval(tDate, { start: startOfYear(new Date()), end: endOfYear(new Date()) });
+
+      return matchesSearch && matchesType && matchesAccount && matchesCategory && matchesMinAmount && matchesMaxAmount && matchesDate;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, searchTerm, filters]);
+
+  useEffect(() => {
+    localStorage.setItem('hera_search_history', JSON.stringify(searchHistory));
+  }, [searchHistory]);
+
+  const addToSearchHistory = (term: string) => {
+    if (!term.trim()) return;
+    setSearchHistory(prev => {
+      const filtered = prev.filter(t => t !== term);
+      return [term, ...filtered].slice(0, 10); // Keep 10, but user wants scrollable after 5
+    });
+  };
+
+  const allCategories = useMemo(() => {
+    const merged = [...CATEGORIES];
+    customCategories.forEach(cc => {
+      const index = merged.findIndex(c => c.id === cc.id);
+      if (index !== -1) {
+        merged[index] = { ...merged[index], ...cc };
+      } else {
+        merged.push(cc);
+      }
+    });
+    // Filter out hidden categories
+    return merged.filter(c => !profile?.hiddenCategories?.includes(c.id));
+  }, [customCategories, profile?.hiddenCategories]);
 
   // Auth Listener
   useEffect(() => {
@@ -343,32 +407,93 @@ export default function App() {
     });
   }, [recurring, user, accounts]);
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const date = parseISO(t.date);
-      let start, end;
-      const now = new Date();
 
-      switch (timeRange) {
-        case 'day': start = startOfDay(now); end = endOfDay(now); break;
-        case 'week': start = startOfWeek(now, { weekStartsOn: 1 }); end = endOfWeek(now, { weekStartsOn: 1 }); break;
-        case 'month': start = startOfMonth(now); end = endOfMonth(now); break;
-        case 'year': start = startOfYear(now); end = endOfYear(now); break;
-        default: return true;
-      }
-      
-      const inRange = isWithinInterval(date, { start, end });
-      const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                           allCategories.find(c => c.id === t.categoryId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      return inRange && matchesSearch;
-    });
-  }, [transactions, timeRange, searchTerm, allCategories]);
 
   const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
   const totalExpenses = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
   const balance = totalIncome - totalExpenses;
   const totalBalance = accounts.reduce((acc, a) => acc + a.balance, 0);
+
+  // Notification Logic
+  useEffect(() => {
+    if (!user || transactions.length === 0) return;
+    
+    const newNotifs: any[] = [];
+    
+    // 1. Category Limits
+    allCategories.forEach(c => {
+      if (c.budgetLimit) {
+        const spent = transactions.filter(t => t.categoryId === c.id && t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+        if (spent > c.budgetLimit) {
+          newNotifs.push({
+            id: `limit-exceeded-${c.id}`,
+            title: 'Límite Excedido',
+            content: `Has superado el presupuesto de ${c.name} (${formatCurrency(spent)} / ${formatCurrency(c.budgetLimit)})`,
+            date: new Date().toISOString(),
+            read: false
+          });
+        } else if (spent > c.budgetLimit * 0.9) {
+          newNotifs.push({
+            id: `limit-approaching-${c.id}`,
+            title: 'Límite Cercano',
+            content: `Estás por alcanzar el presupuesto de ${c.name} (${formatCurrency(spent)} / ${formatCurrency(c.budgetLimit)})`,
+            date: new Date().toISOString(),
+            read: false
+          });
+        }
+      }
+    });
+
+    // 2. Negative Accounts
+    accounts.forEach(a => {
+      if (a.balance < 0) {
+        newNotifs.push({
+          id: `negative-account-${a.id}`,
+          title: 'Cuenta en Negativo',
+          content: `Tu cuenta "${a.name}" tiene un saldo negativo de ${formatCurrency(a.balance)}`,
+          date: new Date().toISOString(),
+          read: false
+        });
+      }
+    });
+
+    // 3. 50/30/20 Limits
+    const needsActual = transactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'need').reduce((acc, t) => acc + t.amount, 0);
+    const wantsActual = transactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'want').reduce((acc, t) => acc + t.amount, 0);
+    const savingsActual = transactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'saving').reduce((acc, t) => acc + t.amount, 0);
+
+    const needsTarget = totalIncome * 0.5;
+    const wantsTarget = totalIncome * 0.3;
+    const savingsTarget = totalIncome * 0.2;
+
+    if (needsActual > needsTarget && totalIncome > 0) {
+      newNotifs.push({ id: '50-30-20-needs', title: 'Regla 50/30/20', content: 'Has excedido el 50% recomendado para Necesidades.', date: new Date().toISOString(), read: false });
+    }
+    if (wantsActual > wantsTarget && totalIncome > 0) {
+      newNotifs.push({ id: '50-30-20-wants', title: 'Regla 50/30/20', content: 'Has excedido el 30% recomendado para Deseos.', date: new Date().toISOString(), read: false });
+    }
+    if (savingsActual > savingsTarget && totalIncome > 0) {
+      newNotifs.push({ id: '50-30-20-savings', title: 'Regla 50/30/20', content: 'Has excedido el 20% recomendado para Ahorro/Deuda.', date: new Date().toISOString(), read: false });
+    }
+
+    // Filter out existing notifications to avoid duplicates
+    const finalNotifs = newNotifs.filter(nn => !notifications.some(n => n.id === nn.id));
+    if (finalNotifs.length > 0) {
+      setNotifications(prev => [...finalNotifs, ...prev]);
+    }
+  }, [transactions, accounts, allCategories, totalIncome]);
+
+  const getPieData = (txs: Transaction[]) => {
+    const groups: Record<string, { name: string, value: number, color: string }> = {};
+    txs.forEach(t => {
+      const cat = allCategories.find(c => c.id === t.categoryId) || { name: 'Otros', color: '#7A7874' };
+      if (!groups[t.categoryId]) {
+        groups[t.categoryId] = { name: cat.name, value: 0, color: cat.color };
+      }
+      groups[t.categoryId].value += t.amount;
+    });
+    return Object.values(groups);
+  };
 
   const handleLogin = () => signInWithPopup(auth, googleProvider);
   const handleLogout = () => signOut(auth);
@@ -391,6 +516,10 @@ export default function App() {
     try {
       const { isRecurring, frequency, notify, ...txData } = data;
       
+      if (!txData.description || txData.description.trim() === '') {
+        txData.description = txData.type === 'income' ? 'Ingreso' : 'Gasto';
+      }
+
       if (editingTransaction) {
         // Reverse old balance impact
         const oldAccount = accounts.find(a => a.id === editingTransaction.accountId);
@@ -468,16 +597,6 @@ export default function App() {
         }
       }
       
-      // Notification
-      const newNotif = {
-        id: Math.random().toString(36).substr(2, 9),
-        title: editingTransaction ? 'Transacción Actualizada' : 'Nueva Transacción',
-        content: `${txData.type === 'income' ? 'Ingreso' : 'Gasto'} de ${formatCurrency(txData.amount)} registrado correctamente.`,
-        date: new Date().toISOString(),
-        read: false
-      };
-      setNotifications(prev => [newNotif, ...prev]);
-
       setIsModalOpen(false);
       setEditingTransaction(null);
       showToast(editingTransaction ? 'Transacción actualizada' : 'Transacción registrada');
@@ -516,15 +635,6 @@ export default function App() {
     try {
       await addDoc(collection(db, path), { ...data, userId: user.uid, createdAt: new Date().toISOString() });
       
-      const newNotif = {
-        id: Math.random().toString(36).substr(2, 9),
-        title: 'Nueva Cuenta',
-        content: `Cuenta "${data.name}" creada con éxito.`,
-        date: new Date().toISOString(),
-        read: false
-      };
-      setNotifications(prev => [newNotif, ...prev]);
-      
       setIsModalOpen(false);
       showToast('Cuenta agregada');
     } catch (err) {
@@ -539,20 +649,56 @@ export default function App() {
     try {
       await addDoc(collection(db, path), { ...data, userId: user.uid });
       
-      const newNotif = {
-        id: Math.random().toString(36).substr(2, 9),
-        title: 'Nueva Categoría',
-        content: `Categoría "${data.name}" añadida.`,
-        date: new Date().toISOString(),
-        read: false
-      };
-      setNotifications(prev => [newNotif, ...prev]);
-
       setIsModalOpen(false);
       showToast('Categoría agregada');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
       showToast('Error al crear categoría');
+    }
+  };
+
+  const handleUpdateCategory = async (id: string, data: Partial<Category>) => {
+    if (!user) return;
+    const path = `users/${user.uid}/categories/${id}`;
+    try {
+      // Check if it's a default category
+      const isDefault = CATEGORIES.some(c => c.id === id);
+      if (isDefault) {
+        // If it's default, we save it as a custom override in the categories collection
+        const defaultCat = CATEGORIES.find(c => c.id === id)!;
+        await setDoc(doc(db, `users/${user.uid}/categories`, id), { ...defaultCat, ...data, userId: user.uid });
+      } else {
+        await updateDoc(doc(db, path), data);
+      }
+      showToast('Categoría actualizada');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    if (!user || !profile) return;
+    if (confirm('¿Estás seguro de eliminar esta categoría?')) {
+      const isDefault = CATEGORIES.some(c => c.id === id);
+      if (isDefault) {
+        // Add to hiddenCategories in profile
+        const newHidden = [...(profile.hiddenCategories || []), id];
+        try {
+          await updateDoc(doc(db, `users/${user.uid}`), { hiddenCategories: newHidden });
+          setProfile({ ...profile, hiddenCategories: newHidden });
+          showToast('Categoría eliminada');
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+        }
+      } else {
+        const path = `users/${user.uid}/categories/${id}`;
+        try {
+          await deleteDoc(doc(db, path));
+          showToast('Categoría eliminada');
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, path);
+        }
+      }
     }
   };
 
@@ -587,9 +733,9 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-bg text-text-primary overflow-hidden font-sans transition-colors duration-300">
+    <div className={cn("flex h-screen bg-bg text-text-primary overflow-hidden font-sans transition-colors duration-300", theme)}>
         {/* Sidebar */}
-        <aside className="w-64 bg-sidebar border-r border-border flex flex-col z-20">
+        <aside className="hidden lg:flex w-64 bg-sidebar border-r border-border flex-col z-20">
           <div className="p-6 border-b border-border flex items-center gap-3">
             <div className="w-10 h-10 bg-orange-primary rounded-xl flex items-center justify-center shadow-lg shadow-orange-primary/20">
               <Wallet className="text-white w-6 h-6" />
@@ -605,6 +751,7 @@ export default function App() {
             <NavItem icon={<ArrowUpRight size={20} />} label="Transacciones" active={activeView === 'transactions'} onClick={() => setActiveView('transactions')} />
             <NavItem icon={<CreditCard size={20} />} label="Mis Cuentas" active={activeView === 'accounts'} onClick={() => setActiveView('accounts')} />
             <NavItem icon={<Repeat size={20} />} label="Programados" active={activeView === 'recurring'} onClick={() => setActiveView('recurring')} />
+            <NavItem icon={<Tag size={20} />} label="Categorías" active={activeView === 'categories'} onClick={() => setActiveView('categories')} />
             <div className="pt-6 pb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-text-dim">Preferencias</div>
             <NavItem icon={<Settings size={20} />} label="Configuración" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
           </nav>
@@ -622,18 +769,101 @@ export default function App() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 flex flex-col min-w-0 relative">
-          <header className="h-16 border-b border-border bg-sidebar/50 backdrop-blur-md flex items-center justify-between px-8 sticky top-0 z-10">
+        <main className="flex-1 flex flex-col min-w-0 relative pb-20 lg:pb-0">
+          <header className="h-16 border-b border-border bg-sidebar/50 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 sticky top-0 z-10">
             <div className="flex items-center gap-4 flex-1 max-w-xl">
+              <div className="lg:hidden">
+                <div className="w-8 h-8 bg-orange-primary rounded-lg flex items-center justify-center">
+                  <Wallet className="text-white w-5 h-5" />
+                </div>
+              </div>
               <div className="relative w-full group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-orange-primary transition-colors" size={16} />
                 <input 
                   type="text" 
                   value={searchTerm}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      addToSearchHistory(searchTerm);
+                      setActiveView('transactions');
+                    }
+                  }}
                   placeholder="Buscar transacciones, categorías..." 
                   className="w-full bg-surface-2 border border-border rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50 transition-all"
                 />
+                <AnimatePresence>
+                  {isSearchFocused && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[400px] flex flex-col"
+                    >
+                      <div className="overflow-y-auto custom-scrollbar p-2 space-y-1">
+                        {!searchTerm && searchHistory.length > 0 && (
+                          <div className="pb-2">
+                            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-text-dim">Recientes</p>
+                            {searchHistory.map((h, i) => (
+                              <button key={i} onClick={() => { setSearchTerm(h); addToSearchHistory(h); setActiveView('transactions'); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors">
+                                <Repeat size={14} className="text-text-dim" />
+                                <span>{h}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {searchTerm && (
+                          <>
+                            {/* Matching Transactions */}
+                            {transactions.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 5).map(t => (
+                              <button key={t.id} onClick={() => { setSelectedTransactionDetails(t); addToSearchHistory(searchTerm); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors text-left">
+                                <div className="w-8 h-8 rounded-lg bg-orange-primary/10 text-orange-primary flex items-center justify-center shrink-0"><ArrowUpRight size={14} /></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold truncate">{t.description}</p>
+                                  <p className="text-[10px] text-text-dim truncate">{format(parseISO(t.date), 'dd MMM yyyy')}</p>
+                                </div>
+                                <span className="font-bold text-xs">{formatCurrency(t.amount)}</span>
+                              </button>
+                            ))}
+                            {/* Matching Categories */}
+                            {allCategories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => {
+                              const Icon = IconMap[c.icon] || Tag;
+                              return (
+                                <button key={c.id} onClick={() => { setActiveView('categories'); addToSearchHistory(searchTerm); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors text-left">
+                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${c.color}15`, color: c.color }}><Icon size={14} /></div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold truncate">{c.name}</p>
+                                    <p className="text-[10px] text-text-dim truncate">Categoría</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                            {/* Matching Accounts */}
+                            {accounts.filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase())).map(a => (
+                              <button key={a.id} onClick={() => { setActiveView('accounts'); addToSearchHistory(searchTerm); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors text-left">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${a.color}15`, color: a.color }}><CreditCard size={14} /></div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-bold truncate">{a.name}</p>
+                                  <p className="text-[10px] text-text-dim truncate">Cuenta</p>
+                                </div>
+                              </button>
+                            ))}
+                          </>
+                        )}
+                        {!searchTerm && searchHistory.length === 0 && (
+                          <div className="p-8 text-center text-text-dim text-xs italic">Escribe para buscar...</div>
+                        )}
+                        {searchTerm && transactions.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && 
+                         allCategories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
+                         accounts.filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
+                          <div className="p-8 text-center text-text-dim text-xs italic">No se encontraron resultados.</div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 
@@ -695,27 +925,26 @@ export default function App() {
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
             <AnimatePresence mode="wait">
               {activeView === 'dashboard' && (
                 <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
                   <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
-                      <h2 className="text-3xl font-display font-bold">Hola, {user.displayName?.split(' ')[0]}</h2>
-                      <p className="text-text-secondary mt-1">Aquí tienes un resumen de tus finanzas hoy.</p>
+                      <h2 className="text-2xl lg:text-3xl font-display font-bold">Hola, {user.displayName?.split(' ')[0]}</h2>
+                      <p className="text-text-secondary mt-1 text-sm lg:text-base">Aquí tienes un resumen de tus finanzas hoy.</p>
                     </div>
-                    <div className="flex items-center gap-2 bg-surface rounded-xl p-1 border border-border">
+                    <div className="flex items-center gap-1 bg-surface rounded-xl p-1 border border-border overflow-x-auto no-scrollbar">
                       {(['day', 'week', 'month', 'year'] as const).map((range) => (
-                        <button key={range} onClick={() => setTimeRange(range)} className={cn("px-4 py-1.5 rounded-lg text-xs font-bold transition-all capitalize", timeRange === range ? "bg-orange-primary text-white shadow-md" : "text-text-secondary hover:text-text-primary")}>
+                        <button key={range} onClick={() => setTimeRange(range)} className={cn("px-3 lg:px-4 py-1.5 rounded-lg text-[10px] lg:text-xs font-bold transition-all capitalize whitespace-nowrap", timeRange === range ? "bg-orange-primary text-white shadow-md" : "text-text-secondary hover:text-text-primary")}>
                           {range === 'day' ? 'Hoy' : range === 'week' ? 'Semana' : range === 'month' ? 'Mes' : 'Año'}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
                     <KPICard title="Saldo Total" value={formatCurrency(totalBalance)} trend="up" color="blue" icon={<Wallet size={24} />} />
-                    <KPICard title="Balance Periodo" value={formatCurrency(balance)} trend={balance >= 0 ? 'up' : 'down'} color={balance >= 0 ? 'green' : 'red'} icon={<TrendingUp size={24} />} />
                     <KPICard title="Ingresos" value={formatCurrency(totalIncome)} trend="up" color="green" icon={<ArrowUpRight size={24} />} />
                     <KPICard title="Gastos" value={formatCurrency(totalExpenses)} trend="down" color="red" icon={<ArrowDownLeft size={24} />} />
                   </div>
@@ -724,9 +953,9 @@ export default function App() {
                     <div className="lg:col-span-2 space-y-8">
                       <div className="bg-surface border border-border rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-8">
-                          <h3 className="font-bold flex items-center gap-2"><TrendingUp size={18} className="text-orange-primary" /> Flujo de Caja</h3>
+                          <h3 className="font-bold flex items-center gap-2 text-sm lg:text-base"><TrendingUp size={18} className="text-orange-primary" /> Flujo de Caja</h3>
                         </div>
-                        <div className="h-[300px] w-full">
+                        <div className="h-[250px] lg:h-[300px] w-full">
                           <ResponsiveContainer width="100%" height="100%">
                             <AreaChart data={getChartData(filteredTransactions)}>
                               <defs>
@@ -736,12 +965,27 @@ export default function App() {
                               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7A7874', fontSize: 10 }} />
                               <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7A7874', fontSize: 10 }} tickFormatter={(val) => `$${val}`} />
-                              <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px' }} />
+                              <Tooltip content={<CustomTooltip />} />
                               <Area type="monotone" dataKey="ingresos" stroke="#1EE07A" fillOpacity={1} fill="url(#colorIncome)" strokeWidth={2} />
                               <Area type="monotone" dataKey="gastos" stroke="#FF4757" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={2} />
                             </AreaChart>
                           </ResponsiveContainer>
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <CustomPieChart 
+                          data={getPieData(filteredTransactions.filter(t => t.type === 'income'))}
+                          title="Distribución de Ingresos"
+                          icon={PieChart}
+                          iconColor="text-green-accent"
+                        />
+                        <CustomPieChart 
+                          data={getPieData(filteredTransactions.filter(t => t.type === 'expense'))}
+                          title="Distribución de Gastos"
+                          icon={PieChart}
+                          iconColor="text-red-accent"
+                        />
                       </div>
 
                       <div className="bg-surface border border-border rounded-2xl overflow-hidden">
@@ -759,6 +1003,92 @@ export default function App() {
                     </div>
 
                     <div className="space-y-8">
+                      <div className="bg-surface border border-border rounded-2xl p-6">
+                        <h3 className="font-bold flex items-center gap-2 mb-6"><Target size={18} className="text-orange-primary" /> Regla 50/30/20</h3>
+                        <div className="space-y-6">
+                          {(() => {
+                            const needsActual = filteredTransactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'need').reduce((acc, t) => acc + t.amount, 0);
+                            const wantsActual = filteredTransactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'want').reduce((acc, t) => acc + t.amount, 0);
+                            const savingsActual = filteredTransactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'saving').reduce((acc, t) => acc + t.amount, 0);
+
+                            const needsTarget = totalIncome * 0.5;
+                            const wantsTarget = totalIncome * 0.3;
+                            const savingsTarget = totalIncome * 0.2;
+
+                            return (
+                              <div className="space-y-6">
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-text-secondary">Necesidades (50%)</span>
+                                    <span className={cn("text-xs font-bold", needsActual > needsTarget ? "text-red-accent" : "text-green-accent")}>
+                                      {needsActual > needsTarget ? 'Excedido' : 'En control'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
+                                      <p className="text-[10px] text-text-dim uppercase font-bold">Objetivo</p>
+                                      <p className="text-sm font-bold">{formatCurrency(needsTarget)}</p>
+                                    </div>
+                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
+                                      <p className="text-[10px] text-text-dim uppercase font-bold">Gastado</p>
+                                      <p className="text-sm font-bold">{formatCurrency(needsActual)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (needsActual / (needsTarget || 1)) * 100)}%` }} className={cn("h-full transition-all", needsActual > needsTarget && totalIncome > 0 ? "bg-red-accent" : "bg-blue-accent")} />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-text-secondary">Deseos (30%)</span>
+                                    <span className={cn("text-xs font-bold", wantsActual > wantsTarget ? "text-red-accent" : "text-green-accent")}>
+                                      {wantsActual > wantsTarget ? 'Excedido' : 'En control'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
+                                      <p className="text-[10px] text-text-dim uppercase font-bold">Objetivo</p>
+                                      <p className="text-sm font-bold">{formatCurrency(wantsTarget)}</p>
+                                    </div>
+                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
+                                      <p className="text-[10px] text-text-dim uppercase font-bold">Gastado</p>
+                                      <p className="text-sm font-bold">{formatCurrency(wantsActual)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (wantsActual / (wantsTarget || 1)) * 100)}%` }} className={cn("h-full transition-all", wantsActual > wantsTarget && totalIncome > 0 ? "bg-red-accent" : "bg-orange-primary")} />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-text-secondary">Ahorro (20%)</span>
+                                    <span className={cn("text-xs font-bold", savingsActual > savingsTarget ? "text-red-accent" : "text-green-accent")}>
+                                      {savingsActual > savingsTarget ? 'Excedido' : 'En control'}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
+                                      <p className="text-[10px] text-text-dim uppercase font-bold">Objetivo</p>
+                                      <p className="text-sm font-bold">{formatCurrency(savingsTarget)}</p>
+                                    </div>
+                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
+                                      <p className="text-[10px] text-text-dim uppercase font-bold">Gastado</p>
+                                      <p className="text-sm font-bold">{formatCurrency(savingsActual)}</p>
+                                    </div>
+                                  </div>
+                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+                                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (savingsActual / (savingsTarget || 1)) * 100)}%` }} className={cn("h-full transition-all", savingsActual > savingsTarget && totalIncome > 0 ? "bg-red-accent" : "bg-green-accent")} />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          <p className="text-[10px] text-text-dim leading-relaxed italic">Comparativa de gastos reales vs objetivos basados en tus ingresos.</p>
+                        </div>
+                      </div>
+
                       <div className="bg-surface-2 border border-border rounded-2xl p-6 relative overflow-hidden">
                         <h3 className="font-bold flex items-center gap-2 mb-4"><Sparkles size={18} className="text-orange-primary" /> Sugerencias IA</h3>
                         <div className="space-y-4">
@@ -810,17 +1140,23 @@ export default function App() {
               {activeView === 'transactions' && (
                 <motion.div key="transactions" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Historial</h2><p className="text-text-secondary">Gestiona todos tus movimientos financieros.</p></div>
+                    <div><h2 className="text-3xl font-display font-bold">Historial</h2><p className="text-text-secondary hidden sm:block">Gestiona todos tus movimientos financieros.</p><p className="text-text-secondary sm:hidden">Gestiona tus registros</p></div>
                     <div className="flex items-center gap-3">
-                      <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Filter size={18} /> Filtrar</button>
-                      <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Download size={18} /> Exportar</button>
+                      <button onClick={() => setIsFilterSidebarOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Filter size={18} /> <span className="hidden sm:inline">Filtrar</span></button>
+                      <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Download size={18} /> <span className="hidden sm:inline">Exportar</span></button>
                     </div>
                   </div>
-                  <div className="bg-surface border border-border rounded-2xl overflow-hidden divide-y divide-border">
-                    {filteredTransactions.map((t) => (
-                      <TransactionItem key={t.id} transaction={t} accounts={accounts} categories={allCategories} onEdit={() => { setEditingTransaction(t); setModalType('transaction'); setIsModalOpen(true); }} onDelete={() => handleDeleteTransaction(t)} />
-                    ))}
-                  </div>
+                    <div className="bg-surface border border-border rounded-2xl overflow-hidden divide-y divide-border">
+                      {filteredTransactions.map((t) => (
+                        <TransactionItem 
+                          key={t.id} 
+                          transaction={t} 
+                          accounts={accounts} 
+                          categories={allCategories} 
+                          onClick={() => setSelectedTransactionDetails(t)}
+                        />
+                      ))}
+                    </div>
                 </motion.div>
               )}
 
@@ -828,7 +1164,7 @@ export default function App() {
                 <motion.div key="accounts" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                   <div className="flex items-center justify-between">
                     <div><h2 className="text-3xl font-display font-bold">Mis Cuentas</h2><p className="text-text-secondary">Gestiona tus tarjetas, bancos y efectivo.</p></div>
-                    <button onClick={() => { setModalType('account'); setIsModalOpen(true); }} className="bg-orange-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> Nueva Cuenta</button>
+                    <button onClick={() => { setModalType('account'); setIsModalOpen(true); }} className="bg-orange-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> <span className="hidden sm:inline">Nueva Cuenta</span><span className="sm:hidden">Nueva</span></button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {accounts.map(a => (
@@ -903,8 +1239,79 @@ export default function App() {
                 </motion.div>
               )}
 
-              {activeView === 'settings' && (
-                <motion.div key="settings" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
+                {activeView === 'categories' && (
+                  <motion.div key="categories" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div><h2 className="text-3xl font-display font-bold">Categorías</h2><p className="text-text-secondary">Gestiona tus categorías y establece límites de presupuesto.</p></div>
+                      <button onClick={() => { setModalType('category'); setIsModalOpen(true); }} className="bg-orange-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> Nueva Categoría</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {allCategories.map(c => {
+                        const Icon = IconMap[c.icon] || Tag;
+                        const isCustom = customCategories.some(cc => cc.id === c.id);
+                        const spent = transactions.filter(t => t.categoryId === c.id && t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
+                        const progress = c.budgetLimit ? (spent / c.budgetLimit) * 100 : 0;
+
+                        return (
+                          <div key={c.id} className="bg-surface border border-border rounded-2xl p-6 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${c.color}15`, color: c.color }}><Icon size={20} /></div>
+                                <div>
+                                  <h4 className="font-bold text-sm">{c.name}</h4>
+                                  <span className="text-[10px] uppercase tracking-widest text-text-dim font-bold">{c.budgetType || 'Sin tipo'}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button onClick={() => handleDeleteCategory(c.id)} className="p-2 text-text-dim hover:text-red-accent transition-colors"><Trash2 size={16} /></button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-text-secondary">Gastado: <span className="font-bold text-text-primary">{formatCurrency(spent)}</span></span>
+                                {c.budgetLimit && <span className="text-text-dim">Límite: {formatCurrency(c.budgetLimit)}</span>}
+                              </div>
+                              {c.budgetLimit && (
+                                <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                                  <div className={cn("h-full transition-all", progress > 100 ? "bg-red-accent" : progress > 80 ? "bg-orange-primary" : "bg-green-accent")} style={{ width: `${Math.min(100, progress)}%` }} />
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="pt-4 border-t border-border grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-bold text-text-dim">Límite</label>
+                                <input 
+                                  type="number" 
+                                  placeholder="Sin límite"
+                                  defaultValue={c.budgetLimit}
+                                  onBlur={(e) => handleUpdateCategory(c.id, { budgetLimit: Number(e.target.value) || undefined })}
+                                  className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-bold text-text-dim">Tipo</label>
+                                <select 
+                                  defaultValue={c.budgetType}
+                                  onChange={(e) => handleUpdateCategory(c.id, { budgetType: e.target.value as any })}
+                                  className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none"
+                                >
+                                  <option value="">Seleccionar</option>
+                                  <option value="need">Necesidad</option>
+                                  <option value="want">Deseo</option>
+                                  <option value="saving">Ahorro</option>
+                                </select>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                )}
+                {activeView === 'settings' && (
+                  <motion.div key="settings" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
                   <div><h2 className="text-3xl font-display font-bold">Configuración</h2><p className="text-text-secondary">Personaliza tu experiencia en Hera.</p></div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -913,7 +1320,8 @@ export default function App() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between p-4 bg-surface-2 rounded-xl border border-border">
                           <div>
-                            <p className="text-sm font-bold">Tema de la aplicación</p>
+                            <p className="text-sm font-bold hidden sm:block">Tema de la aplicación</p>
+                            <p className="text-sm font-bold sm:hidden">Tema</p>
                             <p className="text-[10px] text-text-secondary">Cambia entre modo claro y oscuro</p>
                           </div>
                           <button 
@@ -921,7 +1329,8 @@ export default function App() {
                             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-3 border border-border hover:border-orange-primary/50 transition-all"
                           >
                             {theme === 'dark' ? <Sun size={16} className="text-orange-primary" /> : <Moon size={16} className="text-blue-accent" />}
-                            <span className="text-xs font-bold">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
+                            <span className="text-xs font-bold hidden sm:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
+                            <span className="text-xs font-bold sm:hidden">{theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
                           </button>
                         </div>
                       </div>
@@ -938,35 +1347,12 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold flex items-center gap-2"><ShoppingBag size={18} className="text-orange-primary" /> Mis Categorías</h3>
-                        <button onClick={() => { setModalType('category'); setIsModalOpen(true); }} className="text-[10px] font-bold uppercase tracking-widest text-orange-primary hover:text-orange-secondary transition-colors">+ Nueva</button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {allCategories.map(c => {
-                          const Icon = IconMap[c.icon] || MoreHorizontal;
-                          const isCustom = customCategories.some(cc => cc.id === c.id);
-                          return (
-                            <div key={c.id} className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border group">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${c.color}15`, color: c.color }}><Icon size={16} /></div>
-                                <span className="text-xs font-medium">{c.name}</span>
-                              </div>
-                              {isCustom && (
-                                <button onClick={async () => { if(confirm('¿Eliminar categoría?')) await deleteDoc(doc(db, 'users', user.uid, 'categories', c.id)); }} className="opacity-0 group-hover:opacity-100 p-1 text-text-dim hover:text-red-accent transition-all"><X size={12} /></button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </main>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </main>
 
         {/* Modals */}
         <AnimatePresence>
@@ -997,55 +1383,56 @@ export default function App() {
                       frequency: fd.get('frequency'),
                       notify: fd.get('notify') === 'true'
                     });
-                  }} className="p-6 space-y-6">
+                  }} className="p-4 space-y-4">
                     <div className="flex p-1 bg-surface-2 rounded-xl border border-border">
                       <label className="flex-1 cursor-pointer"><input type="radio" name="type" value="expense" defaultChecked={editingTransaction?.type !== 'income'} className="sr-only peer" /><div className="py-2 text-center rounded-lg text-sm font-bold transition-all peer-checked:bg-red-accent peer-checked:text-white text-text-secondary">Gasto</div></label>
                       <label className="flex-1 cursor-pointer"><input type="radio" name="type" value="income" defaultChecked={editingTransaction?.type === 'income'} className="sr-only peer" /><div className="py-2 text-center rounded-lg text-sm font-bold transition-all peer-checked:bg-green-accent peer-checked:text-white text-text-secondary">Ingreso</div></label>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto</label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} /><input required name="amount" type="number" step="0.01" defaultValue={editingTransaction?.amount || 0} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Fecha</label><div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} /><input required name="date" type="date" defaultValue={editingTransaction ? format(parseISO(editingTransaction.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto</label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} /><input required name="amount" type="number" step="0.01" defaultValue={editingTransaction?.amount || 0} className="w-full bg-surface-2 border border-border rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
+                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Fecha</label><div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} /><input required name="date" type="date" defaultValue={editingTransaction ? format(parseISO(editingTransaction.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface-2 border border-border rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Cuenta</label><select required name="accountId" defaultValue={editingTransaction?.accountId} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">{accounts.map(a => <option key={a.id} value={a.id}>{a.name} ({formatCurrency(a.balance)})</option>)}</select></div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Cuenta</label><select required name="accountId" defaultValue={editingTransaction?.accountId} className="w-full bg-surface-2 border border-border rounded-lg py-2 px-3 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Categoría</label><CategorySelect name="categoryId" defaultValue={editingTransaction?.categoryId} categories={allCategories} /></div>
                     </div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" defaultValue={editingTransaction?.description} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" defaultValue={editingTransaction?.description} className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
                     
                     {!editingTransaction && (
-                      <div className="space-y-4 p-5 bg-surface-2 rounded-2xl border border-border relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-4 opacity-10"><Repeat size={40} className="text-orange-primary" /></div>
+                      <div className="space-y-3 p-4 bg-surface-2 rounded-xl border border-border relative overflow-hidden">
                         <label className="flex items-center gap-3 cursor-pointer group">
-                          <input type="checkbox" name="isRecurring" className="w-5 h-5 rounded-lg border-border text-orange-primary focus:ring-orange-primary transition-all" />
-                          <span className="text-sm font-bold group-hover:text-orange-primary transition-colors">¿Convertir en movimiento recurrente?</span>
+                          <input 
+                            type="checkbox" 
+                            name="isRecurring" 
+                            checked={isRecurringChecked}
+                            onChange={(e) => setIsRecurringChecked(e.target.checked)}
+                            className="w-4 h-4 rounded border-border text-orange-primary focus:ring-orange-primary transition-all" 
+                          />
+                          <span className="text-xs font-bold group-hover:text-orange-primary transition-colors">¿Convertir en recurrente?</span>
                         </label>
-                        <div className="grid grid-cols-2 gap-4 pt-2">
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Frecuencia</label>
-                            <div className="relative">
-                              <select name="frequency" className="w-full bg-surface border border-border rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
-                                <option value="daily">Cada día</option>
-                                <option value="weekly">Cada semana</option>
-                                <option value="monthly">Cada mes</option>
-                                <option value="yearly">Cada año</option>
+                        {isRecurringChecked && (
+                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="grid grid-cols-2 gap-3 pt-1 overflow-hidden">
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-text-dim">Frecuencia</label>
+                              <select name="frequency" className="w-full bg-surface border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
+                                <option value="daily">Diario</option>
+                                <option value="weekly">Semanal</option>
+                                <option value="monthly">Mensual</option>
+                                <option value="yearly">Anual</option>
                               </select>
-                              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
                             </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Notificaciones</label>
-                            <div className="relative">
-                              <select name="notify" className="w-full bg-surface border border-border rounded-xl py-2.5 px-4 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
-                                <option value="true">Activadas</option>
-                                <option value="false">Desactivadas</option>
+                            <div className="space-y-1">
+                              <label className="text-[10px] uppercase font-bold text-text-dim">Aviso</label>
+                              <select name="notify" className="w-full bg-surface border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
+                                <option value="true">Sí</option>
+                                <option value="false">No</option>
                               </select>
-                              <Bell size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-dim pointer-events-none" />
                             </div>
-                          </div>
-                        </div>
+                          </motion.div>
+                        )}
                       </div>
                     )}
-                    <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">{editingTransaction ? 'Guardar' : 'Registrar'}</button></div>
+                    <div className="pt-2 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">{editingTransaction ? 'Guardar' : 'Registrar'}</button></div>
                   </form>
                 ) : modalType === 'account' ? (
                   <form onSubmit={(e) => {
@@ -1068,7 +1455,7 @@ export default function App() {
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Últimos 4 dígitos</label><input name="lastDigits" maxLength={4} placeholder="Opcional" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
                       <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#FF5C1A" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
                     </div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Cuenta</button></div>
                   </form>
                 ) : (
@@ -1099,7 +1486,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#A855F7" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[80px] resize-none" /></div>
+                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Categoría</button></div>
                   </form>
                 )}
@@ -1108,12 +1495,55 @@ export default function App() {
           )}
         </AnimatePresence>
 
+        {/* Bottom Nav - Mobile Only */}
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-border flex items-center justify-around px-2 py-3 z-30 backdrop-blur-lg bg-sidebar/90">
+          <BottomNavItem icon={<LayoutDashboard size={20} />} active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
+          <BottomNavItem icon={<ArrowUpRight size={20} />} active={activeView === 'transactions'} onClick={() => setActiveView('transactions')} />
+          <div className="relative -top-6">
+            <button 
+              onClick={() => { setModalType('transaction'); setEditingTransaction(null); setIsModalOpen(true); }}
+              className="w-14 h-14 bg-orange-primary rounded-full flex items-center justify-center text-white shadow-xl shadow-orange-primary/40 border-4 border-bg active:scale-90 transition-transform"
+            >
+              <Plus size={28} />
+            </button>
+          </div>
+          <BottomNavItem icon={<Tag size={20} />} active={activeView === 'categories'} onClick={() => setActiveView('categories')} />
+          <BottomNavItem icon={<Settings size={20} />} active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
+        </nav>
+
+        <FilterSidebar 
+          isOpen={isFilterSidebarOpen} 
+          onClose={() => setIsFilterSidebarOpen(false)} 
+          filters={filters} 
+          setFilters={setFilters}
+          accounts={accounts}
+          categories={allCategories}
+        />
+
+        <TransactionDetailsSidebar 
+          transaction={selectedTransactionDetails}
+          onClose={() => setSelectedTransactionDetails(null)}
+          onEdit={() => { setEditingTransaction(selectedTransactionDetails); setModalType('transaction'); setIsModalOpen(true); }}
+          onDelete={() => handleDeleteTransaction(selectedTransactionDetails!)}
+          accounts={accounts}
+          categories={allCategories}
+        />
+
         <Toast />
       </div>
   );
 }
 
 // --- Subcomponents ---
+
+function BottomNavItem({ icon, active, onClick }: { icon: React.ReactNode, active?: boolean, onClick: () => void }) {
+  return (
+    <button onClick={onClick} className={cn("p-2 rounded-xl transition-all relative", active ? "text-orange-primary" : "text-text-dim")}>
+      {active && <motion.div layoutId="bottom-nav-active" className="absolute -top-3 left-1/2 -translate-x-1/2 w-1 h-1 bg-orange-primary rounded-full" />}
+      {icon}
+    </button>
+  );
+}
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active?: boolean, onClick: () => void }) {
   return (
@@ -1143,24 +1573,23 @@ function KPICard({ title, value, trend, color, icon }: { title: string, value: s
   );
 }
 
-function TransactionItem({ transaction, accounts, categories, onEdit, onDelete }: any) {
+function TransactionItem({ transaction, accounts, categories, onClick }: any) {
   const category = categories.find((c: any) => c.id === transaction.categoryId) || categories[categories.length - 1];
   const account = accounts.find((a: any) => a.id === transaction.accountId);
   const Icon = IconMap[category.icon] || MoreHorizontal;
 
   return (
-    <div className="group flex items-center gap-4 p-4 hover:bg-surface-2 transition-all cursor-pointer">
+    <div 
+      onClick={onClick}
+      className="group flex items-center gap-4 p-4 hover:bg-surface-2 transition-all cursor-pointer"
+    >
       <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${category.color}15`, color: category.color }}><Icon size={20} /></div>
       <div className="flex-1 min-w-0">
         <h5 className="text-sm font-bold truncate group-hover:text-orange-primary transition-colors">{transaction.description}</h5>
         <p className="text-[10px] text-text-dim uppercase tracking-wider font-medium">{category.name} • {account?.name} • {format(parseISO(transaction.date), 'dd MMM yyyy', { locale: es })}</p>
       </div>
-      <div className="text-right flex items-center gap-4">
+      <div className="text-right">
         <div className={cn("text-sm font-bold", transaction.type === 'income' ? "text-green-accent" : "text-text-primary")}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-2 text-text-dim hover:text-text-primary transition-colors"><Settings size={14} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 text-text-dim hover:text-red-accent transition-colors"><X size={14} /></button>
-        </div>
       </div>
     </div>
   );
@@ -1201,6 +1630,216 @@ function CategorySelect({ name, defaultValue, categories }: { name: string, defa
   );
 }
 
+function TransactionDetailsSidebar({ transaction, onClose, onEdit, onDelete, accounts, categories }: any) {
+  if (!transaction) return null;
+  const category = categories.find((c: any) => c.id === transaction.categoryId) || categories[categories.length - 1];
+  const account = accounts.find((a: any) => a.id === transaction.accountId);
+  const Icon = IconMap[category.icon] || Tag;
+
+  return (
+    <AnimatePresence>
+      {transaction && (
+        <>
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={onClose} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" 
+          />
+          <motion.div 
+            initial={{ x: '100%' }} 
+            animate={{ x: 0 }} 
+            exit={{ x: '100%' }} 
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed top-0 right-0 h-full w-full max-w-sm bg-surface border-l border-border z-[70] shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
+              <h3 className="font-display font-bold text-xl">Detalle de Registro</h3>
+              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+              <div className="text-center space-y-4">
+                <div className="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-xl" style={{ backgroundColor: `${category.color}15`, color: category.color }}>
+                  <Icon size={40} />
+                </div>
+                <div>
+                  <h4 className="text-2xl font-display font-bold">{transaction.description}</h4>
+                  <p className="text-text-dim uppercase tracking-widest text-[10px] font-bold mt-1">{category.name}</p>
+                </div>
+                <div className={cn("text-4xl font-display font-bold", transaction.type === 'income' ? "text-green-accent" : "text-text-primary")}>
+                  {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center justify-between p-4 bg-surface-2 rounded-2xl border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-primary/10 text-orange-primary flex items-center justify-center"><CreditCard size={20} /></div>
+                    <div>
+                      <p className="text-[10px] text-text-dim uppercase font-bold">Cuenta</p>
+                      <p className="text-sm font-bold">{account?.name}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-surface-2 rounded-2xl border border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-primary/10 text-orange-primary flex items-center justify-center"><Calendar size={20} /></div>
+                    <div>
+                      <p className="text-[10px] text-text-dim uppercase font-bold">Fecha</p>
+                      <p className="text-sm font-bold">{format(parseISO(transaction.date), 'dd MMMM yyyy', { locale: es })}</p>
+                    </div>
+                  </div>
+                </div>
+                {transaction.isRecurring && (
+                  <div className="flex items-center justify-between p-4 bg-surface-2 rounded-2xl border border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-primary/10 text-orange-primary flex items-center justify-center"><Repeat size={20} /></div>
+                      <div>
+                        <p className="text-[10px] text-text-dim uppercase font-bold">Recurrente</p>
+                        <p className="text-sm font-bold">Cada {transaction.frequency}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t border-border bg-sidebar/30 flex gap-3">
+              <button 
+                onClick={() => { onEdit(); onClose(); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all flex items-center justify-center gap-2"
+              >
+                <Settings size={18} /> Editar
+              </button>
+              <button 
+                onClick={() => { onDelete(); onClose(); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold bg-red-accent/10 text-red-accent hover:bg-red-accent hover:text-white transition-all flex items-center justify-center gap-2"
+              >
+                <Trash2 size={18} /> Eliminar
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function FilterSidebar({ isOpen, onClose, filters, setFilters, accounts, categories }: any) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={onClose} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" 
+          />
+          <motion.div 
+            initial={{ x: '100%' }} 
+            animate={{ x: 0 }} 
+            exit={{ x: '100%' }} 
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed top-0 right-0 h-full w-full max-w-sm bg-surface border-l border-border z-[70] shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
+              <h3 className="font-display font-bold text-xl flex items-center gap-2"><Filter size={20} className="text-orange-primary" /> Filtros</h3>
+              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Rango de Fecha</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['all', 'day', 'week', 'month', 'year'] as const).map(range => (
+                    <button 
+                      key={range} 
+                      onClick={() => setFilters({ ...filters, dateRange: range })}
+                      className={cn("px-3 py-2 rounded-xl text-xs font-bold border transition-all", filters.dateRange === range ? "bg-orange-primary border-orange-primary text-white" : "border-border hover:bg-surface-2 text-text-secondary")}
+                    >
+                      {range === 'all' ? 'Todo' : range === 'day' ? 'Hoy' : range === 'week' ? 'Semana' : range === 'month' ? 'Mes' : 'Año'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo</label>
+                <div className="flex gap-2">
+                  {(['all', 'income', 'expense'] as const).map(type => (
+                    <button 
+                      key={type} 
+                      onClick={() => setFilters({ ...filters, type })}
+                      className={cn("flex-1 px-3 py-2 rounded-xl text-xs font-bold border transition-all", filters.type === type ? "bg-orange-primary border-orange-primary text-white" : "border-border hover:bg-surface-2 text-text-secondary")}
+                    >
+                      {type === 'all' ? 'Todo' : type === 'income' ? 'Ingreso' : 'Gasto'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Cuenta</label>
+                <select 
+                  value={filters.accountId} 
+                  onChange={(e) => setFilters({ ...filters, accountId: e.target.value })}
+                  className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
+                >
+                  <option value="all">Todas las cuentas</option>
+                  {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Categoría</label>
+                <select 
+                  value={filters.categoryId} 
+                  onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
+                  className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
+                >
+                  <option value="all">Todas las categorías</option>
+                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Rango de Monto</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <input 
+                    type="number" 
+                    placeholder="Min" 
+                    value={filters.minAmount}
+                    onChange={(e) => setFilters({ ...filters, minAmount: e.target.value })}
+                    className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Max" 
+                    value={filters.maxAmount}
+                    onChange={(e) => setFilters({ ...filters, maxAmount: e.target.value })}
+                    className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-border bg-sidebar/30 flex gap-3">
+              <button 
+                onClick={() => setFilters({ type: 'all', accountId: 'all', categoryId: 'all', minAmount: '', maxAmount: '', dateRange: 'all' })}
+                className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all"
+              >
+                Limpiar
+              </button>
+              <button 
+                onClick={onClose}
+                className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all"
+              >
+                Aplicar
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function Toast() {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
@@ -1208,7 +1847,7 @@ function Toast() {
   return (
     <AnimatePresence>
       {visible && (
-        <motion.div initial={{ opacity: 0, y: 20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: 20, x: '-50%' }} className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] bg-surface-2 border border-border-2 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
+        <motion.div initial={{ opacity: 0, y: -20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: -20, x: '-50%' }} className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] bg-surface-2 border border-border-2 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-orange-primary/20 text-orange-primary flex items-center justify-center"><Check size={16} /></div>
           <span className="text-sm font-bold">{message}</span>
         </motion.div>
@@ -1230,4 +1869,76 @@ function getChartData(transactions: Transaction[]) {
     if (day) { if (t.type === 'income') day.ingresos += t.amount; else day.gastos += t.amount; }
   });
   return last7Days;
+}
+
+function CustomTooltip({ active, payload }: any) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-surface border border-border p-3 rounded-xl shadow-2xl backdrop-blur-md">
+        {payload.map((entry: any, index: number) => (
+          <div key={index} className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
+            <p className="text-xs font-bold text-text-secondary">{entry.name}:</p>
+            <p className="text-sm font-bold text-text-primary">{formatCurrency(entry.value)}</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+function CustomPieChart({ data, title, icon: Icon, iconColor }: any) {
+  const total = data.reduce((acc: number, curr: any) => acc + curr.value, 0);
+  
+  return (
+    <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col h-full">
+      <h3 className="font-bold text-sm mb-6 flex items-center gap-2">
+        <Icon size={16} className={iconColor} /> {title}
+      </h3>
+      <div className="flex-1 flex flex-col lg:flex-row items-center gap-6">
+        <div className="h-[180px] w-full lg:w-1/2 relative">
+          <ResponsiveContainer width="100%" height="100%">
+            <RePieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={4}
+                dataKey="value"
+                stroke="none"
+              >
+                {data.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+            </RePieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-[10px] text-text-dim uppercase font-bold tracking-widest">Total</span>
+            <span className="text-lg font-display font-bold">{formatCurrency(total)}</span>
+          </div>
+        </div>
+        <div className="w-full lg:w-1/2 space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
+          {data.sort((a: any, b: any) => b.value - a.value).map((item: any, i: number) => (
+            <div key={i} className="flex items-center justify-between text-xs group">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="text-text-secondary truncate group-hover:text-text-primary transition-colors">{item.name}</span>
+              </div>
+              <span className="font-bold ml-2">{formatCurrency(item.value)}</span>
+            </div>
+          ))}
+          {data.length === 0 && (
+            <div className="h-full flex items-center justify-center text-text-dim italic text-[10px]">
+              Sin datos
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
