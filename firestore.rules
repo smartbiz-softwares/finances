@@ -21,6 +21,15 @@ service cloud.firestore {
     // Collection: /users/{userId}/categories/{categoryId}
     // Fields: id, userId, name, icon, color
     //
+    // Collection: /users/{userId}/goals/{goalId}
+    // Fields: id, userId, name, targetAmount, currentAmount, deadline, color, icon, createdAt
+    //
+    // Collection: /users/{userId}/automations/{automationId}
+    // Fields: id, userId, triggerCategoryId, targetGoalId, type, value, isActive
+    //
+    // Collection: /users/{userId}/goalContributions/{contributionId}
+    // Fields: id, userId, goalId, amount, date, source, automationId
+    //
     // ===============================================================
 
     // Helper Functions
@@ -72,6 +81,35 @@ service cloud.firestore {
              data.color is string;
     }
 
+    function isValidGoal(data) {
+      return data.keys().hasAll(['userId', 'name', 'targetAmount', 'currentAmount', 'color', 'icon', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.targetAmount is number &&
+             data.currentAmount is number &&
+             data.color is string &&
+             data.icon is string;
+    }
+
+    function isValidAutomation(data) {
+      return data.keys().hasAll(['userId', 'triggerCategoryId', 'targetGoalId', 'type', 'value', 'isActive']) &&
+             data.userId == request.auth.uid &&
+             data.triggerCategoryId is string &&
+             data.targetGoalId is string &&
+             data.type in ['percentage', 'fixed'] &&
+             data.value is number &&
+             data.isActive is bool;
+    }
+
+    function isValidContribution(data) {
+      return data.keys().hasAll(['userId', 'goalId', 'amount', 'date', 'source']) &&
+             data.userId == request.auth.uid &&
+             data.goalId is string &&
+             data.amount is number &&
+             data.date is string &&
+             data.source in ['manual', 'automation'];
+    }
+
     match /users/{userId} {
       allow read: if isOwner(userId);
       allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
@@ -99,6 +137,24 @@ service cloud.firestore {
         allow read: if isOwner(userId);
         allow create, update: if isOwner(userId) && isValidCategory(request.resource.data);
         allow delete: if isOwner(userId);
+      }
+
+      match /goals/{goalId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidGoal(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /automations/{automationId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidAutomation(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      match /goalContributions/{contributionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidContribution(request.resource.data);
+        allow update, delete: if false; // Contributions are immutable
       }
     }
 

@@ -68,3 +68,35 @@ export interface UserProfile {
   hiddenCategories?: string[];
   createdAt: string;
 }
+
+export interface FinancialGoal {
+  id: string;
+  userId: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline?: string;
+  color: string;
+  icon: string;
+  createdAt: string;
+}
+
+export interface GoalAutomation {
+  id: string;
+  userId: string;
+  triggerCategoryId: string;
+  targetGoalId: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  isActive: boolean;
+}
+
+export interface GoalContribution {
+  id: string;
+  userId: string;
+  goalId: string;
+  amount: number;
+  date: string;
+  source: 'manual' | 'automation';
+  automationId?: string;
+}

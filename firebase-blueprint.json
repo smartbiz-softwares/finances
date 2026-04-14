@@ -67,6 +67,53 @@
         "isActive": { "type": "boolean" }
       },
       "required": ["id", "userId", "accountId", "type", "amount", "categoryId", "frequency", "startDate", "nextOccurrence", "isActive"]
+    },
+    "FinancialGoal": {
+      "title": "FinancialGoal",
+      "description": "User financial goal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "targetAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "color": { "type": "string" },
+        "icon": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "name", "targetAmount", "currentAmount", "color", "icon", "createdAt"]
+    },
+    "GoalAutomation": {
+      "title": "GoalAutomation",
+      "description": "Automation to update goals based on transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "triggerCategoryId": { "type": "string" },
+        "targetGoalId": { "type": "string" },
+        "type": { "type": "string", "enum": ["percentage", "fixed"] },
+        "value": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "triggerCategoryId", "targetGoalId", "type", "value", "isActive"]
+    },
+    "GoalContribution": {
+      "title": "GoalContribution",
+      "description": "History of contributions to a financial goal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "goalId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "source": { "type": "string", "enum": ["manual", "automation"] },
+        "automationId": { "type": "string" }
+      },
+      "required": ["id", "userId", "goalId", "amount", "date", "source"]
     }
   },
   "firestore": {
@@ -85,6 +132,18 @@
     "/users/{userId}/recurring/{recurringId}": {
       "schema": "RecurringTransaction",
       "description": "User recurring transaction templates"
+    },
+    "/users/{userId}/goals/{goalId}": {
+      "schema": "FinancialGoal",
+      "description": "User financial goals"
+    },
+    "/users/{userId}/automations/{automationId}": {
+      "schema": "GoalAutomation",
+      "description": "User goal automations"
+    },
+    "/users/{userId}/goalContributions/{contributionId}": {
+      "schema": "GoalContribution",
+      "description": "History of goal contributions"
     }
   }
 }

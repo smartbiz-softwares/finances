@@ -86,7 +86,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfYear, endOfYear, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn, formatCurrency } from './lib/utils';
-import { Transaction, TransactionType, Frequency, Category, RecurringTransaction, AISuggestion, Account, UserProfile } from './types';
+import { Transaction, TransactionType, Frequency, Category, RecurringTransaction, AISuggestion, Account, UserProfile, FinancialGoal, GoalAutomation, GoalContribution } from './types';
 import { CATEGORIES } from './constants';
 import { getFinancialSuggestions } from './services/geminiService';
 import { 
@@ -206,13 +206,19 @@ export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'transactions' | 'accounts' | 'recurring' | 'categories' | 'settings'>('dashboard');
+  const [activeView, setActiveView] = useState<'dashboard' | 'transactions' | 'accounts' | 'recurring' | 'categories' | 'goals' | 'settings'>('dashboard');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
   const [customCategories, setCustomCategories] = useState<Category[]>([]);
+  const [goals, setGoals] = useState<FinancialGoal[]>([]);
+  const [automations, setAutomations] = useState<GoalAutomation[]>([]);
+  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'transaction' | 'account' | 'category'>('transaction');
+  const [modalType, setModalType] = useState<'transaction' | 'account' | 'category' | 'goal' | 'automation' | 'addFunds'>('transaction');
+  const [selectedGoal, setSelectedGoal] = useState<FinancialGoal | null>(null);
+  const [selectedGoalDetails, setSelectedGoalDetails] = useState<FinancialGoal | null>(null);
+  const [isGoalSidebarOpen, setIsGoalSidebarOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -352,11 +358,29 @@ export default function App() {
       setCustomCategories(snap.docs.map(d => ({ ...d.data(), id: d.id } as Category)));
     }, (err) => handleFirestoreError(err, OperationType.LIST, categoriesPath));
 
+    const goalsPath = `users/${user.uid}/goals`;
+    const unsubGoals = onSnapshot(collection(db, goalsPath), (snap) => {
+      setGoals(snap.docs.map(d => ({ ...d.data(), id: d.id } as FinancialGoal)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, goalsPath));
+
+    const automationsPath = `users/${user.uid}/automations`;
+    const unsubAutomations = onSnapshot(collection(db, automationsPath), (snap) => {
+      setAutomations(snap.docs.map(d => ({ ...d.data(), id: d.id } as GoalAutomation)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, automationsPath));
+
+    const contributionsPath = `users/${user.uid}/goalContributions`;
+    const unsubContributions = onSnapshot(collection(db, contributionsPath), (snap) => {
+      setGoalContributions(snap.docs.map(d => ({ ...d.data(), id: d.id } as GoalContribution)));
+    }, (err) => handleFirestoreError(err, OperationType.LIST, contributionsPath));
+
     return () => {
       unsubAccounts();
       unsubTransactions();
       unsubRecurring();
       unsubCategories();
+      unsubGoals();
+      unsubAutomations();
+      unsubContributions();
     };
   }, [user]);
 
@@ -458,7 +482,7 @@ export default function App() {
             read: false
           });
           if (!sessionAlerts.has(alertId)) {
-            showToast(`⚠️ ¡Presupuesto excedido en ${c.name}!`);
+            showToast(`¡Presupuesto excedido en ${c.name}!`, 'error');
             sessionAlerts.add(alertId);
           }
         } else if (spent > c.budgetLimit * 0.8) {
@@ -471,7 +495,7 @@ export default function App() {
             read: false
           });
           if (!sessionAlerts.has(alertId)) {
-            showToast(`💡 Estás cerca del límite en ${c.name}`);
+            showToast(`Estás cerca del límite en ${c.name}`, 'warning');
             sessionAlerts.add(alertId);
           }
         }
@@ -544,6 +568,120 @@ export default function App() {
       } catch (err) {
         handleFirestoreError(err, OperationType.UPDATE, path);
       }
+    }
+  };
+
+  const handleAddFundsToGoal = async (goalId: string, amount: number, source: 'manual' | 'automation' = 'manual', automationId?: string) => {
+    if (!user || amount <= 0) return;
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+
+    const remaining = goal.targetAmount - goal.currentAmount;
+    if (amount > remaining) {
+      showToast(`El monto excede la meta. Solo faltan ${formatCurrency(remaining)}`, 'warning');
+      return;
+    }
+
+    const newAmount = goal.currentAmount + amount;
+    const goalPath = `users/${user.uid}/goals/${goalId}`;
+    const contribPath = `users/${user.uid}/goalContributions`;
+
+    try {
+      await updateDoc(doc(db, goalPath), { currentAmount: newAmount });
+      
+      const contributionData: any = {
+        userId: user.uid,
+        goalId,
+        amount,
+        date: new Date().toISOString(),
+        source
+      };
+
+      if (automationId) {
+        contributionData.automationId = automationId;
+      }
+
+      await addDoc(collection(db, contribPath), contributionData);
+
+      if (newAmount >= goal.targetAmount) {
+        // Deactivate automations for this goal
+        const relatedAutomations = automations.filter(a => a.targetGoalId === goalId && a.isActive);
+        for (const auto of relatedAutomations) {
+          await updateDoc(doc(db, `users/${user.uid}/automations/${auto.id}`), { isActive: false });
+        }
+        showToast(`¡Felicidades! Has alcanzado tu meta: ${goal.name}`, 'success');
+      } else {
+        showToast(`Se han añadido ${formatCurrency(amount)} a ${goal.name}`, 'success');
+      }
+      
+      setIsModalOpen(false);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, goalPath);
+      showToast('Error al procesar la operación', 'error');
+    }
+  };
+
+  const handleAddGoal = async (data: any) => {
+    if (!user) return;
+    const path = `users/${user.uid}/goals`;
+    try {
+      await addDoc(collection(db, path), {
+        ...data,
+        userId: user.uid,
+        createdAt: new Date().toISOString()
+      });
+      setIsModalOpen(false);
+      showToast('Objetivo creado');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, path);
+    }
+  };
+
+  const handleUpdateGoal = async (id: string, data: any) => {
+    if (!user) return;
+    const path = `users/${user.uid}/goals/${id}`;
+    try {
+      await updateDoc(doc(db, path), data);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, path);
+    }
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    if (!user) return;
+    const path = `users/${user.uid}/goals/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+      showToast('Objetivo eliminado');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, path);
+    }
+  };
+
+  const handleAddAutomation = async (data: any) => {
+    if (!user) return;
+    const path = `users/${user.uid}/automations`;
+    try {
+      await addDoc(collection(db, path), {
+        ...data,
+        userId: user.uid,
+        isActive: true
+      });
+      setIsModalOpen(false);
+      showToast('Automatización creada');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, path);
+    }
+  };
+
+  const handleDeleteAutomation = async (id: string) => {
+    if (!user) return;
+    const path = `users/${user.uid}/automations/${id}`;
+    try {
+      await deleteDoc(doc(db, path));
+      showToast('Automatización eliminada');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, path);
     }
   };
 
@@ -633,12 +771,23 @@ export default function App() {
         }
       }
       
+      // Trigger Automations
+      if (txData.type === 'income') {
+        const matchingAutomations = automations.filter(a => a.isActive && a.triggerCategoryId === txData.categoryId);
+        for (const auto of matchingAutomations) {
+          const amountToAdd = auto.type === 'fixed' ? auto.value : (txData.amount * (auto.value / 100));
+          if (amountToAdd > 0) {
+            await handleAddFundsToGoal(auto.targetGoalId, amountToAdd, 'automation', auto.id);
+          }
+        }
+      }
+
       setIsModalOpen(false);
       setEditingTransaction(null);
       showToast(editingTransaction ? 'Transacción actualizada' : 'Transacción registrada');
     } catch (e) {
       console.error(e);
-      showToast('Error al procesar la transacción');
+      showToast('Error al procesar la transacción', 'error');
     }
   };
 
@@ -675,7 +824,7 @@ export default function App() {
       showToast('Cuenta agregada');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
-      showToast('Error al crear cuenta');
+      showToast('Error al crear cuenta', 'error');
     }
   };
 
@@ -689,7 +838,7 @@ export default function App() {
       showToast('Categoría agregada');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, path);
-      showToast('Error al crear categoría');
+      showToast('Error al crear categoría', 'error');
     }
   };
 
@@ -785,6 +934,7 @@ export default function App() {
             <NavItem icon={<ArrowUpRight size={20} />} label="Transacciones" active={activeView === 'transactions'} onClick={() => setActiveView('transactions')} />
             <NavItem icon={<CreditCard size={20} />} label="Mis Cuentas" active={activeView === 'accounts'} onClick={() => setActiveView('accounts')} />
             <NavItem icon={<Repeat size={20} />} label="Programados" active={activeView === 'recurring'} onClick={() => setActiveView('recurring')} />
+            <NavItem icon={<Target size={20} />} label="Objetivos" active={activeView === 'goals'} onClick={() => setActiveView('goals')} />
             <NavItem icon={<Tag size={20} />} label="Categorías" active={activeView === 'categories'} onClick={() => setActiveView('categories')} />
             <div className="pt-6 pb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-text-dim">Preferencias</div>
             <NavItem icon={<Settings size={20} />} label="Configuración" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
@@ -920,7 +1070,7 @@ export default function App() {
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute right-0 mt-2 w-80 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden"
+                        className="fixed inset-x-4 top-20 lg:absolute lg:inset-auto lg:right-0 lg:top-full lg:mt-2 lg:w-80 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden"
                       >
                         <div className="p-4 border-b border-border bg-sidebar/50 flex items-center justify-between">
                           <h4 className="font-bold text-sm">Notificaciones</h4>
@@ -966,7 +1116,7 @@ export default function App() {
                   <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
                       <h2 className="text-2xl lg:text-3xl font-display font-bold">Hola, {user.displayName?.split(' ')[0]}</h2>
-                      <p className="text-text-secondary mt-1 text-sm lg:text-base">Aquí tienes un resumen de tus finanzas hoy.</p>
+                      <p className="text-text-secondary mt-1 text-sm lg:text-base hidden sm:block">Aquí tienes un resumen de tus finanzas hoy.</p>
                     </div>
                     <div className="flex items-center gap-1 bg-surface rounded-xl p-1 border border-border overflow-x-auto no-scrollbar">
                       {(['day', 'week', 'month', 'year'] as const).map((range) => (
@@ -1247,7 +1397,7 @@ export default function App() {
               {activeView === 'transactions' && (
                 <motion.div key="transactions" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Historial</h2><p className="text-text-secondary hidden sm:block">Gestiona todos tus movimientos financieros.</p><p className="text-text-secondary sm:hidden">Gestiona tus registros</p></div>
+                    <div><h2 className="text-3xl font-display font-bold">Historial</h2><p className="text-text-secondary hidden sm:block">Gestiona todos tus movimientos financieros.</p></div>
                     <div className="flex items-center gap-3">
                       <button onClick={() => setIsFilterSidebarOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Filter size={18} /> <span className="hidden sm:inline">Filtrar</span></button>
                       <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Download size={18} /> <span className="hidden sm:inline">Exportar</span></button>
@@ -1270,8 +1420,8 @@ export default function App() {
               {activeView === 'accounts' && (
                 <motion.div key="accounts" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Mis Cuentas</h2><p className="text-text-secondary">Gestiona tus tarjetas, bancos y efectivo.</p></div>
-                    <button onClick={() => { setModalType('account'); setIsModalOpen(true); }} className="bg-orange-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> <span className="hidden sm:inline">Nueva Cuenta</span><span className="sm:hidden">Nueva</span></button>
+                    <div><h2 className="text-3xl font-display font-bold">Mis Cuentas</h2><p className="text-text-secondary hidden sm:block">Gestiona tus tarjetas, bancos y efectivo.</p></div>
+                    <button onClick={() => { setModalType('account'); setIsModalOpen(true); }} className="bg-orange-primary text-white p-2 sm:px-4 sm:py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> <span className="hidden sm:inline">Nueva Cuenta</span></button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {accounts.map(a => (
@@ -1313,8 +1463,8 @@ export default function App() {
               {activeView === 'recurring' && (
                 <motion.div key="recurring" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Programados</h2><p className="text-text-secondary">Automatiza tus ingresos y gastos recurrentes.</p></div>
-                    <button onClick={() => { setModalType('transaction'); setEditingTransaction(null); setIsModalOpen(true); }} className="bg-orange-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20 transition-all active:scale-95"><Plus size={18} /> Nueva Programación</button>
+                    <div><h2 className="text-3xl font-display font-bold">Programados</h2><p className="text-text-secondary hidden sm:block">Automatiza tus ingresos y gastos recurrentes.</p></div>
+                    <button onClick={() => { setModalType('transaction'); setEditingTransaction(null); setIsModalOpen(true); }} className="bg-orange-primary text-white p-2 sm:px-4 sm:py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20 transition-all active:scale-95"><Plus size={18} /> <span className="hidden sm:inline">Nueva Programación</span></button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {recurring.map(r => {
@@ -1346,11 +1496,27 @@ export default function App() {
                 </motion.div>
               )}
 
-                {activeView === 'categories' && (
+                {activeView === 'goals' && (
+                  <motion.div key="goals" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                    <GoalsView 
+                      goals={goals} 
+                      automations={automations} 
+                      onAddGoal={() => { setModalType('goal'); setIsModalOpen(true); }} 
+                      onAddAutomation={() => { setModalType('automation'); setIsModalOpen(true); }} 
+                      onDeleteGoal={handleDeleteGoal} 
+                      onDeleteAutomation={handleDeleteAutomation}
+                      onAddFunds={(goal: any) => { setSelectedGoal(goal); setModalType('addFunds'); setIsModalOpen(true); }}
+                      onSelectGoal={(goal: any) => { setSelectedGoalDetails(goal); setIsGoalSidebarOpen(true); }}
+                      categories={allCategories}
+                    />
+                  </motion.div>
+                )}
+
+              {activeView === 'categories' && (
                   <motion.div key="categories" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <div><h2 className="text-3xl font-display font-bold">Categorías</h2><p className="text-text-secondary">Gestiona tus categorías y establece límites de presupuesto.</p></div>
-                      <button onClick={() => { setModalType('category'); setIsModalOpen(true); }} className="bg-orange-primary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> Nueva Categoría</button>
+                      <div><h2 className="text-3xl font-display font-bold">Categorías</h2><p className="text-text-secondary hidden sm:block">Gestiona tus categorías y establece límites de presupuesto.</p></div>
+                      <button onClick={() => { setModalType('category'); setIsModalOpen(true); }} className="bg-orange-primary text-white p-2 sm:px-4 sm:py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> <span className="hidden sm:inline">Nueva Categoría</span></button>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {allCategories.map(c => {
@@ -1484,11 +1650,21 @@ export default function App() {
           {isModalOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-              <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-lg bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+                animate={{ opacity: 1, scale: 1, y: 0 }} 
+                exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+                className={cn(
+                  "relative w-full bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300",
+                  (modalType === 'goal' || modalType === 'automation') ? "max-w-2xl" : "max-w-lg"
+                )}
+              >
                 <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
                   <h3 className="font-display font-bold text-xl">
                     {modalType === 'transaction' ? (editingTransaction ? 'Editar Registro' : 'Nuevo Registro') : 
-                     modalType === 'account' ? 'Nueva Cuenta' : 'Nueva Categoría'}
+                     modalType === 'account' ? 'Nueva Cuenta' : 
+                     modalType === 'category' ? 'Nueva Categoría' :
+                     modalType === 'goal' ? 'Nuevo Objetivo Financiero' : 'Nueva Automatización'}
                   </h3>
                   <button onClick={() => setIsModalOpen(false)} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
                 </div>
@@ -1583,7 +1759,7 @@ export default function App() {
                     <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Cuenta</button></div>
                   </form>
-                ) : (
+                ) : modalType === 'category' ? (
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     const fd = new FormData(e.currentTarget);
@@ -1631,6 +1807,160 @@ export default function App() {
                     <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
                     <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Categoría</button></div>
                   </form>
+                ) : null}
+
+                {modalType === 'goal' && (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const goalData = {
+                      name: formData.get('name'),
+                      targetAmount: Number(formData.get('targetAmount')),
+                      currentAmount: Number(formData.get('currentAmount')) || 0,
+                      deadline: formData.get('deadline'),
+                      color: formData.get('color'),
+                      icon: formData.get('icon')
+                    };
+                    if (selectedGoal) {
+                      handleUpdateGoal(selectedGoal.id, goalData);
+                      setIsModalOpen(false);
+                      setSelectedGoal(null);
+                      showToast('Objetivo actualizado');
+                    } else {
+                      handleAddGoal(goalData);
+                    }
+                  }} className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre del Objetivo</label>
+                        <input name="name" required defaultValue={selectedGoal?.name} placeholder="Ej: Viaje a Japón, Fondo de Emergencia..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" />
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto Objetivo</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} />
+                          <input name="targetAmount" type="number" required defaultValue={selectedGoal?.targetAmount} placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto Actual</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} />
+                          <input name="currentAmount" type="number" defaultValue={selectedGoal?.currentAmount || 0} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Fecha Límite (Opcional)</label>
+                        <div className="relative">
+                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} />
+                          <input name="deadline" type="date" defaultValue={selectedGoal?.deadline ? format(parseISO(selectedGoal.deadline), 'yyyy-MM-dd') : ''} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label>
+                          <input name="color" type="color" defaultValue={selectedGoal?.color || "#FF7A00"} className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none cursor-pointer" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Icono</label>
+                          <select name="icon" defaultValue={selectedGoal?.icon || 'Target'} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">
+                            {Object.keys(IconMap).map(icon => <option key={icon} value={icon}>{icon}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex gap-3">
+                      <button type="button" onClick={() => { setIsModalOpen(false); setSelectedGoal(null); }} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button>
+                      <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">{selectedGoal ? 'Guardar Cambios' : 'Crear Objetivo'}</button>
+                    </div>
+                  </form>
+                )}
+
+                {modalType === 'automation' && (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    handleAddAutomation({
+                      triggerCategoryId: formData.get('triggerCategoryId'),
+                      targetGoalId: formData.get('targetGoalId'),
+                      type: formData.get('type'),
+                      value: Number(formData.get('value'))
+                    });
+                  }} className="p-6 space-y-6">
+                    <div className="space-y-4">
+                      <div className="p-4 bg-orange-primary/5 border border-orange-primary/20 rounded-xl flex gap-3">
+                        <Sparkles className="text-orange-primary shrink-0" size={20} />
+                        <p className="text-xs leading-relaxed text-text-secondary">Las automatizaciones se activan cuando registras un **Ingreso** en la categoría seleccionada.</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Si recibo un ingreso en...</label>
+                        <select name="triggerCategoryId" required className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
+                          {allCategories.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Aumentar el objetivo...</label>
+                        <select name="targetGoalId" required className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
+                          {goals.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo de Aumento</label>
+                          <select name="type" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
+                            <option value="percentage">Porcentaje (%)</option>
+                            <option value="fixed">Monto Fijo ($)</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Valor</label>
+                          <input name="value" type="number" step="0.01" required placeholder="Ej: 10" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex gap-3">
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button>
+                      <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Activar Automatización</button>
+                    </div>
+                  </form>
+                )}
+                {modalType === 'addFunds' && selectedGoal && (
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    handleAddFundsToGoal(selectedGoal.id, Number(formData.get('amount')));
+                  }} className="p-6 space-y-6">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4 p-4 bg-surface-2 rounded-2xl border border-border">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${selectedGoal.color}15`, color: selectedGoal.color }}>
+                          {React.createElement(IconMap[selectedGoal.icon] || Target, { size: 24 })}
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Añadir fondos a</p>
+                          <h4 className="font-bold">{selectedGoal.name}</h4>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto a depositar</label>
+                        <div className="relative">
+                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} />
+                          <input name="amount" type="number" step="0.01" required autoFocus placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-3 pl-10 pr-4 text-lg font-bold focus:outline-none focus:border-orange-primary/50" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pt-4 flex gap-3">
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button>
+                      <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Confirmar Depósito</button>
+                    </div>
+                  </form>
                 )}
               </motion.div>
             </div>
@@ -1641,6 +1971,7 @@ export default function App() {
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-border flex items-center justify-around px-2 py-3 z-30 backdrop-blur-lg bg-sidebar/90">
           <BottomNavItem icon={<LayoutDashboard size={20} />} active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
           <BottomNavItem icon={<ArrowUpRight size={20} />} active={activeView === 'transactions'} onClick={() => setActiveView('transactions')} />
+          <BottomNavItem icon={<Target size={20} />} active={activeView === 'goals'} onClick={() => setActiveView('goals')} />
           <div className="relative -top-6">
             <button 
               onClick={() => { setModalType('transaction'); setEditingTransaction(null); setIsModalOpen(true); }}
@@ -1649,6 +1980,7 @@ export default function App() {
               <Plus size={28} />
             </button>
           </div>
+          <BottomNavItem icon={<Repeat size={20} />} active={activeView === 'recurring'} onClick={() => setActiveView('recurring')} />
           <BottomNavItem icon={<Tag size={20} />} active={activeView === 'categories'} onClick={() => setActiveView('categories')} />
           <BottomNavItem icon={<Settings size={20} />} active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
         </nav>
@@ -1669,6 +2001,15 @@ export default function App() {
           onDelete={() => handleDeleteTransaction(selectedTransactionDetails!)}
           accounts={accounts}
           categories={allCategories}
+        />
+
+        <GoalDetailsSidebar 
+          goal={selectedGoalDetails}
+          contributions={goalContributions.filter(c => c.goalId === selectedGoalDetails?.id)}
+          onClose={() => { setSelectedGoalDetails(null); setIsGoalSidebarOpen(false); }}
+          isOpen={isGoalSidebarOpen}
+          onEdit={() => { setSelectedGoal(selectedGoalDetails); setModalType('goal'); setIsModalOpen(true); }}
+          onDelete={() => { handleDeleteGoal(selectedGoalDetails!.id); setSelectedGoalDetails(null); setIsGoalSidebarOpen(false); }}
         />
 
         <Toast />
@@ -1714,6 +2055,140 @@ function KPICard({ title, value, trend, color, icon }: { title: string, value: s
     </div>
   );
 }
+
+const GoalCard = ({ goal, onDelete, onAddFunds, onClick }: any) => {
+  const progress = Math.min(100, (goal.currentAmount / goal.targetAmount) * 100);
+  const Icon = IconMap[goal.icon] || Target;
+
+  return (
+    <div 
+      onClick={onClick}
+      className="bg-surface border border-border rounded-2xl p-6 space-y-4 group hover:border-orange-primary/30 transition-all cursor-pointer"
+    >
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${goal.color}15`, color: goal.color }}>
+            <Icon size={24} />
+          </div>
+          <div>
+            <h4 className="font-bold">{goal.name}</h4>
+            <p className="text-xs text-text-dim">Meta: {formatCurrency(goal.targetAmount)}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 hover:bg-surface-2 rounded-lg text-text-dim hover:text-red-accent transition-colors"><Trash2 size={14} /></button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-bold text-text-secondary">{formatCurrency(goal.currentAmount)}</span>
+          <span className="text-text-dim">{Math.round(progress)}%</span>
+        </div>
+        <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+          <motion.div 
+            initial={{ width: 0 }} 
+            animate={{ width: `${progress}%` }} 
+            className="h-full transition-all"
+            style={{ backgroundColor: goal.color }}
+          />
+        </div>
+      </div>
+
+      <div className="pt-2">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onAddFunds(); }}
+          className="w-full py-2 bg-surface-2 hover:bg-orange-primary hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border border-border hover:border-orange-primary"
+        >
+          Añadir Fondos
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const GoalsView = ({ goals, automations, onAddGoal, onAddAutomation, onDeleteGoal, onDeleteAutomation, onAddFunds, onSelectGoal, categories }: any) => {
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl lg:text-3xl font-display font-bold">Objetivos Financieros</h2>
+          <p className="text-text-secondary text-sm lg:text-base hidden sm:block">Ahorra para lo que más importa.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={onAddAutomation}
+            className="flex items-center gap-2 p-2 sm:px-4 sm:py-2 bg-surface border border-border rounded-xl text-sm font-bold hover:bg-surface-2 transition-all"
+          >
+            <Repeat size={18} className="text-orange-primary" />
+            <span className="hidden sm:inline">Automatizar</span>
+          </button>
+          <button 
+            onClick={onAddGoal}
+            className="flex items-center gap-2 p-2 sm:px-4 sm:py-2 bg-orange-primary text-white rounded-xl text-sm font-bold hover:bg-orange-secondary transition-all shadow-lg shadow-orange-primary/20"
+          >
+            <Plus size={18} />
+            <span className="hidden sm:inline">Nuevo Objetivo</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {goals.map((g: any) => (
+          <GoalCard 
+            key={g.id} 
+            goal={g} 
+            onDelete={() => onDeleteGoal(g.id)} 
+            onAddFunds={() => onAddFunds(g)} 
+            onClick={() => onSelectGoal(g)}
+          />
+        ))}
+        {goals.length === 0 && (
+          <div className="col-span-full py-20 text-center space-y-4 bg-surface border border-dashed border-border rounded-3xl">
+            <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto">
+              <Target size={32} className="text-text-dim" />
+            </div>
+            <div>
+              <p className="font-bold">No tienes objetivos aún</p>
+              <p className="text-sm text-text-dim">Crea tu primer objetivo de ahorro hoy mismo.</p>
+            </div>
+            <button onClick={onAddGoal} className="text-orange-primary font-bold hover:underline">Comenzar ahora</button>
+          </div>
+        )}
+      </div>
+
+      {automations.length > 0 && (
+        <div className="space-y-6">
+          <h3 className="font-bold flex items-center gap-2"><Repeat size={18} className="text-orange-primary" /> Automatizaciones Activas</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {automations.map((a: any) => {
+              const goal = goals.find((g: any) => g.id === a.targetGoalId);
+              const cat = categories.find((c: any) => c.id === a.triggerCategoryId);
+              return (
+                <div key={a.id} className="bg-surface border border-border rounded-2xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-green-accent/10 text-green-accent rounded-lg">
+                      <TrendingUp size={20} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold">
+                        {a.type === 'percentage' ? `${a.value}% de` : `${formatCurrency(a.value)} de`} {cat?.name || 'Ingresos'}
+                      </p>
+                      <p className="text-xs text-text-dim">Destinado a: <span className="text-text-primary font-medium">{goal?.name || 'Objetivo'}</span></p>
+                    </div>
+                  </div>
+                  <button onClick={() => onDeleteAutomation(a.id)} className="p-2 text-text-dim hover:text-red-accent transition-colors">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function TransactionItem({ transaction, accounts, categories, onClick }: any) {
   const category = categories.find((c: any) => c.id === transaction.categoryId) || categories[categories.length - 1];
@@ -1867,6 +2342,148 @@ function TransactionDetailsSidebar({ transaction, onClose, onEdit, onDelete, acc
   );
 }
 
+function GoalDetailsSidebar({ goal, contributions, onClose, isOpen, onEdit, onDelete }: any) {
+  const [filter, setFilter] = useState<'all' | 'manual' | 'automation'>('all');
+  const filteredContributions = contributions
+    .filter((c: any) => filter === 'all' || c.source === filter)
+    .sort((a: any, b: any) => b.date.localeCompare(a.date));
+
+  const progress = goal ? Math.min(100, (goal.currentAmount / goal.targetAmount) * 100) : 0;
+  const Icon = goal ? (IconMap[goal.icon] || Target) : Target;
+
+  return (
+    <AnimatePresence>
+      {isOpen && goal && (
+        <>
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={onClose} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" 
+          />
+          <motion.div 
+            initial={{ x: '100%' }} 
+            animate={{ x: 0 }} 
+            exit={{ x: '100%' }} 
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed top-0 right-0 h-full w-full max-w-md bg-surface border-l border-border z-[70] shadow-2xl flex flex-col"
+          >
+            <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
+              <h3 className="font-display font-bold text-xl flex items-center gap-2">Detalles del Objetivo</h3>
+              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+              {/* Header Info */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${goal.color}15`, color: goal.color }}>
+                    <Icon size={32} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">{goal.name}</h2>
+                    <p className="text-sm text-text-dim">Creado el {format(parseISO(goal.createdAt), 'dd MMM yyyy', { locale: es })}</p>
+                  </div>
+                </div>
+
+                <div className="bg-surface-2 border border-border rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-text-dim uppercase tracking-widest">Progreso Actual</span>
+                    <span className="text-lg font-bold text-orange-primary">{Math.round(progress)}%</span>
+                  </div>
+                  <div className="h-3 bg-surface rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }} 
+                      animate={{ width: `${progress}%` }} 
+                      className="h-full transition-all"
+                      style={{ backgroundColor: goal.color }}
+                    />
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] uppercase font-bold text-text-dim mb-1">Ahorrado</p>
+                      <p className="text-xl font-bold">{formatCurrency(goal.currentAmount)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase font-bold text-text-dim mb-1">Meta</p>
+                      <p className="text-xl font-bold text-text-secondary">{formatCurrency(goal.targetAmount)}</p>
+                    </div>
+                  </div>
+                  {goal.deadline && (
+                    <div className="pt-4 border-t border-border flex items-center gap-2 text-xs text-text-dim">
+                      <Calendar size={14} />
+                      <span>Fecha límite: {format(parseISO(goal.deadline), 'dd MMM yyyy', { locale: es })}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* History */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-sm uppercase tracking-widest text-text-dim">Historial de Aportes</h4>
+                  <div className="flex bg-surface-2 rounded-lg p-1 border border-border">
+                    {(['all', 'manual', 'automation'] as const).map(f => (
+                      <button 
+                        key={f}
+                        onClick={() => setFilter(f)}
+                        className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", filter === f ? "bg-orange-primary text-white" : "text-text-dim hover:text-text-primary")}
+                      >
+                        {f === 'all' ? 'Todo' : f === 'manual' ? 'Manual' : 'Auto'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {filteredContributions.length === 0 ? (
+                    <div className="py-8 text-center border-2 border-dashed border-border rounded-2xl">
+                      <p className="text-xs text-text-dim">No hay aportes registrados aún.</p>
+                    </div>
+                  ) : (
+                    filteredContributions.map((c: any) => (
+                      <div key={c.id} className="bg-surface-2 border border-border rounded-xl p-4 flex items-center justify-between group hover:border-orange-primary/30 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", c.source === 'automation' ? "bg-purple-accent/10 text-purple-accent" : "bg-blue-accent/10 text-blue-accent")}>
+                            {c.source === 'automation' ? <Repeat size={14} /> : <UserIcon size={14} />}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold">{formatCurrency(c.amount)}</p>
+                            <p className="text-[10px] text-text-dim">{format(parseISO(c.date), 'dd MMM, HH:mm', { locale: es })}</p>
+                          </div>
+                        </div>
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
+                          {c.source === 'automation' ? 'Automático' : 'Manual'}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-border bg-sidebar/30 flex gap-3">
+              <button 
+                onClick={() => { onEdit(); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all flex items-center justify-center gap-2"
+              >
+                <Settings size={18} /> Editar
+              </button>
+              <button 
+                onClick={() => { onDelete(); }}
+                className="flex-1 py-3 rounded-xl text-sm font-bold bg-red-accent/10 text-red-accent hover:bg-red-accent hover:text-white transition-all flex items-center justify-center gap-2"
+              >
+                <Trash2 size={18} /> Eliminar
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function FilterSidebar({ isOpen, onClose, filters, setFilters, accounts, categories }: any) {
   return (
     <AnimatePresence>
@@ -1985,20 +2602,48 @@ function FilterSidebar({ isOpen, onClose, filters, setFilters, accounts, categor
 function Toast() {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
-  (window as any).showToast = (msg: string) => { setMessage(msg); setVisible(true); setTimeout(() => setVisible(false), 3000); };
+  const [type, setType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
+
+  (window as any).showToast = (msg: string, t: 'success' | 'error' | 'warning' | 'info' = 'success') => { 
+    setMessage(msg); 
+    setType(t);
+    setVisible(true); 
+    setTimeout(() => setVisible(false), 3000); 
+  };
+
+  const Icon = type === 'success' ? Check : 
+               type === 'error' ? AlertCircle : 
+               type === 'warning' ? AlertCircle : Lightbulb;
+  
+  const iconColor = type === 'success' ? 'bg-green-accent/20 text-green-accent' :
+                    type === 'error' ? 'bg-red-accent/20 text-red-accent' :
+                    type === 'warning' ? 'bg-orange-primary/20 text-orange-primary' :
+                    'bg-blue-accent/20 text-blue-accent';
+
   return (
     <AnimatePresence>
       {visible && (
-        <motion.div initial={{ opacity: 0, y: -20, x: '-50%' }} animate={{ opacity: 1, y: 0, x: '-50%' }} exit={{ opacity: 0, y: -20, x: '-50%' }} className="fixed top-8 left-1/2 -translate-x-1/2 z-[100] bg-surface-2 border border-border-2 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-orange-primary/20 text-orange-primary flex items-center justify-center"><Check size={16} /></div>
-          <span className="text-sm font-bold">{message}</span>
-        </motion.div>
+        <div className="fixed top-6 left-0 right-0 flex justify-center z-[100] pointer-events-none px-4">
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -20 }} 
+            className="bg-surface-2 border border-border px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 min-w-[280px] max-w-full pointer-events-auto"
+          >
+            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", iconColor)}>
+              <Icon size={16} />
+            </div>
+            <span className="text-sm font-bold text-text-primary">{message}</span>
+          </motion.div>
+        </div>
       )}
     </AnimatePresence>
   );
 }
 
-function showToast(msg: string) { if ((window as any).showToast) (window as any).showToast(msg); }
+function showToast(msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') { 
+  if ((window as any).showToast) (window as any).showToast(msg, type); 
+}
 
 function getChartData(transactions: Transaction[]) {
   const last7Days = Array.from({ length: 7 }, (_, i) => {
