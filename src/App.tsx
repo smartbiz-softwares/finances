@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   LayoutDashboard, 
   ArrowUpRight, 
@@ -65,7 +65,8 @@ import {
   Car as CarIcon,
   Utensils as UtensilsIcon,
   Gamepad as GamepadIcon,
-  HeartPulse as HeartPulseIcon
+  HeartPulse as HeartPulseIcon,
+  RotateCw
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -244,6 +245,8 @@ export default function App() {
     dateRange: 'all' as 'all' | 'day' | 'week' | 'month' | 'year'
   });
 
+  const processedRef = useRef<Set<string>>(new Set());
+
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -396,6 +399,14 @@ export default function App() {
     fetchSuggestions();
   }, [transactions.length]);
 
+  const handleRefreshSuggestions = useCallback(async () => {
+    if (transactions.length === 0) return;
+    setIsLoadingSuggestions(true);
+    const res = await getFinancialSuggestions(transactions, true);
+    setSuggestions(res);
+    setIsLoadingSuggestions(false);
+  }, [transactions]);
+
   // Process Recurring
   useEffect(() => {
     if (!user || recurring.length === 0) return;
@@ -404,6 +415,11 @@ export default function App() {
       if (!r.isActive) return;
       const next = parseISO(r.nextOccurrence);
       if (next <= now) {
+        // Prevent duplicate processing of the same recurrence in this session
+        const processedKey = `${r.id}-${r.nextOccurrence}`;
+        if (processedRef.current.has(processedKey)) return;
+        processedRef.current.add(processedKey);
+
         const transaction: Omit<Transaction, 'id'> = {
           userId: user.uid,
           accountId: r.accountId,
@@ -537,9 +553,12 @@ export default function App() {
     }
 
     // Filter out existing notifications to avoid duplicates
-    const finalNotifs = newNotifs.filter(nn => !notifications.some(n => n.id === nn.id));
-    if (finalNotifs.length > 0) {
-      setNotifications(prev => [...finalNotifs, ...prev]);
+    if (newNotifs.length > 0) {
+      setNotifications(prev => {
+        const finalNotifs = newNotifs.filter(nn => !prev.some(n => n.id === nn.id));
+        if (finalNotifs.length === 0) return prev;
+        return [...finalNotifs, ...prev];
+      });
     }
   }, [transactions, accounts, allCategories, totalIncome]);
 
@@ -1347,7 +1366,17 @@ export default function App() {
                       </div>
 
                       <div className="bg-surface-2 border border-border rounded-2xl p-6 relative overflow-hidden">
-                        <h3 className="font-bold flex items-center gap-2 mb-4"><Sparkles size={18} className="text-orange-primary" /> Sugerencias IA</h3>
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-bold flex items-center gap-2"><Sparkles size={18} className="text-orange-primary" /> Sugerencias IA</h3>
+                          <button 
+                            onClick={handleRefreshSuggestions}
+                            disabled={isLoadingSuggestions}
+                            className="p-1.5 text-text-dim hover:text-text-primary hover:bg-surface-3 rounded-lg transition-all disabled:opacity-50"
+                            title="Recargar sugerencias"
+                          >
+                            <RotateCw size={14} className={cn(isLoadingSuggestions && "animate-spin")} />
+                          </button>
+                        </div>
                         <div className="space-y-4">
                           {isLoadingSuggestions ? <div className="space-y-3">{[1, 2].map(i => <div key={i} className="h-20 bg-surface-3 animate-pulse rounded-xl"></div>)}</div> : suggestions.map((s, i) => (
                             <div key={i} className="p-4 bg-surface-3 rounded-xl border border-border hover:border-orange-primary/30 transition-all group cursor-default">
