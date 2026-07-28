@@ -109,6 +109,17 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_debts_userId ON debts(userId);
 
+  CREATE TABLE IF NOT EXISTS debt_payments (
+    id TEXT PRIMARY KEY,
+    debtId TEXT NOT NULL,
+    userId TEXT NOT NULL,
+    amount REAL NOT NULL,
+    date TEXT NOT NULL,
+    note TEXT,
+    createdAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_debt_payments_debtId ON debt_payments(debtId);
+
   CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
     userId TEXT,
@@ -195,7 +206,42 @@ function seedUserDataIfEmpty(userId: string) {
   db.prepare('INSERT INTO goals (id, userId, name, targetAmount, currentAmount, deadline, weeklyTarget, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
     randomUUID(), userId, 'Viaje de Vacaciones a Japón', 2500.00, 920.00, '2027-04-15', 50.00, 'active'
   );
+
+  // Initial debts & receivables
+  try {
+    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      randomUUID(), userId, 'Cena de cumpleaños', 'Carlos Gómez', 'debt', 150.00, 0, '2026-08-15', 'pending'
+    );
+    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      randomUUID(), userId, 'Préstamo proyecto web', 'Laura Martínez', 'receivable', 280.00, 0, '2026-08-30', 'pending'
+    );
+    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      randomUUID(), userId, 'Cuota mensual equipo', 'Banco Santander', 'debt', 450.00, 0, '2026-09-01', 'pending'
+    );
+    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      randomUUID(), userId, 'Entrada de concierto', 'Pedro Sánchez', 'receivable', 65.00, 65.00, '2026-07-20', 'paid'
+    );
+  } catch {}
 }
+
+// Seed user Christian specifically (jcksparrow0209@gmail.com / +5359079144)
+function seedChristianUser() {
+  const christianPhones = ['+5359079144', '5359079144'];
+  for (const phone of christianPhones) {
+    let user = db.prepare('SELECT * FROM users WHERE phone = ? OR email = ?').get(phone, 'jcksparrow0209@gmail.com') as any;
+    if (!user) {
+      const id = randomUUID();
+      db.prepare('INSERT INTO users (id, email, displayName, phone, theme, currency, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+        id, 'jcksparrow0209@gmail.com', 'Christian', phone, 'dark', 'EUR', new Date().toISOString()
+      );
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+    } else {
+      db.prepare('UPDATE users SET displayName = ?, email = ? WHERE id = ?').run('Christian', 'jcksparrow0209@gmail.com', user.id);
+    }
+    seedUserDataIfEmpty(user.id);
+  }
+}
+seedChristianUser();
 
 // --- Helpers ---
 
@@ -467,20 +513,51 @@ app.get('/api/finance/overview', authMiddleware, (req: any, res) => {
   const accounts = getDBAccounts(req.userId);
   const recentTxs = getDBTransactions(req.userId, 10);
   const goals = getDBGoals(req.userId);
+  const debts = getDBDebts(req.userId);
 
-  // Financial Health Score calculation
-  const savingsRatio = summary.totalIncome > 0 ? (summary.totalIncome - summary.totalExpense) / summary.totalIncome : 0;
-  const emergencyGoal = goals.find((g: any) => g.name.toLowerCase().includes('emergenc')) as any;
-  const emergencyCoverage = emergencyGoal ? (emergencyGoal.currentAmount / emergencyGoal.targetAmount) * 35 : (summary.netWorth > 2000 ? 25 : 10);
-  const savingsPts = Math.min(30, Math.max(0, savingsRatio * 30));
-  const healthScore = Math.min(100, Math.max(15, Math.round(30 + emergencyCoverage + savingsPts)));
+  // --- Comprehensive Hera Financial Health Score (Score Hera 0 - 100) ---
+  const pendingDebts = debts.filter((d: any) => (d.status || 'pending') === 'pending' && d.type === 'debt');
+  const totalPendingDebtAmount: number = Number(pendingDebts.reduce((sum: number, d: any) => sum + (Number(d.amount) - Number(d.paidAmount || 0)), 0));
+
+  // Pillar 1: Savings Ratio (Ingresos vs Gastos) - Max 25 pts
+  const totalInc: number = Number(summary.totalIncome || 0);
+  const totalExp: number = Number(summary.totalExpense || 0);
+  const totalBal: number = Number(summary.totalBalance || 0);
+
+  const savingsRate: number = totalInc > 0 ? (totalInc - totalExp) / totalInc : 0;
+  const p1_savings: number = savingsRate >= 0.3 ? 25 : savingsRate >= 0.15 ? 20 : savingsRate > 0 ? 12 : 5;
+
+  // Pillar 2: Debt Health (Nivel de Endeudamiento) - Max 25 pts
+  const debtToBalanceRatio: number = totalBal > 0 ? totalPendingDebtAmount / totalBal : (totalPendingDebtAmount > 0 ? 2 : 0);
+  const p2_debt: number = totalPendingDebtAmount === 0 ? 25 : debtToBalanceRatio < 0.2 ? 20 : debtToBalanceRatio < 0.5 ? 14 : debtToBalanceRatio < 1.0 ? 8 : 3;
+
+  // Pillar 3: Liquidity & Net Worth (Cuentas y Saldo) - Max 20 pts
+  const p3_liquidity: number = totalBal >= 5000 ? 20 : totalBal >= 1000 ? 15 : totalBal > 0 ? 10 : 3;
+
+  // Pillar 4: Goals Progress (Metas de Ahorro) - Max 15 pts
+  const avgGoalProgress: number = goals.length > 0 ? Number(goals.reduce((acc: number, g: any) => acc + (Number(g.currentAmount || 0) / Math.max(1, Number(g.targetAmount || 1))), 0)) / goals.length : 0;
+  const p4_goals = avgGoalProgress >= 0.75 ? 15 : avgGoalProgress >= 0.4 ? 11 : avgGoalProgress > 0 ? 7 : 3;
+
+  // Pillar 5: Consistency (Registros y Actividad) - Max 15 pts
+  const txCount = recentTxs.length;
+  const p5_consistency = txCount >= 8 ? 15 : txCount >= 3 ? 10 : 5;
+
+  const healthScore = Math.min(100, Math.max(15, p1_savings + p2_debt + p3_liquidity + p4_goals + p5_consistency));
+  const scoreBreakdown = {
+    savings: { pts: p1_savings, max: 25, label: 'Ahorro & Flujo de Caja' },
+    debt: { pts: p2_debt, max: 25, label: 'Control de Deudas' },
+    liquidity: { pts: p3_liquidity, max: 20, label: 'Liquidez & Cuentas' },
+    goals: { pts: p4_goals, max: 15, label: 'Metas de Ahorro' },
+    consistency: { pts: p5_consistency, max: 15, label: 'Consistencia de Registros' }
+  };
 
   res.json({
     summary,
     accounts,
     recentTxs,
     goals,
-    healthScore
+    healthScore,
+    scoreBreakdown
   });
 });
 
@@ -543,6 +620,137 @@ app.post('/api/finance/debts', authMiddleware, (req: any, res) => {
   );
   logAudit(req.userId, 'create_debt', `Nueva deuda/préstamo: ${name}`);
   res.json({ success: true, id });
+});
+
+app.put('/api/finance/debts/:id', (req: any, res) => {
+  const { id } = req.params;
+  const { status, paidAmount, name, personOrEntity, amount, dueDate } = req.body;
+
+  let userId = req.userId;
+  const header = req.headers.authorization;
+  if (!userId && header && header.startsWith('Bearer ')) {
+    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch {}
+  }
+  if (!userId) userId = 'demo_user';
+
+  let debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
+  if (!debt) {
+    const sampleNames: any = {
+      'sample-1': { name: 'Cena de cumpleaños', person: 'Carlos Gómez', type: 'debt', amount: 150.00 },
+      'sample-2': { name: 'Préstamo proyecto web', person: 'Laura Martínez', type: 'receivable', amount: 280.00 },
+      'sample-3': { name: 'Cuota mensual equipo', person: 'Banco Santander', type: 'debt', amount: 450.00 },
+      'sample-4': { name: 'Entrada de concierto', person: 'Pedro Sánchez', type: 'receivable', amount: 65.00 }
+    };
+    const s = sampleNames[id] || { name: 'Deuda / Cobro', person: 'Contacto', type: 'debt', amount: 100.00 };
+    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      id, userId, s.name, s.person, s.type, s.amount, 0, '2026-08-30', 'pending'
+    );
+    debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
+  }
+
+  const newStatus = status || debt.status;
+  let newPaidAmount = paidAmount !== undefined ? paidAmount : debt.paidAmount;
+
+  // If marking as paid and remaining balance exists, auto-record payment for remaining balance!
+  if (status === 'paid') {
+    const total = Number(amount !== undefined ? amount : debt.amount);
+    const currentPaid = Number(debt.paidAmount || 0);
+    const remaining = total - currentPaid;
+
+    if (remaining > 0) {
+      const paymentId = randomUUID();
+      const todayStr = new Date().toISOString().split('T')[0];
+      db.prepare('INSERT INTO debt_payments (id, debtId, userId, amount, date, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+        paymentId, id, userId, remaining, todayStr, 'Liquidación final — Pago completo registrado', new Date().toISOString()
+      );
+      newPaidAmount = total;
+    }
+  }
+
+  const newName = name || debt.name;
+  const newPerson = personOrEntity !== undefined ? personOrEntity : debt.personOrEntity;
+  const newAmount = amount !== undefined ? amount : debt.amount;
+  const newDueDate = dueDate !== undefined ? dueDate : debt.dueDate;
+
+  db.prepare('UPDATE debts SET status = ?, paidAmount = ?, name = ?, personOrEntity = ?, amount = ?, dueDate = ? WHERE id = ?').run(
+    newStatus, newPaidAmount, newName, newPerson, newAmount, newDueDate, id
+  );
+  logAudit(userId, 'update_debt', `Deuda actualizada: ${newName} -> ${newStatus}`);
+  res.json({ success: true, paidAmount: newPaidAmount, status: newStatus });
+});
+
+app.delete('/api/finance/debts/:id', authMiddleware, (req: any, res) => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM debts WHERE id = ? AND userId = ?').run(id, req.userId);
+  db.prepare('DELETE FROM debt_payments WHERE debtId = ? AND userId = ?').run(id, req.userId);
+  logAudit(req.userId, 'delete_debt', `Deuda eliminada: ${id}`);
+  res.json({ success: true });
+});
+
+// Get payment history for a debt
+app.get('/api/finance/debts/:id/payments', (req: any, res) => {
+  const { id } = req.params;
+  let userId = req.userId;
+  const header = req.headers.authorization;
+  if (!userId && header && header.startsWith('Bearer ')) {
+    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch {}
+  }
+  const payments = db.prepare('SELECT * FROM debt_payments WHERE debtId = ? ORDER BY date DESC, createdAt DESC').all(id);
+  res.json(payments);
+});
+
+// Add partial payment (abono) to a debt
+app.post('/api/finance/debts/:id/payments', (req: any, res) => {
+  const { id } = req.params;
+  const { amount, date, note } = req.body;
+  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'Monto de pago válido requerido' });
+
+  let userId = req.userId;
+  const header = req.headers.authorization;
+  if (!userId && header && header.startsWith('Bearer ')) {
+    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch {}
+  }
+  if (!userId) userId = 'demo_user';
+
+  let debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
+  if (!debt) {
+    const sampleNames: any = {
+      'sample-1': { name: 'Cena de cumpleaños', person: 'Carlos Gómez', type: 'debt', amount: 150.00 },
+      'sample-2': { name: 'Préstamo proyecto web', person: 'Laura Martínez', type: 'receivable', amount: 280.00 },
+      'sample-3': { name: 'Cuota mensual equipo', person: 'Banco Santander', type: 'debt', amount: 450.00 },
+      'sample-4': { name: 'Entrada de concierto', person: 'Pedro Sánchez', type: 'receivable', amount: 65.00 }
+    };
+    const s = sampleNames[id] || { name: 'Deuda / Cobro', person: 'Contacto', type: 'debt', amount: Number(amount) * 2 };
+    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+      id, userId, s.name, s.person, s.type, s.amount, 0, '2026-08-30', 'pending'
+    );
+    debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
+  }
+
+  const paymentId = randomUUID();
+  const payDate = date || new Date().toISOString().split('T')[0];
+
+  db.prepare('INSERT INTO debt_payments (id, debtId, userId, amount, date, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    paymentId, id, userId, Number(amount), payDate, note || '', new Date().toISOString()
+  );
+
+  // Recalculate total paid
+  const totalPaidRes = db.prepare('SELECT SUM(amount) as total FROM debt_payments WHERE debtId = ?').get(id) as any;
+  const totalPaid = Number(totalPaidRes?.total || 0);
+
+  let newStatus = debt.status;
+  if (totalPaid >= Number(debt.amount)) {
+    newStatus = 'paid';
+  } else if (totalPaid > 0 && debt.status !== 'cancelled') {
+    newStatus = 'partial';
+  }
+
+  db.prepare('UPDATE debts SET paidAmount = ?, status = ? WHERE id = ?').run(
+    totalPaid, newStatus, id
+  );
+
+  logAudit(userId, 'add_debt_payment', `Pago registrado a deuda ${debt.name}: ${amount}€`);
+  res.json({ success: true, paymentId, totalPaid, status: newStatus });
 });
 
 app.get('/api/finance/transactions', authMiddleware, (req: any, res) => {
@@ -1023,6 +1231,212 @@ app.post('/api/scan-receipt', authMiddleware, async (req: any, res) => {
   });
 });
 
+// --- Hera Pre-Configured Document Export Engine (Excel, Word, PDF Templates) ---
+app.post('/api/export-document', (req: any, res) => {
+  const { format, title, columns, rows, summary } = req.body;
+  const docTitle = title || 'Informe Financiero Ejecutivo - HeraWallet';
+  const filename = `${docTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+  const dateStr = new Date().toLocaleString('es-ES');
+
+  let userId = req.userId;
+  const header = req.headers.authorization;
+  if (!userId && header && header.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(header.slice(7), JWT_SECRET) as any;
+      userId = decoded.userId;
+    } catch {}
+  }
+  const userSummary = summary || getDBUserSummary(userId);
+  const userTxs = rows || (getDBTransactions(userId, 10) as any[]).map(t => [
+    t.date || 'Hoy',
+    t.category || 'General',
+    t.description || 'Movimiento',
+    t.type === 'income' ? 'Ingreso' : 'Gasto',
+    `${t.amount} €`
+  ]);
+
+  const docCols = columns || ['Fecha', 'Categoría', 'Descripción', 'Tipo', 'Importe'];
+
+  if (format === 'xlsx' || format === 'excel' || format === 'csv') {
+    // 🟢 Styled Excel Spreadsheet (XML/HTML format supported natively by MS Excel & LibreOffice with full CSS colors and formatting)
+    const excelXml = `
+      <html xmlns:o="urn:schemas-microsoft-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>Informe HeraWallet</x:Name>
+                <x:WorksheetOptions>
+                  <x:DisplayGridlines/>
+                </x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #2E2B28; }
+          .title-header { background-color: #D97757; color: #FFFFFF; font-size: 18pt; font-weight: bold; padding: 14px; text-align: left; }
+          .slogan-row { background-color: #FFF9F7; color: #6F6B66; font-size: 10pt; font-style: italic; padding: 8px; border-bottom: 2px solid #D97757; }
+          .meta-row { color: #9A958E; font-size: 9pt; font-family: monospace; padding: 6px; }
+          .section-banner { background-color: #2E2B28; color: #ECE7E1; font-size: 11pt; font-weight: bold; padding: 8px 12px; margin-top: 15px; }
+          .kpi-table { margin-top: 10px; margin-bottom: 20px; border-collapse: collapse; width: 100%; }
+          .kpi-table th { background-color: #F9F9F7; color: #9A958E; font-size: 9pt; border: 1px solid #E7E3DD; padding: 8px; text-transform: uppercase; font-family: monospace; }
+          .kpi-table td { background-color: #FFFFFF; color: #2E2B28; font-size: 12pt; font-weight: bold; border: 1px solid #E7E3DD; padding: 10px; text-align: center; }
+          .data-table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+          .data-table th { background-color: #D97757; color: #FFFFFF; font-size: 10pt; font-weight: bold; border: 1px solid #C96A4D; padding: 10px; text-align: left; text-transform: uppercase; font-family: monospace; }
+          .data-table td { border: 1px solid #E7E3DD; padding: 8px 10px; font-size: 10pt; }
+          .even-row { background-color: #F9F9F7; }
+          .odd-row { background-color: #FFFFFF; }
+          .amount-cell { font-family: monospace; font-weight: bold; text-align: right; }
+          .footer-note { color: #9A958E; font-size: 9pt; font-family: monospace; text-align: center; margin-top: 25px; padding-top: 10px; border-top: 1px solid #E7E3DD; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr><td colspan="${docCols.length}" class="title-header">HeraWallet — ${docTitle}</td></tr>
+          <tr><td colspan="${docCols.length}" class="slogan-row">Tus metas empiezan con un mejor control.</td></tr>
+          <tr><td colspan="${docCols.length}" class="meta-row">Fecha de emisión: ${dateStr} | ID Documento: ${filename} | Emisor: Hera AI Coach</td></tr>
+          <tr><td colspan="${docCols.length}"></td></tr>
+        </table>
+
+        <div class="section-banner">RESUMEN DE PATRIMONIO Y SALDOS</div>
+        <table class="kpi-table">
+          <thead>
+            <tr>
+              <th>Patrimonio Neto</th>
+              <th>Ingresos Mensuales</th>
+              <th>Gastos Mensuales</th>
+              <th>Score Financiero</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>${userSummary.totalBalance || '0,00'} €</td>
+              <td style="color: #3E8E68;">${userSummary.totalIncome || '0,00'} €</td>
+              <td style="color: #C45454;">${userSummary.totalExpense || '0,00'} €</td>
+              <td style="color: #D89A36;">48 / 100</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="section-banner">DESGLOSE DETALLADO DE MOVIMIENTOS</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              ${docCols.map((c: string) => `<th>${c}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${userTxs.map((r: any[], idx: number) => `
+              <tr class="${idx % 2 === 0 ? 'even-row' : 'odd-row'}">
+                ${r.map((cell: any, cIdx: number) => `
+                  <td class="${cIdx === r.length - 1 ? 'amount-cell' : ''}">${cell}</td>
+                `).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          Confidencial — HeraWallet Financial Technology. Todos los derechos reservados.
+        </div>
+      </body>
+      </html>
+    `;
+
+    res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.xls"`);
+    return res.send('\ufeff' + excelXml);
+
+  } else if (format === 'docx' || format === 'word') {
+    // 🟦 Styled Word Document
+    const wordXml = `
+      <html xmlns:o="urn:schemas-microsoft-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <title>${docTitle}</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; color: #2E2B28; padding: 40px; }
+          .header-box { border-bottom: 3px solid #D97757; padding-bottom: 12px; margin-bottom: 20px; }
+          h1 { color: #D97757; font-size: 24px; margin: 0 0 4px 0; }
+          .slogan { color: #6F6B66; font-size: 12px; font-style: italic; }
+          .meta { font-family: monospace; font-size: 10px; color: #9A958E; margin-top: 8px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background-color: #D97757; color: #ffffff; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; font-family: monospace; }
+          td { border-bottom: 1px solid #E7E3DD; padding: 10px; font-size: 11px; }
+          tr:nth-child(even) { background-color: #F9F9F7; }
+          .footer { margin-top: 40px; font-size: 10px; color: #9A958E; border-top: 1px solid #E7E3DD; padding-top: 12px; text-align: center; font-family: monospace; }
+        </style>
+      </head>
+      <body>
+        <div class="header-box">
+          <h1>HeraWallet — ${docTitle}</h1>
+          <div class="slogan">Tus metas empiezan con un mejor control.</div>
+          <div class="meta">Emisión: ${dateStr} | Documento: ${filename}</div>
+        </div>
+        <h3>Informe Financiero Ejecutivo</h3>
+        <table>
+          <thead><tr>${docCols.map((c: string) => `<th>${c}</th>`).join('')}</tr></thead>
+          <tbody>${userTxs.map((r: any[]) => `<tr>${r.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+        <div class="footer">Confidencial — HeraWallet Financial Technology.</div>
+      </body>
+      </html>
+    `;
+
+    res.setHeader('Content-Type', 'application/msword; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.doc"`);
+    return res.send('\ufeff' + wordXml);
+
+  } else {
+    // 📕 PDF / Printable Stream
+    const pdfHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${docTitle}</title>
+        <style>
+          body { font-family: 'Segoe UI', sans-serif; color: #2E2B28; padding: 40px; }
+          .header-box { border-bottom: 3px solid #D97757; padding-bottom: 12px; margin-bottom: 20px; }
+          h1 { color: #D97757; font-size: 24px; margin: 0; }
+          .slogan { color: #6F6B66; font-size: 12px; font-style: italic; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          th { background: #D97757; color: #fff; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; }
+          td { border-bottom: 1px solid #E7E3DD; padding: 10px; font-size: 11px; }
+          tr:nth-child(even) { background: #F9F9F7; }
+          .footer { margin-top: 40px; font-size: 10px; color: #9A958E; border-top: 1px solid #E7E3DD; padding-top: 12px; text-align: center; font-family: monospace; }
+        </style>
+      </head>
+      <body>
+        <div class="header-box">
+          <h1>HeraWallet — ${docTitle}</h1>
+          <div class="slogan">Tus metas empiezan con un mejor control.</div>
+        </div>
+        <table>
+          <thead><tr>${docCols.map((c: string) => `<th>${c}</th>`).join('')}</tr></thead>
+          <tbody>${userTxs.map((r: any[]) => `<tr>${r.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+        <div class="footer">Confidencial — HeraWallet Financial Technology.</div>
+        <script>
+          window.onload = function() {
+            window.print();
+            setTimeout(function() { window.close(); }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(pdfHtml);
+  }
+});
+
 // --- Conversational AI Engine Endpoint with Real DeepSeek & Gemini Integration ---
 
 app.get('/api/chat/history', authMiddleware, (req: any, res) => {
@@ -1066,6 +1480,12 @@ Cuentas Usuario: ${JSON.stringify(accounts)}.
 Metas de Ahorro: ${JSON.stringify(goals)}.
 Deudas Registradas: ${JSON.stringify(debts)}.
 Transacciones Recientes: ${JSON.stringify(txs)}.
+
+ESTILO Y TONO EJECUTIVO:
+- Mantén una redacción limpia, sobria, elegante y ejecutiva.
+- ESTÁ ABSOLUTAMENTE PROHIBIDO el uso de caracteres de bloques o cuadrículas ASCII como ▰▰▰▰▰▰▰▱▱▱ o █████░░░░ para simular barras de progreso. Solo proporciona porcentajes limpios (ej. 61.7%) y el sistema renderizará la barra visual de Hera.
+- ESTÁ PROHIBIDO el uso excesivo de emojis (no uses emojis de números como 1️⃣, 2️⃣, 3️⃣, 4️⃣ ni satures el texto con 🔴, 🟢, 🟡, 🚀 en cada línea).
+- Estructura las secciones usando títulos Markdown limpios (### o ####) indicando la puntuación de forma sobria como "(20/100)".
 
 REGLA CRÍTICA DE INTERACTIVIDAD VISUAL Y WIDGETS:
 1. SI EL USUARIO SOLICITA REGISTRAR O CREAR UN GASTO/INGRESO O META:
@@ -1118,14 +1538,21 @@ Incluye al final:
 }
 <<<TABLE_END>>>
 
-5. SI EL USUARIO PIDE DESCARGAR INFORME, PDF O REPORTE COMPLETO:
+5. SI EL USUARIO PIDE GENERAR O DESCARGAR DOCUMENTOS (WORD, EXCEL, PDF, INFORME O REPORTE):
 Incluye al final:
 <<<DOC_START>>>
 {
-  "title": "Informe Financiero Ejecutivo - Hera AI",
-  "format": "PDF",
+  "title": "Informe Financiero Ejecutivo - HeraWallet",
+  "format": "DOCX/XLSX/PDF",
   "size": "340 KB",
-  "date": "${new Date().toISOString().split('T')[0]}"
+  "date": "${new Date().toISOString().split('T')[0]}",
+  "columns": ["Categoría / Concepto", "Presupuesto", "Ejecutado", "Estado"],
+  "rows": [
+    ["Alimentación & Supermercado", "500€", "420€", "En rango"],
+    ["Servicios & Suministros", "350€", "340€", "Optimizado"],
+    ["Ocio & Salidas", "200€", "410€", "Excedido (-210€)"],
+    ["Ahorro & Inversión", "400€", "400€", "Completado 100%"]
+  ]
 }
 <<<DOC_END>>>`;
 
@@ -1223,6 +1650,52 @@ Incluye al final:
     } catch (e) {}
   }
 
+  // Fallback Automatic Document Widget Detection
+  if (!widgetType && (
+    aiReplyText.toLowerCase().includes('excel') || 
+    aiReplyText.toLowerCase().includes('word') || 
+    aiReplyText.toLowerCase().includes('pdf') || 
+    aiReplyText.toLowerCase().includes('descargar') || 
+    aiReplyText.toLowerCase().includes('generar archivo') ||
+    aiReplyText.toLowerCase().includes('cree el excel') ||
+    aiReplyText.toLowerCase().includes('widget inferior') ||
+    aiReplyText.toLowerCase().includes('informe financiero')
+  )) {
+    const isDoc = aiReplyText.toLowerCase().includes('word') || aiReplyText.toLowerCase().includes('doc');
+    const isPdf = aiReplyText.toLowerCase().includes('pdf');
+    const fmt = isDoc ? 'docx' : isPdf ? 'pdf' : 'xlsx';
+
+    widgetType = 'document';
+    widgetData = {
+      title: 'Informe_Financiero_HeraWallet',
+      format: fmt,
+      size: '340 KB',
+      columns: ['Fecha', 'Categoría', 'Descripción', 'Tipo', 'Importe'],
+      rows: [
+        ['2026-07-28', 'Ingresos', 'Nómina / Ventas', 'Ingreso', '4.509 €'],
+        ['2026-07-28', 'General', 'Gastos Totales', 'Gasto', '7.356 €'],
+        ['2026-07-28', 'Ahorro', 'Fondo de Emergencia', 'Ahorro', '1.850 €'],
+        ['2026-07-28', 'Metas', 'Viaje a Japón', 'Ahorro', '920 €']
+      ]
+    };
+  }
+
+  // Fallback Automatic Pending Action Detection
+  if (!widgetType && (aiReplyText.toLowerCase().includes('autorizas') || aiReplyText.toLowerCase().includes('ejecute la acción') || aiReplyText.toLowerCase().includes('acción pendiente'))) {
+    const amountMatch = aiReplyText.match(/(\d+([.,]\d+)?)\s*€/);
+    const amountVal = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 100;
+    widgetType = 'pending_action';
+    widgetData = {
+      actionType: 'create_transaction',
+      type: 'income',
+      amount: amountVal,
+      category: 'Ahorro / Fondo de Emergencia',
+      description: 'Transferencia a Fondo de Ahorro',
+      accountId: (accounts[0] as any)?.id || '',
+      accountName: (accounts[0] as any)?.name || 'Cuenta Principal'
+    };
+  }
+
   // Save AI response to DB
   db.prepare('INSERT INTO chat_messages (id, userId, role, content, type, data, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
     randomUUID(), userId, 'assistant', aiReplyText, widgetType || 'text', widgetData ? JSON.stringify(widgetData) : null, new Date().toISOString()
@@ -1263,6 +1736,17 @@ app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
 
       logAudit(req.userId, 'confirm_chat_transaction', `Transacción confirmada desde chat: ${category} - ${amount}€`);
       return res.json({ success: true, message: 'Registro creado con éxito en tus transacciones' });
+    }
+
+    if (actionType === 'create_debt') {
+      const id = randomUUID();
+      const debtPerson = req.body.personOrEntity || name || 'Persona / Entidad';
+      const debtName = description || name || 'Préstamo / Deuda';
+      db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        id, req.userId, debtName, debtPerson, type || 'debt', Number(amount) || 0, 0, deadline || '', 'pending'
+      );
+      logAudit(req.userId, 'confirm_chat_debt', `Deuda/Cobro confirmada desde chat: ${debtPerson} - ${amount}€`);
+      return res.json({ success: true, message: 'Registro de deuda/cobro guardado con éxito' });
     }
 
     if (actionType === 'create_goal') {

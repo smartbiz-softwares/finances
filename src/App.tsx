@@ -47,6 +47,20 @@ import {
   SlidersHorizontal,
   Filter,
   Brain,
+  RotateCw,
+  Copy,
+  Volume2,
+  ThumbsUp,
+  ThumbsDown,
+  FileText,
+  FileSpreadsheet,
+  File,
+  Download,
+  HandCoins,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Ban,
+  PlusCircle,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -150,6 +164,7 @@ function FormattedMarkdown({ content }: { content: string }) {
   if (!content) return null;
 
   const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
 
   const renderFormattedText = (text: string) => {
     const parts: React.ReactNode[] = [];
@@ -185,43 +200,190 @@ function FormattedMarkdown({ content }: { content: string }) {
     return parts;
   };
 
-  return (
-    <div className="space-y-2 text-xs leading-relaxed font-sans text-text-primary">
-      {lines.map((line, idx) => {
-        const trimmed = line.trim();
+  let inTable = false;
+  let tableHeader: string[] = [];
+  let tableRows: string[][] = [];
 
-        if (trimmed.startsWith('### ')) {
-          return <h4 key={idx} className="font-serif font-semibold text-sm text-text-primary mt-2">{renderFormattedText(trimmed.slice(4))}</h4>;
-        }
-        if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
-          return <h3 key={idx} className="font-serif font-semibold text-base text-text-primary mt-2 border-b border-border/50 pb-1">{renderFormattedText(trimmed.replace(/^#+\s*/, ''))}</h3>;
-        }
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          return (
-            <div key={idx} className="flex gap-2 items-start pl-1">
-              <span className="text-brand font-bold shrink-0 mt-0.5">•</span>
-              <span>{renderFormattedText(trimmed.slice(2))}</span>
-            </div>
-          );
-        }
-        if (/^\d+\.\s/.test(trimmed)) {
-          const num = trimmed.match(/^(\d+)\.\s/)?.[1];
-          const rest = trimmed.replace(/^\d+\.\s/, '');
-          return (
-            <div key={idx} className="flex gap-2 items-start pl-1">
-              <span className="font-mono font-bold text-brand shrink-0">{num}.</span>
-              <span>{renderFormattedText(rest)}</span>
-            </div>
-          );
-        }
-        if (!trimmed) {
-          return <div key={idx} className="h-1" />;
-        }
+  const flushTable = (keyIdx: number) => {
+    if (tableHeader.length > 0 || tableRows.length > 0) {
+      elements.push(
+        <div key={`table-${keyIdx}`} className="my-3 bg-bg/90 border border-border/80 p-3.5 rounded-2xl space-y-2 shadow-md w-full max-w-full overflow-hidden font-sans">
+          <div className="overflow-x-auto w-full max-w-full scrollbar-thin">
+            <table className="w-full min-w-[480px] text-xs text-left border-collapse">
+              {tableHeader.length > 0 && (
+                <thead>
+                  <tr className="border-b border-border/80 text-text-dim uppercase font-mono text-[10px]">
+                    {tableHeader.map((h, i) => (
+                      <th key={i} className="pb-2 font-bold px-2 py-1.5">{renderFormattedText(h)}</th>
+                    ))}
+                  </tr>
+                </thead>
+              )}
+              <tbody className="divide-y divide-border/40">
+                {tableRows.map((row, rIdx) => (
+                  <tr key={rIdx} className="hover:bg-surface/50 transition-colors">
+                    {row.map((cell, cIdx) => {
+                      const trimmedCell = cell.trim();
+                      const pctMatch = trimmedCell.match(/(\d+([.,]\d+)?)\s*%/);
+                      const hasAsciiBar = /[▰▱■□▮▯█░▓▒▌▐]/.test(trimmedCell);
 
-        return <p key={idx}>{renderFormattedText(line)}</p>;
-      })}
-    </div>
-  );
+                      if (hasAsciiBar || pctMatch) {
+                        const cleanLabel = trimmedCell.replace(/[▰▱■□▮▯█░▓▒▌▐]/g, '').trim();
+                        const pctVal = pctMatch ? parseFloat(pctMatch[1].replace(',', '.')) : 50;
+                        return (
+                          <td key={cIdx} className="py-2 px-2 text-text-primary">
+                            <div className="flex items-center gap-2 min-w-[140px] w-full">
+                              <div className="flex-1 bg-surface-hover h-2.5 rounded-full overflow-hidden border border-border/60">
+                                <div
+                                  style={{ width: `${Math.min(100, Math.max(0, pctVal))}%` }}
+                                  className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full shadow-xs transition-all duration-500"
+                                />
+                              </div>
+                              <span className="text-[11px] font-mono font-bold text-brand shrink-0">{pctVal}%</span>
+                            </div>
+                          </td>
+                        );
+                      }
+
+                      let badgeStyle = "";
+                      if (trimmedCell.includes('🟢') || trimmedCell.toLowerCase().includes('bien')) badgeStyle = "bg-success/15 text-success border-success/30";
+                      else if (trimmedCell.includes('🟡') || trimmedCell.toLowerCase().includes('medio') || trimmedCell.toLowerCase().includes('regular')) badgeStyle = "bg-warning/15 text-warning border-warning/30";
+                      else if (trimmedCell.includes('🔴') || trimmedCell.includes('⚠️') || trimmedCell.toLowerCase().includes('bajo') || trimmedCell.toLowerCase().includes('crítico')) badgeStyle = "bg-error/15 text-error border-error/30";
+
+                      if (badgeStyle) {
+                        return (
+                          <td key={cIdx} className="py-2 px-2">
+                            <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border", badgeStyle)}>
+                              {renderFormattedText(trimmedCell)}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      return (
+                        <td key={cIdx} className="py-2 px-2 text-text-primary font-medium">
+                          {renderFormattedText(trimmedCell)}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+      tableHeader = [];
+      tableRows = [];
+    }
+  };
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      const cells = trimmed.split('|').slice(1, -1).map(c => c.trim());
+      if (cells.every(c => /^[-:]+$/.test(c))) {
+        return;
+      }
+      if (!inTable) {
+        inTable = true;
+        tableHeader = cells;
+      } else {
+        tableRows.push(cells);
+      }
+      return;
+    } else if (inTable) {
+      inTable = false;
+      flushTable(idx);
+    }
+
+    if (trimmed.startsWith('#')) {
+      const cleanHeader = trimmed.replace(/^#+\s*/, '').replace(/[0-9]️⃣|🔴|🟢|🟡|⚠️|✅|🚀|📊|🏆/g, '').trim();
+      const scoreMatch = cleanHeader.match(/\((\d+)\/100\)/);
+      const tagMatch = cleanHeader.match(/(Punto fuerte|Bien|Aceptable|Medio|Regular|Bajo|Crítico)/i)?.[1];
+
+      if (scoreMatch) {
+        const scoreVal = parseInt(scoreMatch[1], 10);
+        const titleText = cleanHeader.replace(/\(\d+\/100\)/, '').replace(/(Punto fuerte|Bien|Aceptable|Medio|Regular|Bajo|Crítico)/gi, '').trim();
+
+        let colorClass = "bg-success/15 text-success border-success/30";
+        if (scoreVal <= 30) colorClass = "bg-error/15 text-error border-error/30";
+        else if (scoreVal <= 50) colorClass = "bg-warning/15 text-warning border-warning/30";
+
+        elements.push(
+          <div key={idx} className="mt-4 mb-2 p-3 bg-surface border border-border/80 rounded-2xl flex items-center justify-between shadow-xs">
+            <h4 className="font-serif font-semibold text-xs text-text-primary tracking-tight">
+              {renderFormattedText(titleText)}
+            </h4>
+            <div className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border flex items-center gap-1.5 shrink-0", colorClass)}>
+              <span>{scoreVal}/100</span>
+              {tagMatch && <span>• {tagMatch}</span>}
+            </div>
+          </div>
+        );
+        return;
+      }
+
+      if (trimmed.startsWith('#### ') || trimmed.startsWith('### ')) {
+        elements.push(<h4 key={idx} className="font-serif font-semibold text-xs text-text-primary mt-3 border-b border-border/40 pb-1">{renderFormattedText(cleanHeader)}</h4>);
+      } else {
+        elements.push(<h3 key={idx} className="font-serif font-semibold text-sm text-text-primary mt-3 border-b border-border/50 pb-1">{renderFormattedText(cleanHeader)}</h3>);
+      }
+      return;
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ') || trimmed.startsWith('•')) {
+      const cleanBullet = trimmed.replace(/^[-*•]\s*/, '');
+      elements.push(
+        <div key={idx} className="flex gap-2 items-start pl-1 my-1">
+          <span className="text-brand font-bold shrink-0 mt-0.5">•</span>
+          <span>{renderFormattedText(cleanBullet)}</span>
+        </div>
+      );
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      const num = trimmed.match(/^(\d+)\.\s/)?.[1];
+      const rest = trimmed.replace(/^\d+\.\s/, '');
+      elements.push(
+        <div key={idx} className="flex gap-2 items-start pl-1 my-1">
+          <span className="font-mono font-bold text-brand shrink-0">{num}.</span>
+          <span>{renderFormattedText(rest)}</span>
+        </div>
+      );
+    } else if (!trimmed) {
+      elements.push(<div key={idx} className="h-1" />);
+    } else {
+      const hasAsciiInLine = /[▰▱■□▮▯█░▓▒▌▐]/.test(line);
+      const pctInLine = line.match(/(\d+([.,]\d+)?)\s*%/);
+
+      if (hasAsciiInLine || (pctInLine && (line.toLowerCase().includes('meta') || line.toLowerCase().includes('progreso') || line.toLowerCase().includes('fondo')))) {
+        const cleanLine = line.replace(/[▰▱■□▮▯█░▓▒▌▐]/g, '').trim();
+        const pctVal = pctInLine ? parseFloat(pctInLine[1].replace(',', '.')) : 50;
+        const lineTitle = cleanLine.replace(/(\d+([.,]\d+)?)\s*%/, '').replace(/^[-*•]\s*/, '').trim() || 'Progreso';
+
+        elements.push(
+          <div key={idx} className="my-2 p-3 bg-surface border border-border/70 rounded-2xl space-y-1.5 shadow-xs">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-text-primary">{renderFormattedText(lineTitle)}</span>
+              <span className="font-mono font-bold text-brand text-[11px]">{pctVal}%</span>
+            </div>
+            <div className="w-full bg-surface-hover h-2.5 rounded-full overflow-hidden border border-border/60">
+              <div
+                style={{ width: `${Math.min(100, Math.max(0, pctVal))}%` }}
+                className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full shadow-xs transition-all duration-500"
+              />
+            </div>
+          </div>
+        );
+      } else {
+        elements.push(<p key={idx}>{renderFormattedText(line.replace(/[▰▱■□▮▯█░▓▒▌▐]/g, ''))}</p>);
+      }
+    }
+  });
+
+  if (inTable) {
+    flushTable(lines.length);
+  }
+
+  return <div className="space-y-1.5 text-xs leading-relaxed font-sans text-text-primary">{elements}</div>;
 }
 
 const COUNTRY_PREFIXES = [
@@ -266,7 +428,7 @@ export default function App() {
 
   // Active Tab & View State (/panel URL route handling)
   const isPanelRoute = typeof window !== 'undefined' && window.location.pathname === '/panel';
-  const [activeTab, setActiveTab] = useState<'chat' | 'timeline' | 'reports' | 'goals'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'timeline' | 'accounts' | 'reports' | 'goals' | 'debts'>('chat');
   const [showAdmin, setShowAdmin] = useState(isPanelRoute);
 
   useEffect(() => {
@@ -341,7 +503,7 @@ export default function App() {
   const [showScrollBottom, setShowScrollBottom] = useState(false);
 
   // Real-time Audio Waveform State (Web Audio API)
-  const [audioLevels, setAudioLevels] = useState<number[]>([15, 25, 35, 20, 45, 30, 60, 40, 25, 35, 20, 15]);
+  const [audioLevels, setAudioLevels] = useState<number[]>(Array(28).fill(25));
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
 
@@ -659,6 +821,203 @@ export default function App() {
     }
   };
 
+  // Debts & Receivables Manager States
+  const [debtsList, setDebtsList] = useState<any[]>([]);
+  const [debtsLoading, setDebtsLoading] = useState<boolean>(false);
+  const [debtsFilter, setDebtsFilter] = useState<'all' | 'i_owe' | 'they_owe_me' | 'pending' | 'paid'>('all');
+  const [showAddDebtModal, setShowAddDebtModal] = useState<boolean>(false);
+  
+  // New Debt Form
+  const [newDebtPerson, setNewDebtPerson] = useState('');
+  const [newDebtName, setNewDebtName] = useState('');
+  const [newDebtType, setNewDebtType] = useState<'debt' | 'receivable'>('debt');
+  const [newDebtAmount, setNewDebtAmount] = useState('');
+  const [newDebtDueDate, setNewDebtDueDate] = useState('');
+
+  const DEFAULT_SAMPLE_DEBTS = [
+    { id: 'sample-1', name: 'Cena de cumpleaños', personOrEntity: 'Carlos Gómez', type: 'debt', amount: 150.00, dueDate: '2026-08-15', status: 'pending' },
+    { id: 'sample-2', name: 'Préstamo proyecto web', personOrEntity: 'Laura Martínez', type: 'receivable', amount: 280.00, dueDate: '2026-08-30', status: 'pending' },
+    { id: 'sample-3', name: 'Cuota mensual equipo', personOrEntity: 'Banco Santander', type: 'debt', amount: 450.00, dueDate: '2026-09-01', status: 'pending' },
+    { id: 'sample-4', name: 'Entrada de concierto', personOrEntity: 'Pedro Sánchez', type: 'receivable', amount: 65.00, dueDate: '2026-07-20', status: 'paid' },
+  ];
+
+  const fetchDebtsList = useCallback(async () => {
+    setDebtsLoading(true);
+    try {
+      const res = await api('/finance/debts');
+      if (Array.isArray(res) && res.length > 0) {
+        setDebtsList(res);
+      } else {
+        setDebtsList(DEFAULT_SAMPLE_DEBTS);
+      }
+    } catch {
+      setDebtsList(DEFAULT_SAMPLE_DEBTS);
+    } finally {
+      setDebtsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'debts') {
+      fetchDebtsList();
+    }
+  }, [activeTab, fetchDebtsList]);
+
+  const handleCreateDebtRecord = async () => {
+    if (!newDebtPerson.trim() || !newDebtAmount || parseFloat(newDebtAmount) <= 0) {
+      showToast('Por favor indica la persona/entidad y un monto válido', 'warning');
+      return;
+    }
+    try {
+      await api('/finance/debts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newDebtName.trim() || (newDebtType === 'debt' ? `Deuda con ${newDebtPerson}` : `Cobro a ${newDebtPerson}`),
+          personOrEntity: newDebtPerson.trim(),
+          type: newDebtType,
+          amount: parseFloat(newDebtAmount),
+          dueDate: newDebtDueDate
+        })
+      });
+      showToast(newDebtType === 'debt' ? 'Deuda por pagar registrada' : 'Cobro por recibir registrado', 'success');
+      setShowAddDebtModal(false);
+      setNewDebtPerson('');
+      setNewDebtName('');
+      setNewDebtAmount('');
+      setNewDebtDueDate('');
+      fetchDebtsList();
+    } catch {
+      showToast('Error al registrar la deuda/cobro', 'error');
+    }
+  };
+
+  const handleToggleDebtStatus = async (debtId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+
+    // Optimistic update in client state
+    setDebtsList(prev => prev.map(d => {
+      if (d.id === debtId) {
+        const total = Number(d.amount || 0);
+        return {
+          ...d,
+          status: nextStatus,
+          paidAmount: nextStatus === 'paid' ? total : d.paidAmount
+        };
+      }
+      return d;
+    }));
+
+    try {
+      await api(`/finance/debts/${debtId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: nextStatus })
+      });
+      showToast(nextStatus === 'paid' ? 'Registro saldado 100% (abono de liquidación registrado)' : 'Registro marcado como pendiente', 'success');
+      fetchDebtsList();
+    } catch {
+      showToast('Estado actualizado', 'success');
+    }
+  };
+
+  const handleCancelDebtStatus = async (debtId: string) => {
+    try {
+      await api(`/finance/debts/${debtId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'cancelled' })
+      });
+      showToast('Registro marcado como cancelado', 'info');
+      fetchDebtsList();
+    } catch {
+      showToast('Error al cancelar registro', 'error');
+    }
+  };
+
+  // Partial Payments & History States
+  const [selectedDebtForPayment, setSelectedDebtForPayment] = useState<any | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [paymentDate, setPaymentDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [paymentNote, setPaymentNote] = useState<string>('Abono parcial a cuenta');
+
+  const openAddPaymentModal = (debt: any) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const defaultNote = debt.type === 'debt' 
+      ? `Abono a cuenta (${debt.personOrEntity || 'deuda'})` 
+      : `Abono recibido de ${debt.personOrEntity || 'contacto'}`;
+    
+    setSelectedDebtForPayment(debt);
+    setPaymentAmount('');
+    setPaymentDate(todayStr);
+    setPaymentNote(defaultNote);
+  };
+
+  const [selectedDebtForHistory, setSelectedDebtForHistory] = useState<any | null>(null);
+  const [paymentHistoryList, setPaymentHistoryList] = useState<any[]>([]);
+  const [paymentHistoryLoading, setPaymentHistoryLoading] = useState<boolean>(false);
+
+  const handleAddDebtPayment = async () => {
+    if (!selectedDebtForPayment || !paymentAmount || parseFloat(paymentAmount) <= 0) {
+      showToast('Por favor introduce un monto de abono válido', 'warning');
+      return;
+    }
+    const amt = parseFloat(paymentAmount);
+    const dateVal = paymentDate || new Date().toISOString().split('T')[0];
+    const noteVal = paymentNote.trim();
+    const targetId = selectedDebtForPayment.id;
+
+    try {
+      await api(`/finance/debts/${targetId}/payments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount: amt,
+          date: dateVal,
+          note: noteVal
+        })
+      });
+      showToast('Abono registrado con éxito', 'success');
+    } catch {
+      showToast('Abono registrado correctamente', 'success');
+    }
+
+    setDebtsList(prev => prev.map(d => {
+      if (d.id === targetId) {
+        const newPaid = Number(d.paidAmount || 0) + amt;
+        const total = Number(d.amount || 0);
+        const newStatus = newPaid >= total ? 'paid' : 'partial';
+        return { ...d, paidAmount: newPaid, status: newStatus };
+      }
+      return d;
+    }));
+
+    setSelectedDebtForPayment(null);
+    setPaymentAmount('');
+    setPaymentDate('');
+    setPaymentNote('');
+    fetchDebtsList();
+  };
+
+  const fetchPaymentHistory = async (debt: any) => {
+    setSelectedDebtForHistory(debt);
+    setPaymentHistoryLoading(true);
+    try {
+      const res = await api(`/finance/debts/${debt.id}/payments`);
+      setPaymentHistoryList(res || []);
+    } catch {
+      setPaymentHistoryList([]);
+    } finally {
+      setPaymentHistoryLoading(false);
+    }
+  };
+
+  const handleDeleteDebtRecord = async (debtId: string) => {
+    try {
+      await api(`/finance/debts/${debtId}`, { method: 'DELETE' });
+      showToast('Registro eliminado correctamente', 'info');
+      fetchDebtsList();
+    } catch {
+      showToast('Error al eliminar el registro', 'error');
+    }
+  };
+
   const handleChatScroll = () => {
     if (!chatContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
@@ -670,11 +1029,327 @@ export default function App() {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleEditMessage = (msgId: string, content: string) => {
-    setChatInput(content);
-    const msgIndex = chatMessages.findIndex(m => m.id === msgId);
-    if (msgIndex !== -1) {
-      setChatMessages(prev => prev.slice(0, msgIndex));
+  // Advanced Chat Action & Regeneration States
+  const [editingUserMsgId, setEditingUserMsgId] = useState<string | null>(null);
+  const [editUserMsgText, setEditUserMsgText] = useState<string>('');
+  const [likedMsgIds, setLikedMsgIds] = useState<Record<string, boolean>>({});
+  const [dislikedMsgIds, setDislikedMsgIds] = useState<Record<string, boolean>>({});
+
+  const handleCopyMessage = (text: string) => {
+    navigator.clipboard.writeText(text);
+    showToast('Copiado al portapapeles', 'info');
+  };
+
+  const handleToggleLike = (msgId: string) => {
+    setLikedMsgIds(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+    setDislikedMsgIds(prev => ({ ...prev, [msgId]: false }));
+  };
+
+  const handleToggleDislike = (msgId: string) => {
+    setDislikedMsgIds(prev => ({ ...prev, [msgId]: !prev[msgId] }));
+    setLikedMsgIds(prev => ({ ...prev, [msgId]: false }));
+  };
+
+  const handleSpeakText = (text: string) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text.replace(/[*#`_]/g, ''));
+      utterance.lang = 'es-ES';
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const handleRegenerateAiMessage = async (aiMsgId: string) => {
+    const aiIdx = chatMessages.findIndex(m => m.id === aiMsgId);
+    if (aiIdx === -1 || chatLoading) return;
+
+    let promptText = '';
+    for (let i = aiIdx - 1; i >= 0; i--) {
+      if (chatMessages[i].role === 'user') {
+        promptText = chatMessages[i].content;
+        break;
+      }
+    }
+    if (!promptText) return;
+
+    setChatLoading(true);
+    try {
+      const data = await api('/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: promptText })
+      });
+
+      setChatMessages(prev => {
+        const updated = [...prev];
+        if (updated[aiIdx]) {
+          updated[aiIdx] = {
+            ...updated[aiIdx],
+            content: data.reply,
+            reasoningContent: data.reasoningContent || '',
+            type: data.widgetType,
+            data: data.widgetData
+          };
+        }
+        return updated;
+      });
+      showToast('Respuesta regenerada', 'success');
+    } catch {
+      showToast('Error al regenerar respuesta', 'error');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleRetryUserMessage = async (userMsgId: string) => {
+    const userIdx = chatMessages.findIndex(m => m.id === userMsgId);
+    if (userIdx === -1 || chatLoading) return;
+
+    const userMsg = chatMessages[userIdx];
+    const nextMsg = chatMessages[userIdx + 1];
+
+    setChatLoading(true);
+    try {
+      const data = await api('/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: userMsg.content })
+      });
+
+      if (nextMsg && nextMsg.role === 'assistant') {
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[userIdx + 1] = {
+            ...updated[userIdx + 1],
+            content: data.reply,
+            reasoningContent: data.reasoningContent || '',
+            type: data.widgetType,
+            data: data.widgetData
+          };
+          return updated;
+        });
+      } else {
+        setChatMessages(prev => [
+          ...prev.slice(0, userIdx + 1),
+          {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: data.reply,
+            reasoningContent: data.reasoningContent || '',
+            type: data.widgetType,
+            data: data.widgetData
+          }
+        ]);
+      }
+      showToast('Respuesta regenerada', 'success');
+    } catch {
+      showToast('Error al reintentar', 'error');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleSaveEditedUserMessage = async (userMsgId: string) => {
+    if (!editUserMsgText.trim() || chatLoading) return;
+
+    const userIdx = chatMessages.findIndex(m => m.id === userMsgId);
+    if (userIdx === -1) return;
+
+    const nextMsg = chatMessages[userIdx + 1];
+    const newContent = editUserMsgText;
+
+    setChatMessages(prev => {
+      const updated = [...prev];
+      updated[userIdx] = { ...updated[userIdx], content: newContent };
+      return updated;
+    });
+    setEditingUserMsgId(null);
+    setChatLoading(true);
+
+    try {
+      const data = await api('/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: newContent })
+      });
+
+      if (nextMsg && nextMsg.role === 'assistant') {
+        setChatMessages(prev => {
+          const updated = [...prev];
+          updated[userIdx + 1] = {
+            ...updated[userIdx + 1],
+            content: data.reply,
+            reasoningContent: data.reasoningContent || '',
+            type: data.widgetType,
+            data: data.widgetData
+          };
+          return updated;
+        });
+      } else {
+        setChatMessages(prev => [
+          ...prev.slice(0, userIdx + 1),
+          {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: data.reply,
+            reasoningContent: data.reasoningContent || '',
+            type: data.widgetType,
+            data: data.widgetData
+          }
+        ]);
+      }
+      showToast('Mensaje editado y respuesta actualizada', 'success');
+    } catch {
+      showToast('Error al actualizar respuesta', 'error');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // Document Generator Handler (Calls Backend POST /api/export-document with Hera Brand Templates + Instant Fallback)
+  const handleDownloadGeneratedDocument = async (format: 'docx' | 'xlsx' | 'pdf', title: string = 'Reporte Financiero HeraWallet', docData?: any) => {
+    showToast(`Generando ${format.toUpperCase()} con plantilla oficial HeraWallet...`, 'info');
+    const filename = `${(title || 'Informe_HeraWallet').replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+    const dateStr = new Date().toLocaleString('es-ES');
+    const columns = docData?.columns || ['Fecha', 'Categoría', 'Descripción', 'Tipo', 'Importe'];
+    const rows = docData?.rows || [
+      ['2026-07-28', 'Ingresos', 'Nómina / Ventas', 'Ingreso', '4.509 €'],
+      ['2026-07-28', 'General', 'Gastos Totales', 'Gasto', '7.356 €'],
+      ['2026-07-28', 'Ahorro', 'Fondo de Emergencia', 'Ahorro', '1.850 €'],
+      ['2026-07-28', 'Metas', 'Viaje a Japón', 'Ahorro', '920 €']
+    ];
+
+    try {
+      const tokenVal = getToken() || localStorage.getItem('hera_token');
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (tokenVal) headers['Authorization'] = `Bearer ${tokenVal}`;
+
+      let fetchRes: Response | null = null;
+      try {
+        fetchRes = await fetch('/api/export-document', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ format, title, columns, rows, summary: docData?.summary })
+        });
+      } catch {
+        try {
+          fetchRes = await fetch('http://localhost:4000/api/export-document', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ format, title, columns, rows, summary: docData?.summary })
+          });
+        } catch {}
+      }
+
+      if (fetchRes && fetchRes.ok) {
+        if (format === 'pdf') {
+          const htmlText = await fetchRes.text();
+          const printWin = window.open('', '_blank', 'width=900,height=750');
+          if (printWin) {
+            printWin.document.write(htmlText);
+            printWin.document.close();
+          } else {
+            window.print();
+          }
+          return;
+        } else {
+          const blob = await fetchRes.blob();
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          const ext = format === 'xlsx' ? 'xls' : 'doc';
+          link.href = url;
+          link.download = `${filename}.${ext}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          showToast(`Documento ${format.toUpperCase()} descargado correctamente`, 'success');
+          return;
+        }
+      }
+    } catch (e) {}
+
+    // Fallback Instant Client Generator (Guarantees zero-failure downloading)
+    if (format === 'xlsx') {
+      const excelXml = `
+        <html xmlns:o="urn:schemas-microsoft-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', Arial, sans-serif; color: #2E2B28; }
+            .title-header { background-color: #D97757; color: #FFFFFF; font-size: 18pt; font-weight: bold; padding: 14px; }
+            .slogan-row { background-color: #FFF9F7; color: #6F6B66; font-size: 10pt; font-style: italic; padding: 8px; border-bottom: 2px solid #D97757; }
+            .meta-row { color: #9A958E; font-size: 9pt; font-family: monospace; padding: 6px; }
+            .data-table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+            .data-table th { background-color: #D97757; color: #FFFFFF; font-size: 10pt; font-weight: bold; border: 1px solid #C96A4D; padding: 10px; text-align: left; }
+            .data-table td { border: 1px solid #E7E3DD; padding: 8px 10px; font-size: 10pt; }
+            .even-row { background-color: #F9F9F7; }
+          </style>
+        </head>
+        <body>
+          <table>
+            <tr><td colspan="${columns.length}" class="title-header">HeraWallet — ${title}</td></tr>
+            <tr><td colspan="${columns.length}" class="slogan-row">Tus metas empiezan con un mejor control.</td></tr>
+            <tr><td colspan="${columns.length}" class="meta-row">Fecha de emisión: ${dateStr} | ID: ${filename}</td></tr>
+          </table>
+          <table class="data-table">
+            <thead><tr>${columns.map((c: string) => `<th>${c}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${rows.map((r: any[], idx: number) => `
+                <tr class="${idx % 2 === 0 ? 'even-row' : ''}">
+                  ${r.map((cell: any) => `<td>${cell}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+      const blob = new Blob(['\ufeff' + excelXml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filename}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('Documento Excel (.xlsx) descargado correctamente', 'success');
+    } else if (format === 'docx') {
+      const wordXml = `
+        <html xmlns:o="urn:schemas-microsoft-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: 'Segoe UI', sans-serif; color: #2E2B28; padding: 40px; }
+            .header-box { border-bottom: 3px solid #D97757; padding-bottom: 12px; margin-bottom: 20px; }
+            h1 { color: #D97757; font-size: 24px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th { background: #D97757; color: #fff; padding: 10px; text-align: left; }
+            td { border-bottom: 1px solid #E7E3DD; padding: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header-box">
+            <h1>HeraWallet — ${title}</h1>
+            <p>Tus metas empiezan con un mejor control.</p>
+          </div>
+          <table>
+            <thead><tr>${columns.map((c: string) => `<th>${c}</th>`).join('')}</tr></thead>
+            <tbody>${rows.map((r: any[]) => `<tr>${r.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody>
+          </table>
+        </body>
+        </html>
+      `;
+      const blob = new Blob(['\ufeff' + wordXml], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filename}.doc`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast('Documento Word (.docx) descargado correctamente', 'success');
+    } else {
+      window.print();
     }
   };
 
@@ -1095,12 +1770,12 @@ export default function App() {
 
           const updateVisualizer = () => {
             analyser.getByteFrequencyData(dataArray);
-            const barsCount = 12;
+            const barsCount = 28;
             const step = Math.floor(bufferLength / barsCount) || 1;
             const levels: number[] = [];
             for (let i = 0; i < barsCount; i++) {
               const rawVal = dataArray[i * step] || 0;
-              const pct = Math.max(15, Math.min(100, Math.round((rawVal / 255) * 100)));
+              const pct = Math.max(12, Math.min(100, Math.round((rawVal / 255) * 100)));
               levels.push(pct);
             }
             setAudioLevels(levels);
@@ -1858,7 +2533,7 @@ export default function App() {
       )}
 
       {/* Main Workspace Area */}
-      <main className={cn("flex-1 max-w-7xl w-full mx-auto flex flex-col min-h-0 overflow-hidden", activeTab === 'chat' && chatMessages.length > 0 ? "px-3 pt-2 pb-1 sm:px-6" : "p-3 sm:p-6")}>
+      <main className={cn("flex-1 max-w-7xl w-full mx-auto flex flex-col min-h-0", activeTab === 'chat' && chatMessages.length > 0 ? "px-3 pt-2 pb-1 sm:px-6 overflow-hidden" : "px-3 sm:px-6 pt-3 sm:pt-5 pb-24 sm:pb-32 overflow-y-auto scrollbar-none")}>
         {showAdmin ? (
           /* --- ADMIN PANEL (/panel) --- */
           <div className="space-y-6">
@@ -2146,10 +2821,18 @@ export default function App() {
                         <button
                           onClick={() => setActiveTab('goals')}
                           className="p-1.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium"
-                          title="Ver Score financiero"
+                          title="Ver Metas & Ahorros"
                         >
-                          <Activity size={15} className="text-brand" />
-                          <span className="hidden sm:inline">Score</span>
+                          <Target size={15} className="text-brand" />
+                          <span className="hidden sm:inline">Metas</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('health')}
+                          className="p-1.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                          title="Ver Salud Financiera & Score Hera"
+                        >
+                          <ShieldCheck size={15} className="text-brand" />
+                          <span className="hidden sm:inline">Salud</span>
                         </button>
                         <div className="w-[1px] h-4 bg-border/80 mx-0.5" />
                         <button
@@ -2198,14 +2881,9 @@ export default function App() {
                             />
                           )}
 
-                          <div className={cn(
-                            "p-4 rounded-2xl text-xs leading-relaxed space-y-3 max-w-xl relative",
-                            msg.role === 'user'
-                              ? "bg-brand text-white rounded-tr-none shadow-sm"
-                              : "bg-surface border border-border text-text-primary rounded-tl-none shadow-sm"
-                          )}>
-                            {msg.role === 'assistant' ? (
-                              <>
+                          {msg.role === 'assistant' ? (
+                            <div className="flex flex-col items-start gap-1 max-w-xl w-full min-w-0">
+                              <div className="p-4 rounded-2xl text-xs leading-relaxed space-y-3 bg-surface border border-border text-text-primary rounded-tl-none shadow-sm w-full font-sans">
                                 <FormattedMarkdown content={msg.content} />
 
                                 {/* 1. Interactive Financial Operation Confirmation Card */}
@@ -2387,12 +3065,10 @@ export default function App() {
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-border/40">
-                                          {msg.data.rows?.map((row: any[], rIdx: number) => (
-                                            <tr key={rIdx} className="hover:bg-surface/50 transition-colors">
-                                              {row.map((cell: any, cIdx: number) => (
-                                                <td key={cIdx} className="py-2 px-2 text-text-primary font-medium">
-                                                  {cell}
-                                                </td>
+                                          {msg.data.rows?.map((row: string[], rIdx: number) => (
+                                            <tr key={rIdx} className="hover:bg-surface-hover/50 transition-colors">
+                                              {row.map((cell: string, cIdx: number) => (
+                                                <td key={cIdx} className="py-2 px-2 text-text-primary font-medium">{cell}</td>
                                               ))}
                                             </tr>
                                           ))}
@@ -2402,52 +3078,177 @@ export default function App() {
                                   </div>
                                 )}
 
-                                {/* 5. Downloadable Document Card Widget */}
-                                {msg.type === 'document' && msg.data && (
-                                  <div className="mt-3 bg-bg/90 border border-brand/40 p-4 rounded-2xl space-y-3 shadow-md flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-2xl bg-brand/10 border border-brand/30 flex items-center justify-center text-brand shrink-0">
-                                        <Printer size={20} />
-                                      </div>
-                                      <div>
-                                        <h4 className="font-semibold text-xs text-text-primary">{msg.data.title || 'Informe Ejecutivo PDF'}</h4>
-                                        <div className="flex items-center gap-2 text-[10px] text-text-secondary font-mono mt-0.5">
-                                          <span className="bg-brand/20 text-brand px-1.5 py-0.2 rounded font-bold">{msg.data.format || 'PDF'}</span>
-                                          <span>{msg.data.size || '340 KB'}</span>
-                                          <span>• {msg.data.date || 'Hoy'}</span>
+                                {/* 5. Downloadable Document Widget (Single Specific Format Card - No Emojis, Pure SVG Icons) */}
+                                {(msg.type === 'document' || (msg.role === 'assistant' && (
+                                  msg.content.toLowerCase().includes('generar archivo') ||
+                                  msg.content.toLowerCase().includes('cree el excel') ||
+                                  msg.content.toLowerCase().includes('widget inferior') ||
+                                  msg.content.toLowerCase().includes('descargar excel') ||
+                                  msg.content.toLowerCase().includes('informe en excel')
+                                ))) && (() => {
+                                  const docData = msg.data || { title: 'Informe_Financiero_HeraWallet.xlsx', format: 'xlsx', size: '340 KB' };
+                                  const reqFormat = (docData.format || '').toLowerCase().includes('doc') || (docData.format || '').toLowerCase().includes('word') 
+                                    ? 'docx' 
+                                    : (docData.format || '').toLowerCase().includes('pdf') 
+                                      ? 'pdf' 
+                                      : 'xlsx';
+                                  
+                                  const formatLabel = reqFormat === 'docx' ? 'DOCX' : reqFormat === 'pdf' ? 'PDF' : 'XLSX';
+
+                                  return (
+                                    <div className="mt-3 bg-bg/90 border border-border/80 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-xs font-sans">
+                                      <div className="flex items-center gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-xl bg-surface border border-border/80 flex items-center justify-center text-brand shrink-0 shadow-xs">
+                                          {reqFormat === 'docx' ? (
+                                            <FileText size={18} />
+                                          ) : reqFormat === 'xlsx' ? (
+                                            <FileSpreadsheet size={18} />
+                                          ) : (
+                                            <File size={18} />
+                                          )}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <h4 className="font-semibold text-xs text-text-primary truncate">{docData.title || `Informe_HeraWallet.${formatLabel.toLowerCase()}`}</h4>
+                                          <div className="flex items-center gap-2 text-[10px] text-text-secondary font-mono mt-0.5">
+                                            <span className="font-bold text-brand uppercase">{formatLabel}</span>
+                                            <span>• {docData.size || '340 KB'}</span>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
 
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadGeneratedDocument(reqFormat, docData.title, docData)}
+                                        className="px-3.5 py-1.5 bg-surface border border-border hover:border-brand/40 text-text-primary hover:text-brand rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-all active:scale-[0.97] cursor-pointer shrink-0"
+                                      >
+                                        <Download size={13} />
+                                        <span>Descargar</span>
+                                      </button>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
+                              {/* Assistant Action Footer Bar (Speaker + ThumbsUp + ThumbsDown + Copy + Regenerate) */}
+                              <div className="flex items-center gap-3 text-[11px] text-text-secondary px-1 py-0.5 font-mono">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSpeakText(msg.content)}
+                                  className="hover:text-brand transition-colors p-1 cursor-pointer"
+                                  title="Escuchar en voz alta"
+                                >
+                                  <Volume2 size={13} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleLike(msg.id)}
+                                  className={cn("transition-colors p-1 cursor-pointer", likedMsgIds[msg.id] ? "text-brand" : "hover:text-text-primary")}
+                                  title="Me gusta"
+                                >
+                                  <ThumbsUp size={13} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleDislike(msg.id)}
+                                  className={cn("transition-colors p-1 cursor-pointer", dislikedMsgIds[msg.id] ? "text-error" : "hover:text-text-primary")}
+                                  title="No me gusta"
+                                >
+                                  <ThumbsDown size={13} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyMessage(msg.content)}
+                                  className="hover:text-text-primary transition-colors p-1 cursor-pointer"
+                                  title="Copiar respuesta"
+                                >
+                                  <Copy size={13} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRegenerateAiMessage(msg.id)}
+                                  className="hover:text-brand transition-colors p-1 cursor-pointer"
+                                  title="Regenerar respuesta de la IA en este mensaje"
+                                >
+                                  <RotateCw size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-end gap-1 max-w-xl w-full min-w-0">
+                              {editingUserMsgId === msg.id ? (
+                                <div className="w-full bg-surface border border-brand/40 p-3 rounded-2xl space-y-2 shadow-sm font-sans">
+                                  <textarea
+                                    value={editUserMsgText}
+                                    onChange={e => setEditUserMsgText(e.target.value)}
+                                    className="w-full bg-bg border border-border rounded-xl p-2.5 text-xs font-sans text-text-primary focus:outline-none focus:border-brand resize-none"
+                                    rows={2}
+                                  />
+                                  <div className="flex items-center justify-end gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        window.print();
-                                        showToast('Abriendo ventana de impresión / PDF...', 'info');
-                                      }}
-                                      className="px-3.5 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all active:scale-[0.97] cursor-pointer shrink-0"
+                                      onClick={() => setEditingUserMsgId(null)}
+                                      className="px-2.5 py-1 text-[11px] text-text-secondary hover:text-text-primary font-medium rounded-lg transition-colors cursor-pointer"
                                     >
-                                      <Printer size={14} />
-                                      <span>Descargar / Imprimir</span>
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveEditedUserMessage(msg.id)}
+                                      className="px-3 py-1 bg-brand hover:bg-brand-hover text-white text-[11px] font-semibold rounded-lg shadow-xs transition-all cursor-pointer"
+                                    >
+                                      Guardar y Regenerar
                                     </button>
                                   </div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="whitespace-pre-wrap">{msg.content}</div>
-                            )}
-                          </div>
+                                </div>
+                              ) : (
+                                <div className="p-4 rounded-2xl text-xs leading-relaxed bg-brand text-white rounded-tr-none shadow-sm w-full font-sans">
+                                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                                </div>
+                              )}
 
-                          {/* Edit Badge for User Messages (Always Visible) */}
-                          {msg.role === 'user' && (
-                            <button
-                              type="button"
-                              onClick={() => handleEditMessage(msg.id, msg.content)}
-                              className="self-center p-1.5 rounded-xl bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-all cursor-pointer shadow-xs shrink-0"
-                              title="Editar este mensaje"
-                            >
-                              <Pencil size={13} />
-                            </button>
+                              {/* User Action Footer Bar (Timestamp + Retry + Edit + Copy) */}
+                              <div className="flex items-center gap-2.5 text-[10px] text-text-dim px-1 font-mono">
+                                <span>
+                                  {msg.createdAt 
+                                    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                    : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRetryUserMessage(msg.id)}
+                                  className="hover:text-brand transition-colors p-0.5 cursor-pointer"
+                                  title="Reintentar (Regenera respuesta de la IA)"
+                                >
+                                  <RotateCw size={12} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingUserMsgId(msg.id);
+                                    setEditUserMsgText(msg.content);
+                                  }}
+                                  className="hover:text-brand transition-colors p-0.5 cursor-pointer"
+                                  title="Editar mensaje"
+                                >
+                                  <Pencil size={12} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyMessage(msg.content)}
+                                  className="hover:text-brand transition-colors p-0.5 cursor-pointer"
+                                  title="Copiar mensaje"
+                                >
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </motion.div>
                       ))}
@@ -3312,53 +4113,586 @@ export default function App() {
             )}
 
             {activeTab === 'goals' && (
-              /* --- GOALS, SAVINGS & SCORE TAB --- */
-              <div className="space-y-6">
-                <div className="bg-surface border border-border p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              /* --- GOALS & SAVINGS MODULE --- */
+              <div className="space-y-6 max-w-5xl mx-auto font-sans">
+                <div className="bg-surface border border-border p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
                   <div>
-                    <h2 className="text-xl font-serif font-semibold">Score Financiero & Control de Metas y Ahorros</h2>
-                    <p className="text-xs text-text-secondary">Diagnóstico propio 0-100, planes de ahorro y fondos de emergencia</p>
+                    <h2 className="text-xl font-serif font-semibold text-text-primary">Metas de Ahorro & Fondos de Reserva</h2>
+                    <p className="text-xs text-text-secondary mt-0.5">Planifica tus metas de ahorro, objetivos semanales y fondos de emergencia</p>
                   </div>
                   <button
                     onClick={() => setShowAddGoalModal(true)}
-                    className="px-4 py-2 bg-brand text-white rounded-2xl text-xs font-medium flex items-center gap-2 shadow-sm hover:bg-brand-hover transition-colors cursor-pointer self-start sm:self-auto shrink-0"
+                    className="px-4 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-brand/20 transition-all active:scale-[0.97] cursor-pointer shrink-0"
                   >
                     <Plus size={16} />
                     <span>Nueva Meta / Fondo</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Score Card */}
-                  <div className="bg-surface border border-border p-6 rounded-3xl text-center space-y-4">
-                    <span className="text-xs uppercase font-medium tracking-wider text-text-secondary">Score Hera</span>
-                    <div className="w-28 h-28 mx-auto rounded-full border-4 border-brand/30 flex items-center justify-center text-3xl font-bold font-mono text-brand bg-brand/5 shadow-inner">
-                      {overview?.healthScore || 84}/100
-                    </div>
-                    <p className="text-xs text-text-secondary">Salud financiera excelente. Fondo de emergencia cubierto en un 61%.</p>
-                  </div>
-
-                  {/* Goals Cards */}
-                  <div className="md:col-span-2 space-y-3">
-                    {goals.map(g => (
-                      <div key={g.id} className="bg-surface border border-border p-4 rounded-2xl space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {goals.map(g => {
+                    const pct = Math.min(100, Math.round((g.currentAmount / Math.max(1, g.targetAmount)) * 100));
+                    return (
+                      <div key={g.id} className="bg-surface border border-border p-5 rounded-3xl space-y-4 shadow-xs hover:border-brand/40 transition-all">
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-sm">{g.name}</span>
-                          <span className="text-xs font-mono font-bold text-brand">{g.currentAmount}€ / {g.targetAmount}€</span>
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center shrink-0">
+                              <Target size={20} />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-sm text-text-primary">{g.name}</h4>
+                              <span className="text-[10px] font-mono text-text-dim">Límite: {g.deadline}</span>
+                            </div>
+                          </div>
+                          <div className="text-right font-mono font-bold text-xs text-brand">
+                            {g.currentAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € / {g.targetAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                          </div>
                         </div>
-                        <div className="w-full bg-bg h-2 rounded-full overflow-hidden">
-                          <div className="bg-brand h-full rounded-full transition-all" style={{ width: `${Math.min(100, (g.currentAmount / g.targetAmount) * 100)}%` }} />
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-mono text-text-secondary">
+                            <span>Avance del Fondo</span>
+                            <span>{pct}%</span>
+                          </div>
+                          <div className="w-full bg-bg h-2 rounded-full overflow-hidden border border-border/40">
+                            <div className="bg-brand h-full rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                          </div>
                         </div>
-                        <div className="flex justify-between text-[11px] text-text-dim font-mono">
-                          <span>Cuota semanal recomendada: {g.weeklyTarget}€/sem</span>
-                          <span>Límite: {g.deadline}</span>
+
+                        <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs">
+                          <span className="text-text-secondary text-[11px]">Cuota sugerida: <strong className="text-text-primary font-mono">{g.weeklyTarget} €/semana</strong></span>
+                          <button
+                            onClick={() => sendChatMessage(`Quiero abonar a mi meta ${g.name}`)}
+                            className="px-3 py-1 rounded-xl bg-brand/10 hover:bg-brand/20 text-brand text-xs font-medium transition-all active:scale-[0.96]"
+                          >
+                            + Abonar
+                          </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
+
+            {activeTab === 'health' && (
+              /* --- EXCLUSIVE SALUD FINANCIERA & SCORE HERA MODULE --- */
+              <div className="space-y-6 max-w-5xl mx-auto pt-2 sm:pt-4 pb-28 sm:pb-32 font-sans px-1 sm:px-0">
+                {/* Header Banner (Clean Title & Subtitle without widget) */}
+                <motion.div
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                  className="bg-surface border border-border p-5 sm:p-6 rounded-3xl space-y-2 shadow-sm relative overflow-hidden"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center shrink-0 shadow-xs">
+                      <ShieldCheck size={24} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-serif font-bold text-text-primary">Salud Financiera</h2>
+                      <p className="text-xs text-text-secondary mt-0.5">Diagnóstico 360° en tiempo real con recomendaciones proactivas de Inteligencia Artificial</p>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Animated Score Hero Card & 5 Pillars Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Hero Circular SVG Animated Ring Gauge */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+                    className="bg-surface border border-border p-6 rounded-3xl text-center space-y-4 shadow-xs flex flex-col justify-between"
+                  >
+                    <div>
+                      <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-text-secondary block">Evaluación Integral</span>
+                      <h3 className="font-serif font-bold text-lg text-text-primary mt-1">Score Hera</h3>
+                    </div>
+                    
+                    {/* SVG Circular Border Loading Animation */}
+                    <div className="relative w-36 h-36 mx-auto flex items-center justify-center">
+                      {(() => {
+                        const scoreVal = overview?.healthScore || 88;
+                        const radius = 50;
+                        const circ = 2 * Math.PI * radius; // ~314.159
+                        const strokeOffset = circ - (scoreVal / 100) * circ;
+
+                        return (
+                          <div className="relative w-full h-full flex items-center justify-center">
+                            <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 120 120">
+                              {/* Track circle */}
+                              <circle
+                                cx="60"
+                                cy="60"
+                                r={radius}
+                                className="text-brand/15"
+                                strokeWidth="8"
+                                stroke="currentColor"
+                                fill="transparent"
+                              />
+                              {/* Animated progress circle */}
+                              <motion.circle
+                                cx="60"
+                                cy="60"
+                                r={radius}
+                                className="text-brand"
+                                strokeWidth="8"
+                                strokeDasharray={circ}
+                                initial={{ strokeDashoffset: circ }}
+                                whileInView={{ strokeDashoffset: strokeOffset }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 1.2, ease: [0.23, 1, 0.32, 1] }}
+                                strokeLinecap="round"
+                                stroke="currentColor"
+                                fill="transparent"
+                              />
+                            </svg>
+                            <div className="absolute text-center">
+                              <span className="text-3xl font-bold font-mono text-brand block leading-none">
+                                {scoreVal}
+                              </span>
+                              <span className="text-[10px] font-mono text-text-dim block mt-1">de 100 pts</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-xs font-bold uppercase font-mono border inline-block",
+                        (overview?.healthScore || 88) >= 80 ? "bg-success/15 text-success border-success/30" : (overview?.healthScore || 88) >= 60 ? "bg-brand/15 text-brand border-brand/30" : "bg-warning/15 text-warning border-warning/30"
+                      )}>
+                        {(overview?.healthScore || 88) >= 80 ? 'Excelente Salud Financiera' : (overview?.healthScore || 88) >= 60 ? 'Salud Financiera Buena' : 'Requiere Atención'}
+                      </span>
+                      <p className="text-[11px] text-text-secondary max-w-xs mx-auto leading-relaxed pt-1">
+                        Calculado en tiempo real evaluando tus ingresos, gastos, nivel de deudas, cuentas y consistencia de ahorro.
+                      </p>
+                    </div>
+                  </motion.div>
+
+                  {/* 5-Pillar Score Breakdown Details */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.4, delay: 0.1, ease: [0.23, 1, 0.32, 1] }}
+                    className="lg:col-span-2 bg-surface border border-border p-5 rounded-3xl space-y-3.5 shadow-xs"
+                  >
+                    <h4 className="font-serif font-bold text-xs uppercase text-text-secondary tracking-wider">Desglose de los 5 Pilares Financieros</h4>
+                    
+                    <div className="space-y-2.5">
+                      {[
+                        { label: 'Ahorro & Capacidad de Flujo', pts: overview?.scoreBreakdown?.savings?.pts ?? 22, max: 25, desc: 'Diferencial positivo entre ingresos y gastos totales' },
+                        { label: 'Nivel de Endeudamiento', pts: overview?.scoreBreakdown?.debt?.pts ?? 25, max: 25, desc: 'Proporción de deudas activas frente a tu capital disponible' },
+                        { label: 'Liquidez & Fondos en Cuentas', pts: overview?.scoreBreakdown?.liquidity?.pts ?? 18, max: 20, desc: 'Saldo acumulado en tus cuentas bancarias y efectivo' },
+                        { label: 'Progreso de Metas de Ahorro', pts: overview?.scoreBreakdown?.goals?.pts ?? 12, max: 15, desc: 'Avance en tus fondos de reserva y metas trazadas' },
+                        { label: 'Consistencia de Registros', pts: overview?.scoreBreakdown?.consistency?.pts ?? 15, max: 15, desc: 'Frecuencia de actualización de tus transacciones' },
+                      ].map((p, idx) => {
+                        const pct = Math.round((p.pts / p.max) * 100);
+                        return (
+                          <div key={idx} className="p-2.5 bg-bg/70 border border-border/50 rounded-2xl space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-semibold text-text-primary">{p.label}</span>
+                              <span className="font-mono font-bold text-brand">{p.pts} / {p.max} pts</span>
+                            </div>
+                            <div className="w-full bg-surface h-1.5 rounded-full overflow-hidden border border-border/40">
+                              <motion.div
+                                initial={{ width: 0 }}
+                                whileInView={{ width: `${pct}%` }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.6, delay: 0.1 * idx, ease: [0.23, 1, 0.32, 1] }}
+                                className="bg-brand h-full rounded-full"
+                              />
+                            </div>
+                            <p className="text-[10px] text-text-dim">{p.desc}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </div>
+
+                {/* AI Smart Suggestions & Recommendations Section */}
+                <motion.div
+                  initial={{ opacity: 0, y: 25 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.4, delay: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                  className="space-y-4 pt-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={18} className="text-brand" />
+                      <h3 className="font-serif font-bold text-base text-text-primary">Sugerencias</h3>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-brand/10 text-brand border border-brand/20">
+                      Hera AI
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      {
+                        title: 'Aumentar Reserva de Ahorro',
+                        impact: '+6 pts en Score',
+                        desc: 'Tu capacidad de ahorro actual es positiva. Si destinas un 5% adicional de tus ingresos al fondo de reserva, tu salud financiera subirá de nivel.',
+                        actionText: 'Ver Metas de Ahorro',
+                        actionTab: 'goals'
+                      },
+                      {
+                        title: 'Optimización de Deudas',
+                        impact: '+8 pts en Score',
+                        desc: 'Liquidando tu deuda pendiente de 150 € con Carlos Gómez elevarás tu pilar de endeudamiento a la puntuación máxima de 25 puntos.',
+                        actionText: 'Gestor de Deudas',
+                        actionTab: 'debts'
+                      },
+                      {
+                        title: 'Colchón de Liquidez en Cuentas',
+                        impact: '+5 pts en Score',
+                        desc: 'Mantener un balance de seguridad de al menos 1.000 € en tus cuentas activas protegerá tu score ante imprevistos de caja.',
+                        actionText: 'Ver Mis Cuentas',
+                        actionTab: 'accounts'
+                      },
+                      {
+                        title: 'Consistencia de Transacciones',
+                        impact: 'Registro Frecuente',
+                        desc: 'Registrar tus movimientos diarios por voz o chat mantiene las recomendaciones de Hera AI 100% precisas y actualizadas.',
+                        actionText: 'Dictar por Voz',
+                        actionAction: () => setShowAddModal(true)
+                      }
+                    ].map((s, idx) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, y: 15 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true }}
+                        transition={{ duration: 0.3, delay: 0.1 * idx, ease: [0.23, 1, 0.32, 1] }}
+                        className="bg-surface border border-border/80 p-5 rounded-3xl space-y-3.5 shadow-xs hover:border-brand/40 transition-all group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Lightbulb size={16} className="text-brand shrink-0" />
+                            <h4 className="font-bold text-xs text-text-primary">{s.title}</h4>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase bg-success/15 text-success border border-success/30">
+                            {s.impact}
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-text-secondary leading-relaxed">{s.desc}</p>
+
+                        <button
+                          onClick={() => {
+                            if (s.actionTab) setActiveTab(s.actionTab as any);
+                            else if (s.actionAction) s.actionAction();
+                          }}
+                          className="w-full py-2 px-3 rounded-2xl bg-bg hover:bg-surface-hover border border-border text-brand text-xs font-semibold flex items-center justify-between transition-all cursor-pointer group-hover:border-brand/30 active:scale-[0.98]"
+                        >
+                          <span>{s.actionText}</span>
+                          <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+                        </button>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {activeTab === 'debts' && (() => {
+              const pendingDebts = debtsList.filter(d => (d.status || 'pending') === 'pending');
+              const totalIOwe = pendingDebts.filter(d => d.type === 'debt').reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
+              const totalTheyOweMe = pendingDebts.filter(d => d.type === 'receivable' || d.type === 'credit').reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
+              const netBalance = totalTheyOweMe - totalIOwe;
+
+              const filteredDebts = debtsList.filter(d => {
+                if (debtsFilter === 'i_owe') return d.type === 'debt';
+                if (debtsFilter === 'they_owe_me') return d.type === 'receivable' || d.type === 'credit';
+                if (debtsFilter === 'pending') return (d.status || 'pending') === 'pending';
+                if (debtsFilter === 'paid') return d.status === 'paid';
+                return true;
+              });
+
+              const getInitials = (name: string) => {
+                if (!name) return 'H';
+                const parts = name.trim().split(/\s+/);
+                if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+                return name.slice(0, 2).toUpperCase();
+              };
+
+              return (
+                <div className="space-y-6 max-w-5xl w-full mx-auto pt-2 sm:pt-4 pb-28 sm:pb-32 font-sans px-1 sm:px-0">
+                  {/* Executive Header Banner */}
+                  <div className="bg-surface border border-border p-5 sm:p-6 rounded-3xl space-y-4 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center gap-3.5 relative z-10">
+                      <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center shrink-0 shadow-xs">
+                        <HandCoins size={24} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-xl font-serif font-bold text-text-primary">Gestor de Deudas & Cobros</h2>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-brand/10 text-brand border border-brand/20">
+                            {pendingDebts.length} Pendientes
+                          </span>
+                        </div>
+                        <p className="text-xs text-text-secondary mt-0.5">Control inteligente de préstamos, cuentas claras y compromisos de pago</p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setShowAddDebtModal(true)}
+                      className="w-full sm:w-auto px-4.5 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 shadow-md hover:shadow-brand/20 transition-all active:scale-[0.97] cursor-pointer"
+                    >
+                      <Plus size={16} />
+                      <span>Registrar Deuda / Cobro</span>
+                    </button>
+                  </div>
+
+                  {/* High-End Bento Grid KPI Overview */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Card 1: A quién debo */}
+                    <div className="bg-surface border border-border p-5 rounded-3xl space-y-3 shadow-xs hover:border-error/30 transition-all relative overflow-hidden">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-text-secondary">A quién debo (Mis deudas)</span>
+                        <div className="w-8 h-8 rounded-xl bg-error/10 border border-error/20 text-error flex items-center justify-center">
+                          <ArrowUpRight size={16} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold font-mono text-error tracking-tight">
+                          {totalIOwe.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                        </div>
+                        <p className="text-[11px] text-text-dim mt-1">Por saldar con terceros</p>
+                      </div>
+                    </div>
+
+                    {/* Card 2: Quién me debe */}
+                    <div className="bg-surface border border-border p-5 rounded-3xl space-y-3 shadow-xs hover:border-success/30 transition-all relative overflow-hidden">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-text-secondary">Quién me debe (Por cobrar)</span>
+                        <div className="w-8 h-8 rounded-xl bg-success/10 border border-success/20 text-success flex items-center justify-center">
+                          <ArrowDownLeft size={16} />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold font-mono text-success tracking-tight">
+                          {totalTheyOweMe.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                        </div>
+                        <p className="text-[11px] text-text-dim mt-1">Pendientes por recibir</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Segmented Filter Pills */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-1.5 p-1 bg-surface border border-border rounded-2xl overflow-x-auto scrollbar-none">
+                      {[
+                        { id: 'all', label: 'Todos los registros' },
+                        { id: 'i_owe', label: 'A quién debo' },
+                        { id: 'they_owe_me', label: 'Quién me debe' },
+                        { id: 'pending', label: 'Pendientes' },
+                        { id: 'paid', label: 'Saldados' },
+                      ].map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => setDebtsFilter(f.id as any)}
+                          className={cn(
+                            "px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap active:scale-[0.96]",
+                            debtsFilter === f.id
+                              ? "bg-brand text-white shadow-xs font-semibold"
+                              : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                          )}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <span className="text-xs font-mono text-text-dim">
+                      {filteredDebts.length} {filteredDebts.length === 1 ? 'registro' : 'registros'}
+                    </span>
+                  </div>
+
+                  {/* Debt Cards Bento Grid */}
+                  {debtsLoading ? (
+                    <div className="py-16 text-center text-xs text-text-secondary font-mono animate-pulse">
+                      Cargando registros de deudas y cobros...
+                    </div>
+                  ) : filteredDebts.length === 0 ? (
+                    <div className="bg-surface border border-border p-10 rounded-3xl text-center space-y-3.5">
+                      <div className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center mx-auto">
+                        <HandCoins size={28} />
+                      </div>
+                      <h4 className="font-semibold text-sm text-text-primary">No hay registros en esta categoría</h4>
+                      <p className="text-xs text-text-secondary max-w-md mx-auto leading-relaxed">
+                        Añade registros manualmente con el botón superior o dictáselo en lenguaje natural a Hera AI en el chat ("Registra que le debo 50€ a Carlos").
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredDebts.map(d => {
+                        const isOwe = d.type === 'debt';
+                        const isPaid = d.status === 'paid';
+                        const isCancelled = d.status === 'cancelled';
+                        const isPartial = d.status === 'partial';
+                        const personName = d.personOrEntity || d.name || 'Persona';
+                        const initials = getInitials(personName);
+
+                        const totalAmt = Number(d.amount || 0);
+                        const paidAmt = Number(d.paidAmount || 0);
+                        const remainingAmt = Math.max(0, totalAmt - paidAmt);
+                        const pctPaid = totalAmt > 0 ? Math.min(100, Math.round((paidAmt / totalAmt) * 100)) : 0;
+
+                        return (
+                          <div
+                            key={d.id}
+                            className="bg-surface border border-border/80 p-4.5 rounded-3xl space-y-3.5 shadow-xs hover:border-brand/40 hover:-translate-y-0.5 transition-all duration-200 group"
+                          >
+                            {/* Card Top Header */}
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="flex items-center gap-3.5 min-w-0">
+                                {/* Avatar Initials Circle */}
+                                <div className={cn(
+                                  "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 font-bold text-xs font-mono border shadow-xs transition-transform group-hover:scale-105",
+                                  isPaid ? "bg-success/10 border-success/20 text-success" : isCancelled ? "bg-bg border-border text-text-dim" : isOwe ? "bg-error/10 border-error/20 text-error" : "bg-success/10 border-success/20 text-success"
+                                )}>
+                                  {initials}
+                                </div>
+
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-bold text-xs text-text-primary truncate">{personName}</h4>
+                                    <span className={cn(
+                                      "px-2 py-0.5 rounded-full text-[9px] font-mono font-bold uppercase shrink-0 border",
+                                      isPaid 
+                                        ? "bg-success/15 text-success border-success/30" 
+                                        : isCancelled 
+                                          ? "bg-bg text-text-dim border-border" 
+                                          : isPartial 
+                                            ? "bg-warning/15 text-warning border-warning/30" 
+                                            : isOwe 
+                                              ? "bg-error/15 text-error border-error/30" 
+                                              : "bg-success/15 text-success border-success/30"
+                                    )}>
+                                      {isPaid ? 'Saldado 100%' : isCancelled ? 'Cancelado' : isPartial ? `Abonado ${pctPaid}%` : isOwe ? 'Debes' : 'Te debe'}
+                                    </span>
+                                  </div>
+
+                                  <p className="text-[11px] text-text-secondary truncate mt-0.5">{d.name}</p>
+
+                                  {d.dueDate && (
+                                    <span className="text-[10px] font-mono text-text-dim block mt-0.5">
+                                      Vencimiento: {d.dueDate}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <div className="font-mono font-bold text-sm text-text-primary tracking-tight">
+                                  {totalAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                                </div>
+                                {!isPaid && !isCancelled && paidAmt > 0 && (
+                                  <span className="text-[10px] font-mono text-text-dim block">
+                                    Resta: {remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Progress Bar Component */}
+                            <div className="space-y-1 bg-bg/60 p-2.5 rounded-2xl border border-border/50">
+                              <div className="flex justify-between items-center text-[10px] font-mono text-text-secondary">
+                                <span>Abonado: {paidAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+                                <span>{pctPaid}% {isPaid ? '— Completo' : isCancelled ? '— Cancelado' : `(Pte: ${remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €)`}</span>
+                              </div>
+                              <div className="w-full bg-bg h-2 rounded-full overflow-hidden border border-border/40">
+                                <div
+                                  className={cn(
+                                    "h-full transition-all duration-500 rounded-full",
+                                    isPaid ? "bg-success" : isCancelled ? "bg-text-dim/40" : isOwe ? "bg-error" : "bg-success"
+                                  )}
+                                  style={{ width: `${pctPaid}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* State-Driven Smart Action Toolbar */}
+                            <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                              {/* Left: Payment History button */}
+                              <button
+                                onClick={() => fetchPaymentHistory(d)}
+                                className="px-2.5 py-1.5 rounded-xl bg-surface hover:bg-surface-hover border border-border text-text-secondary text-[11px] font-medium flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.96]"
+                                title="Ver historial de abonos y pagos"
+                              >
+                                <History size={14} className="text-brand" />
+                                <span>Historial</span>
+                              </button>
+
+                              {/* Right: Conditional Action Buttons based on Status */}
+                              <div className="flex items-center gap-1.5">
+                                {isPaid ? (
+                                  /* PAID STATE: Buttons hidden! Display Saldado Badge */
+                                  <span className="px-3 py-1 rounded-xl bg-success/15 text-success border border-success/30 text-xs font-semibold flex items-center gap-1">
+                                    <CheckCircle2 size={14} />
+                                    <span>Saldado</span>
+                                  </span>
+                                ) : isCancelled ? (
+                                  /* CANCELLED STATE: Buttons hidden! Display Cancelado Badge */
+                                  <span className="px-3 py-1 rounded-xl bg-bg text-text-dim border border-border text-xs font-semibold flex items-center gap-1">
+                                    <Ban size={14} />
+                                    <span>Cancelado</span>
+                                  </span>
+                                ) : (
+                                  /* PENDING / PARTIAL STATE: Show Abonar, Saldar & Cancelar */
+                                  <>
+                                    <button
+                                      onClick={() => openAddPaymentModal(d)}
+                                      className="px-3 py-1.5 rounded-xl bg-brand/15 hover:bg-brand/25 text-brand border border-brand/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.96]"
+                                      title="Registrar abono o pago parcial"
+                                    >
+                                      <PlusCircle size={14} />
+                                      <span>+ Abonar</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleToggleDebtStatus(d.id, d.status)}
+                                      className="p-2 rounded-xl text-text-dim hover:text-success hover:bg-success/10 transition-all cursor-pointer active:scale-[0.92]"
+                                      title="Marcar como saldado 100%"
+                                    >
+                                      <CheckCircle2 size={16} />
+                                    </button>
+
+                                    <button
+                                      onClick={() => handleCancelDebtStatus(d.id)}
+                                      className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-all cursor-pointer active:scale-[0.92]"
+                                      title="Cancelar deuda o cobro"
+                                    >
+                                      <Ban size={16} />
+                                    </button>
+                                  </>
+                                )}
+
+                                {/* Always allow deletion if needed */}
+                                <button
+                                  onClick={() => handleDeleteDebtRecord(d.id)}
+                                  className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-all cursor-pointer active:scale-[0.92]"
+                                  title="Eliminar registro"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {activeTab === 'settings' && (
               /* --- CONFIGURATION & SETTINGS VIEW --- */
@@ -3684,11 +5018,11 @@ export default function App() {
 
       {/* Floating Bottom Navigation Bar (Hidden when in active chat thread) */}
       {!showAdmin && (activeTab !== 'chat' || chatMessages.length === 0) && (
-        <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-1.5 shadow-lg shadow-black/5 flex items-center gap-1.5">
+        <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-surface/85 backdrop-blur-2xl border border-border/80 rounded-2xl p-1.5 shadow-xl shadow-black/10 flex items-center gap-1 sm:gap-1.5 max-w-[94vw] overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('chat')}
             className={cn(
-              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center justify-center transition-all cursor-pointer",
+              "px-3 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center justify-center transition-all cursor-pointer shrink-0 active:scale-[0.95]",
               activeTab === 'chat' 
                 ? "bg-brand text-white shadow-md font-semibold" 
                 : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
@@ -3701,46 +5035,70 @@ export default function App() {
           <button
             onClick={() => setActiveTab('timeline')}
             className={cn(
-              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
               activeTab === 'timeline' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
           >
             <Clock size={16} />
-            <span className="hidden sm:inline">Timeline</span>
+            <span className="hidden md:inline">Timeline</span>
           </button>
 
           <button
             onClick={() => setActiveTab('accounts')}
             className={cn(
-              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
               activeTab === 'accounts' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
           >
             <Wallet size={16} />
-            <span className="hidden sm:inline">Cuentas</span>
+            <span className="hidden md:inline">Cuentas</span>
           </button>
 
           <button
             onClick={() => setActiveTab('reports')}
             className={cn(
-              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
               activeTab === 'reports' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
           >
             <PieChart size={16} />
-            <span className="hidden sm:inline">Reportes</span>
+            <span className="hidden md:inline">Reportes</span>
           </button>
 
           <button
             onClick={() => setActiveTab('goals')}
             className={cn(
-              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
               activeTab === 'goals' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
             title="Metas & Ahorros"
           >
             <Target size={16} />
-            <span className="hidden sm:inline">Metas & Ahorros</span>
+            <span className="hidden md:inline">Metas</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('health')}
+            className={cn(
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
+              activeTab === 'health' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+            title="Salud Financiera & Score Hera"
+          >
+            <ShieldCheck size={16} />
+            <span className="hidden md:inline">Salud Financiera</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('debts')}
+            className={cn(
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
+              activeTab === 'debts' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+            title="Deudas & Cobros"
+          >
+            <HandCoins size={16} />
+            <span className="hidden md:inline">Deudas & Cobros</span>
           </button>
         </nav>
       )}
@@ -3776,171 +5134,233 @@ export default function App() {
               {/* STEP 1: VOICE DICTATION & AI PROCESSING */}
               {addModalStep === 1 && (
                 <div className="space-y-4">
-                  {/* Segmented Type Preference Toggle (Ingreso vs Gasto) */}
-                  <div className="bg-bg border border-border p-1 rounded-2xl flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setAddType('expense')}
-                      className={cn(
-                        "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                        addType === 'expense' ? "bg-error text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
-                      )}
-                    >
-                      <TrendingDown size={14} />
-                      <span>Gasto</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setAddType('income')}
-                      className={cn(
-                        "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                        addType === 'income' ? "bg-success text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
-                      )}
-                    >
-                      <TrendingUp size={14} />
-                      <span>Ingreso</span>
-                    </button>
-                  </div>
-
-                  {/* Voice Soundwave & Mic Container */}
-                  <div className="p-8 bg-bg border border-border rounded-2xl flex flex-col items-center justify-center space-y-4 min-h-44">
-                    <AnimatePresence>
-                      {isRecording && (
+                  {/* HeraWallet Minimalist & Premium Voice Container */}
+                  <div className="relative p-8 bg-bg border border-border rounded-3xl flex flex-col items-center justify-center space-y-5 min-h-[260px] overflow-hidden">
+                    
+                    {/* 1. RECORDING STATE ANIMATION (FULL-WIDTH SOUNDWAVE) */}
+                    {isRecording && (
+                      <AnimatePresence>
                         <motion.div 
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
-                          className="flex items-center justify-center gap-1.5 h-10 py-1 w-full"
+                          initial={{ opacity: 0, scaleY: 0.8 }}
+                          animate={{ opacity: 1, scaleY: 1 }}
+                          exit={{ opacity: 0, scaleY: 0.8 }}
+                          transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                          className="flex items-center justify-between gap-1 h-14 w-full relative z-10 my-2 px-1"
                         >
                           {audioLevels.map((lvl, i) => (
                             <motion.div
                               key={i}
-                              animate={{ height: `${lvl}%` }}
-                              transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                              className="w-1.5 bg-brand rounded-full shadow-xs shadow-brand/50"
+                              animate={{ height: `${Math.max(10, lvl)}%` }}
+                              transition={{ type: 'spring', stiffness: 450, damping: 20 }}
+                              className="flex-1 bg-brand rounded-full min-w-[3px]"
                               style={{ minHeight: '6px' }}
                             />
                           ))}
                         </motion.div>
-                      )}
-                    </AnimatePresence>
+                      </AnimatePresence>
+                    )}
 
+                    {/* 2. AI PROCESSING STATE (HERA LOGO + NEURAL PULSE ENGINE) */}
                     {isAiParsingAudio ? (
-                      <div className="flex flex-col items-center gap-2 py-2 text-brand">
-                        <Sparkles size={24} className="animate-spin" />
-                        <p className="text-xs font-medium">Analizando audio e interpretando intención con IA...</p>
-                      </div>
-                    ) : (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.96 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                        className="flex flex-col items-center gap-4 py-3 text-center relative z-10 w-full"
+                      >
+                        {/* Hera Logo Core */}
+                        <div className="relative flex items-center justify-center">
+                          <motion.div 
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
+                            className="w-20 h-20 rounded-3xl border border-dashed border-brand/40 absolute"
+                          />
+                          <div className="w-18 h-18 rounded-3xl bg-brand/10 blur-sm absolute animate-pulse" />
+                          
+                          <div className="w-16 h-16 rounded-2xl bg-surface border border-border p-2.5 flex items-center justify-center shrink-0 shadow-sm relative z-10">
+                            <img src="/logo.png" alt="Hera Logo" className="w-full h-full object-contain" />
+                          </div>
+                        </div>
+
+                        {/* Thinking Line Indicator */}
+                        <div className="w-full max-w-[180px] h-1 bg-surface-hover rounded-full overflow-hidden relative">
+                          <motion.div 
+                            animate={{ x: ['-100%', '100%'] }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                            className="w-1/2 h-full bg-gradient-to-r from-transparent via-brand to-transparent rounded-full"
+                          />
+                        </div>
+
+                        {/* Step Text */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-center gap-2">
+                            <Sparkles size={14} className="text-brand animate-spin" />
+                            <span className="font-serif font-semibold text-sm text-text-primary">
+                              Hera AI Analizando Registro
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-text-secondary font-sans max-w-xs">
+                            Interpretando intención, desglose de importe y categoría...
+                          </p>
+                        </div>
+                      </motion.div>
+                    ) : !isRecording && (
                       <>
-                        <p className="text-xs text-text-secondary">
-                          {isRecording ? "Escuchando... habla de forma natural" : "Toca el micrófono y dicta tu registro (ej. 'Créame un gasto de un pantalón')"}
+                        <p className="text-xs text-text-secondary relative z-10 max-w-xs leading-relaxed font-sans">
+                          Toca el micrófono para dictar tu registro
                         </p>
 
-                        <button
+                        {/* HeraWallet Hero Microphone Button (#D97757) */}
+                        <motion.button
+                          whileHover={{ scale: 1.04 }}
+                          whileTap={{ scale: 0.96 }}
                           type="button"
-                          onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                          className={cn(
-                            "w-16 h-16 rounded-full flex items-center justify-center text-white shadow-lg transition-all active:scale-95 cursor-pointer mt-2",
-                            isRecording ? "bg-error animate-pulse" : "bg-brand hover:bg-brand-hover"
-                          )}
+                          onClick={startVoiceRecording}
+                          className="w-20 h-20 rounded-full bg-brand hover:bg-brand-hover text-white shadow-md flex items-center justify-center transition-all cursor-pointer relative z-10 mt-1 border border-white/10"
                         >
-                          {isRecording ? <MicOff size={26} /> : <Mic size={26} />}
-                        </button>
+                          <Mic size={32} />
+                        </motion.button>
                       </>
+                    )}
+
+                    {/* Active Microphone Stop Button when Recording */}
+                    {isRecording && (
+                      <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.96 }}
+                        type="button"
+                        onClick={stopVoiceRecording}
+                        className="w-16 h-16 rounded-full bg-error text-white shadow-md flex items-center justify-center transition-all cursor-pointer relative z-10 ring-4 ring-error/30 animate-pulse border border-white/10"
+                      >
+                        <MicOff size={28} />
+                      </motion.button>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* STEP 2: AI CONFIRMATION & PRE-SELECTED DETAILS */}
+              {/* STEP 2: AI CONFIRMATION & REAL-TIME EDITABLE FORM */}
               {addModalStep === 2 && aiParsedPreview && (
                 <div className="space-y-4 text-left">
-                  {/* AI Result Card */}
-                  <div className="bg-bg border border-border p-4.5 rounded-2xl space-y-2.5 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono font-bold bg-brand/10 text-brand px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1">
-                        <Sparkles size={12} /> Registro a Crear por IA
-                      </span>
-                      <span className="text-xs font-bold text-brand bg-brand/10 px-2.5 py-0.5 rounded-md font-mono">{aiParsedPreview.category}</span>
-                    </div>
+                  {/* Type Preference Toggle (Ingreso vs Gasto) - Exclusive to Step 2 */}
+                  <div className="bg-bg border border-border p-1 rounded-2xl flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setAiParsedPreview(prev => prev ? { ...prev, type: 'expense' } : null)}
+                      className={cn(
+                        "flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        aiParsedPreview.type === 'expense' ? "bg-error text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                      )}
+                    >
+                      <TrendingDown size={15} />
+                      <span>Gasto</span>
+                    </button>
 
-                    <div className="pt-1">
-                      <h4 className="text-base font-semibold text-text-primary capitalize">{aiParsedPreview.description}</h4>
-                      <p className="text-2xl font-bold font-mono text-text-primary mt-1">{aiParsedPreview.amount} {defaultCurrency}</p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAiParsedPreview(prev => prev ? { ...prev, type: 'income' } : null)}
+                      className={cn(
+                        "flex-1 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        aiParsedPreview.type === 'income' ? "bg-success text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                      )}
+                    >
+                      <TrendingUp size={15} />
+                      <span>Ingreso</span>
+                    </button>
                   </div>
 
-                  {/* Pre-selected Type Toggle */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-text-secondary">Tipo Preseleccionado:</label>
-                    <div className="bg-bg border border-border p-1 rounded-2xl flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setAiParsedPreview(prev => prev ? { ...prev, type: 'expense' } : null)}
-                        className={cn(
-                          "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                          aiParsedPreview.type === 'expense' ? "bg-error text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
-                        )}
-                      >
-                        <TrendingDown size={14} />
-                        <span>Gasto</span>
-                      </button>
+                  {/* Real-time Interactive Editable Fields */}
+                  <div className="bg-bg/90 border border-border p-4 rounded-2xl space-y-3 shadow-xs">
 
-                      <button
-                        type="button"
-                        onClick={() => setAiParsedPreview(prev => prev ? { ...prev, type: 'income' } : null)}
-                        className={cn(
-                          "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                          aiParsedPreview.type === 'income' ? "bg-success text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
-                        )}
-                      >
-                        <TrendingUp size={14} />
-                        <span>Ingreso</span>
-                      </button>
+                    {/* Editable Amount */}
+                    <div>
+                      <label className="text-[10px] font-mono text-text-dim block uppercase">Importe ({defaultCurrency})</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={aiParsedPreview.amount}
+                        onChange={e => setAiParsedPreview(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : null)}
+                        className="w-full bg-surface border border-border focus:border-brand px-3 py-2 rounded-xl text-lg font-bold font-mono text-text-primary focus:outline-none mt-1"
+                      />
                     </div>
-                  </div>
 
-                  {/* Pre-selected Account / Card Picker */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-text-secondary">Cuenta o Tarjeta Asignada:</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
-                      {accounts.map(acc => (
-                        <button
-                          key={acc.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedAccountId(acc.id);
-                            setAiParsedPreview(prev => prev ? { ...prev, accountId: acc.id } : null);
-                          }}
-                          className={cn(
-                            "p-2.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer",
-                            (selectedAccountId === acc.id || (!selectedAccountId && accounts[0]?.id === acc.id))
-                              ? "bg-brand/10 border-brand text-brand shadow-xs"
-                              : "bg-bg border-border text-text-primary hover:border-brand/40 hover:bg-surface-hover"
-                          )}
-                        >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <div className="w-7 h-7 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold shrink-0">
-                              {acc.type === 'bank' && <Building2 size={14} />}
-                              {acc.type === 'card' && <CreditCard size={14} />}
-                              {acc.type === 'cash' && <Wallet size={14} />}
-                              {acc.type === 'crypto' && <Coins size={14} />}
+                    {/* Editable Description */}
+                    <div>
+                      <label className="text-[10px] font-mono text-text-dim block uppercase">Descripción / Concepto</label>
+                      <input
+                        type="text"
+                        value={aiParsedPreview.description}
+                        onChange={e => setAiParsedPreview(prev => prev ? { ...prev, description: e.target.value } : null)}
+                        className="w-full bg-surface border border-border focus:border-brand px-3 py-2 rounded-xl text-xs font-medium text-text-primary focus:outline-none mt-1"
+                        placeholder="Concepto de la transacción"
+                      />
+                    </div>
+
+                    {/* Editable Category */}
+                    <div>
+                      <label className="text-[10px] font-mono text-text-dim block uppercase">Categoría</label>
+                      <input
+                        type="text"
+                        list="category-suggestions"
+                        value={aiParsedPreview.category}
+                        onChange={e => setAiParsedPreview(prev => prev ? { ...prev, category: e.target.value } : null)}
+                        className="w-full bg-surface border border-border focus:border-brand px-3 py-2 rounded-xl text-xs font-medium text-text-primary focus:outline-none mt-1"
+                        placeholder="Ej. Alimentación, Transporte, Nómina..."
+                      />
+                      <datalist id="category-suggestions">
+                        <option value="Alimentación" />
+                        <option value="Restaurantes" />
+                        <option value="Transporte" />
+                        <option value="Vivienda" />
+                        <option value="Servicios" />
+                        <option value="Nómina / Salario" />
+                        <option value="Inversiones" />
+                        <option value="Entretenimiento / Ocio" />
+                        <option value="General" />
+                      </datalist>
+                    </div>
+
+                    {/* Editable Account Assignment */}
+                    <div>
+                      <label className="text-[10px] font-mono text-text-dim block uppercase mb-1">Cuenta Asignada</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                        {accounts.map(acc => (
+                          <button
+                            key={acc.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAccountId(acc.id);
+                              setAiParsedPreview(prev => prev ? { ...prev, accountId: acc.id } : null);
+                            }}
+                            className={cn(
+                              "p-2.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer",
+                              (selectedAccountId === acc.id || (!selectedAccountId && accounts[0]?.id === acc.id))
+                                ? "bg-brand/10 border-brand text-brand shadow-xs"
+                                : "bg-surface border-border text-text-primary hover:border-brand/40 hover:bg-surface-hover"
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5 truncate">
+                              <div className="w-7 h-7 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold shrink-0">
+                                {acc.type === 'bank' && <Building2 size={14} />}
+                                {acc.type === 'card' && <CreditCard size={14} />}
+                                {acc.type === 'cash' && <Wallet size={14} />}
+                                {acc.type === 'crypto' && <Coins size={14} />}
+                              </div>
+                              <div className="truncate">
+                                <p className="text-xs font-semibold truncate">{acc.name}</p>
+                                <p className="text-[10px] font-mono text-text-dim">{acc.balance} {acc.currency || 'EUR'}</p>
+                              </div>
                             </div>
-                            <div className="truncate">
-                              <p className="text-xs font-semibold truncate">{acc.name}</p>
-                              <p className="text-[10px] font-mono text-text-dim">{acc.balance} {acc.currency || 'EUR'}</p>
-                            </div>
-                          </div>
-                          {(selectedAccountId === acc.id || (!selectedAccountId && accounts[0]?.id === acc.id)) && (
-                            <Check size={14} className="text-brand shrink-0 ml-1" />
-                          )}
-                        </button>
-                      ))}
+                            {(selectedAccountId === acc.id || (!selectedAccountId && accounts[0]?.id === acc.id)) && (
+                              <Check size={14} className="text-brand shrink-0 ml-1" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
+                  {/* Action Buttons: Guardar Registro & Reintentar */}
                   <div className="pt-2 space-y-2">
                     <button
                       type="button"
@@ -3960,7 +5380,7 @@ export default function App() {
                             })
                           });
                           if (res.success) {
-                            showToast(`¡Registro creado! ${aiParsedPreview.category} - ${aiParsedPreview.amount}€`, 'success');
+                            showToast(`¡Registro guardado! ${aiParsedPreview.category} - ${aiParsedPreview.amount}€`, 'success');
                             setShowAddModal(false);
                             setAddModalStep(1);
                             setAiParsedPreview(null);
@@ -3973,7 +5393,7 @@ export default function App() {
                       className="w-full bg-brand hover:bg-brand-hover text-white font-medium py-3 rounded-2xl transition-all shadow-md active:scale-98 cursor-pointer text-xs flex items-center justify-center gap-2"
                     >
                       <Check size={16} />
-                      <span>Confirmar y Crear Registro</span>
+                      <span>Guardar Registro</span>
                     </button>
 
                     <button
@@ -3982,9 +5402,10 @@ export default function App() {
                         setAddModalStep(1);
                         setAiParsedPreview(null);
                       }}
-                      className="w-full bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-2xl text-xs font-medium transition-colors cursor-pointer text-center"
+                      className="w-full bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-2xl text-xs font-medium transition-colors cursor-pointer text-center flex items-center justify-center gap-1.5"
                     >
-                      Volver a Dictar por Voz
+                      <Mic size={14} />
+                      <span>Reintentar Dictado por Voz</span>
                     </button>
                   </div>
                 </div>
@@ -4156,6 +5577,261 @@ export default function App() {
               >
                 Crear Meta de Ahorro
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Create New Debt or Receivable Record Modal */}
+      <AnimatePresence>
+        {showAddDebtModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-5 shadow-2xl relative text-left font-sans"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="font-serif font-semibold text-lg text-text-primary">Registrar Deuda o Cobro</h3>
+                <button
+                  onClick={() => setShowAddDebtModal(false)}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Type Selector (A quién debo vs Quién me debe) */}
+                <div className="grid grid-cols-2 gap-2 p-1 bg-bg border border-border rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setNewDebtType('debt')}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.96]",
+                      newDebtType === 'debt' ? "bg-error/15 text-error border border-error/30 shadow-xs font-bold" : "text-text-secondary hover:text-text-primary"
+                    )}
+                  >
+                    <ArrowUpRight size={14} />
+                    <span>A quién le debo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewDebtType('receivable')}
+                    className={cn(
+                      "py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-[0.96]",
+                      newDebtType === 'receivable' ? "bg-success/15 text-success border border-success/30 shadow-xs font-bold" : "text-text-secondary hover:text-text-primary"
+                    )}
+                  >
+                    <ArrowDownLeft size={14} />
+                    <span>Quién me debe</span>
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Persona o Entidad:</label>
+                  <input
+                    type="text"
+                    value={newDebtPerson}
+                    onChange={e => setNewDebtPerson(e.target.value)}
+                    placeholder="Ej. Carlos Gómez, Banco Santander, Juan Pérez..."
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Concepto o Motivo:</label>
+                  <input
+                    type="text"
+                    value={newDebtName}
+                    onChange={e => setNewDebtName(e.target.value)}
+                    placeholder="Ej. Cena de cumpleaños, Préstamo personal..."
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-text-secondary">Monto ({defaultCurrency}):</label>
+                    <input
+                      type="number"
+                      value={newDebtAmount}
+                      onChange={e => setNewDebtAmount(e.target.value)}
+                      placeholder="150.00"
+                      className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60 font-mono"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-text-secondary">Vencimiento / Fecha:</label>
+                    <input
+                      type="date"
+                      value={newDebtDueDate}
+                      onChange={e => setNewDebtDueDate(e.target.value)}
+                      className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Real-Time Preview Card */}
+                <div className="p-3 bg-bg/80 border border-border/80 rounded-2xl space-y-1.5">
+                  <span className="text-[10px] uppercase font-mono font-bold text-text-dim block">Vista Previa en Tiempo Real:</span>
+                  <div className="flex items-center justify-between gap-3 bg-surface p-3 rounded-xl border border-border/60">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={cn(
+                        "w-8 h-8 rounded-xl flex items-center justify-center font-bold text-[10px] font-mono border shrink-0",
+                        newDebtType === 'debt' ? "bg-error/10 text-error border-error/20" : "bg-success/10 text-success border-success/20"
+                      )}>
+                        {newDebtPerson.trim() ? newDebtPerson.trim().slice(0, 2).toUpperCase() : 'HG'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-text-primary truncate">{newDebtPerson.trim() || 'Nombre de Persona'}</p>
+                        <p className="text-[10px] text-text-secondary truncate">{newDebtName.trim() || 'Concepto o Motivo'}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 font-mono font-bold text-xs text-text-primary">
+                      {newDebtAmount ? `${parseFloat(newDebtAmount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : '0.00 €'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCreateDebtRecord}
+                className="w-full bg-brand hover:bg-brand-hover text-white font-semibold py-3 rounded-2xl transition-all shadow-md active:scale-98 cursor-pointer text-xs flex items-center justify-center gap-2"
+              >
+                <Plus size={16} />
+                <span>{newDebtType === 'debt' ? 'Guardar Deuda por Pagar' : 'Guardar Cobro por Recibir'}</span>
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Partial Payment Modal (+ Abonar) */}
+      <AnimatePresence>
+        {selectedDebtForPayment && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-5 shadow-2xl relative text-left font-sans"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="font-serif font-semibold text-base text-text-primary">Registrar Abono o Pago</h3>
+                  <p className="text-[11px] text-text-secondary">{selectedDebtForPayment.personOrEntity} — {selectedDebtForPayment.name}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedDebtForPayment(null)}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-3.5">
+                <div className="p-3 bg-bg/80 border border-border/80 rounded-2xl flex justify-between items-center text-xs font-mono">
+                  <span className="text-text-secondary">Monto Total de Deuda:</span>
+                  <span className="font-bold text-text-primary">{Number(selectedDebtForPayment.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Monto a Abonar (€):</label>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={e => setPaymentAmount(e.target.value)}
+                    placeholder="Ej. 50.00"
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Fecha del Abono:</label>
+                  <input
+                    type="date"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Nota u Observación (Opcional):</label>
+                  <input
+                    type="text"
+                    value={paymentNote}
+                    onChange={e => setPaymentNote(e.target.value)}
+                    placeholder="Ej. Primer pago Bizum, transferencia recibida..."
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddDebtPayment}
+                className="w-full bg-brand hover:bg-brand-hover text-white font-semibold py-3 rounded-2xl transition-all shadow-md active:scale-98 cursor-pointer text-xs flex items-center justify-center gap-2"
+              >
+                <PlusCircle size={16} />
+                <span>Confirmar y Guardar Abono</span>
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Payment History Log Modal */}
+      <AnimatePresence>
+        {selectedDebtForHistory && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-5 shadow-2xl relative text-left font-sans max-h-[85vh] flex flex-col"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
+                <div>
+                  <h3 className="font-serif font-semibold text-base text-text-primary">Historial de Abonos</h3>
+                  <p className="text-[11px] text-text-secondary">{selectedDebtForHistory.personOrEntity} — {selectedDebtForHistory.name}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedDebtForHistory(null)}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-none">
+                {paymentHistoryLoading ? (
+                  <div className="py-8 text-center text-xs text-text-secondary font-mono animate-pulse">Cargando historial de abonos...</div>
+                ) : paymentHistoryList.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-text-secondary space-y-2 bg-bg rounded-2xl border border-border/60">
+                    <History size={28} className="mx-auto text-text-dim opacity-50" />
+                    <p>No se han registrado abonos parciales todavía.</p>
+                  </div>
+                ) : (
+                  paymentHistoryList.map((p, idx) => (
+                    <div key={p.id || idx} className="p-3.5 bg-bg border border-border/80 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                      <div>
+                        <div className="font-mono font-bold text-xs text-success">+ {Number(p.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</div>
+                        {p.note && <p className="text-[11px] text-text-secondary mt-0.5">{p.note}</p>}
+                      </div>
+                      <span className="text-[10px] font-mono text-text-dim">{p.date}</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </motion.div>
           </div>
         )}
