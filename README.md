@@ -1,6 +1,6 @@
-# 🏛️ HeraWallet — Gestión Financiera Inteligente con IA
-
 <div align="center">
+  <img src="src/logo.png" alt="HeraWallet Logo" width="100" />
+  <h1>HeraWallet</h1>
   <p><strong><em>"Tus metas empiezan con un mejor control."</em></strong></p>
   <p>
     <img src="https://img.shields.io/badge/React-19.0-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React 19" />
