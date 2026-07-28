@@ -1,2631 +1,106 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  LayoutDashboard, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Calendar, 
-  Settings, 
-  Plus, 
-  Wallet,
+  Sparkles, 
+  Check, 
+  Camera, 
+  LogOut, 
+  Sun, 
+  Moon, 
+  Monitor,
+  ChevronDown,
+  Pencil,
+  AlertCircle, 
+  Lightbulb, 
+  User as UserIcon,
+  ShieldCheck,
+  ArrowRight,
+  MessageSquare,
+  Clock,
   PieChart,
-  Repeat,
-  Bell,
-  Search,
-  LogOut,
-  ChevronRight,
-  Sparkles,
+  Target,
+  Mic,
+  MicOff,
+  Paperclip,
+  Send,
+  Building2,
+  Wallet,
+  CreditCard,
+  Coins,
+  Printer,
+  Plus,
   TrendingUp,
   TrendingDown,
-  Tag,
+  Settings,
+  Database as DbIcon,
+  Key,
+  Users,
+  Activity,
   DollarSign,
-  Filter,
-  Download,
-  MoreHorizontal,
-  X,
-  Check,
-  AlertCircle,
-  Lightbulb,
-  Home,
-  Utensils,
-  Car,
-  Gamepad,
-  HeartPulse,
-  ShoppingBag,
-  CreditCard,
-  Banknote,
-  Sun,
-  Moon,
-  ChevronDown,
+  AlertTriangle,
+  RefreshCw,
+  Search,
+  CheckCircle2,
+  XCircle,
+  Receipt,
+  History,
   Trash2,
-  Target,
-  User as UserIcon,
-  LogIn,
-  Coffee,
-  Music,
-  Film,
-  Gift,
-  Plane,
-  Briefcase,
-  GraduationCap,
-  Dumbbell,
-  Zap,
-  Smartphone,
-  Wifi,
-  Tv,
-  Droplets,
-  Flame,
-  Shield,
-  Heart,
-  Star,
-  Camera,
-  Book,
-  Globe,
-  ShoppingBag as ShoppingBagIcon,
-  Home as HomeIcon,
-  Car as CarIcon,
-  Utensils as UtensilsIcon,
-  Gamepad as GamepadIcon,
-  HeartPulse as HeartPulseIcon,
-  RotateCw
+  SlidersHorizontal,
+  Filter,
+  Brain,
+  X
 } from 'lucide-react';
-import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Cell,
-  PieChart as RePieChart,
-  Pie,
-  AreaChart,
-  Area,
-  Legend
-} from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
-import { format, subDays, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfYear, endOfYear, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { cn, formatCurrency } from './lib/utils';
-import { Transaction, TransactionType, Frequency, Category, RecurringTransaction, AISuggestion, Account, UserProfile, FinancialGoal, GoalAutomation, GoalContribution } from './types';
-import { CATEGORIES } from './constants';
-import { getFinancialSuggestions } from './services/geminiService';
-import { 
-  auth, 
-  db, 
-  googleProvider, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  query, 
-  where, 
-  onSnapshot, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  serverTimestamp,
-  FirebaseUser
-} from './firebase';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import { cn } from './lib/utils';
+import { UserProfile } from './types';
+import api, { signOut, setToken, getToken, setUser } from './api';
 
-// --- Error Handling ---
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  // showToast('Error de permisos en Firestore');
-}
-
-// --- Constants ---
-
-const ACCOUNT_TYPES = [
-  { id: 'cash', name: 'Efectivo', icon: Banknote, color: '#F5C842' },
-  { id: 'card', name: 'Tarjeta', icon: CreditCard, color: '#FF5C1A' },
-  { id: 'bank', name: 'Banco', icon: Wallet, color: '#3B9EFF' },
-];
-
-// --- Components ---
-
-const IconMap: Record<string, any> = {
-  Wallet, Utensils, Home, Car, Gamepad, HeartPulse, ShoppingBag, MoreHorizontal, CreditCard, Banknote,
-  Coffee, Music, Film, Gift, Plane, Briefcase, GraduationCap, Dumbbell, Zap, Smartphone, Wifi, Tv,
-  Droplets, Flame, Shield, Heart, Star, Camera, Book, Globe
-};
-
-function AppLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+function HeraWalletLogo({ size = 'md', showText = true, showSlogan = false }: { size?: 'sm' | 'md' | 'lg'; showText?: boolean; showSlogan?: boolean }) {
   const sizes = {
-    sm: { container: 'w-8 h-8', icon: 18, text: 'text-lg' },
-    md: { container: 'w-10 h-10', icon: 24, text: 'text-xl' },
-    lg: { container: 'w-20 h-20', icon: 40, text: 'text-4xl' }
+    sm: { img: 'h-6 w-6', title: 'text-lg', subtitle: 'text-[9px]' },
+    md: { img: 'h-8 w-8', title: 'text-xl', subtitle: 'text-[10px]' },
+    lg: { img: 'h-12 w-12', title: 'text-3xl', subtitle: 'text-xs' }
   };
-  
-  return (
-    <div className="flex items-center gap-3">
-      <div className={cn(sizes[size].container, "bg-orange-primary rounded-xl flex items-center justify-center shadow-lg shadow-orange-primary/20 relative overflow-hidden group")}>
-        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        <Target size={sizes[size].icon} className="text-white relative z-10" />
-      </div>
-      {size !== 'lg' && (
-        <div>
-          <h1 className={cn("font-display font-bold tracking-tight", sizes[size].text)}>Hera</h1>
-          <span className="text-[10px] uppercase tracking-widest text-orange-secondary font-bold">Smart Finance</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function App() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<'dashboard' | 'transactions' | 'accounts' | 'recurring' | 'categories' | 'goals' | 'settings'>('dashboard');
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
-  const [customCategories, setCustomCategories] = useState<Category[]>([]);
-  const [goals, setGoals] = useState<FinancialGoal[]>([]);
-  const [automations, setAutomations] = useState<GoalAutomation[]>([]);
-  const [goalContributions, setGoalContributions] = useState<GoalContribution[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'transaction' | 'account' | 'category' | 'goal' | 'automation' | 'addFunds'>('transaction');
-  const [selectedGoal, setSelectedGoal] = useState<FinancialGoal | null>(null);
-  const [selectedGoalDetails, setSelectedGoalDetails] = useState<FinancialGoal | null>(null);
-  const [isGoalSidebarOpen, setIsGoalSidebarOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [timeRange, setTimeRange] = useState<'day' | 'week' | 'month' | 'year'>('month');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  const [notifications, setNotifications] = useState<{id: string, title: string, content: string, date: string, read: boolean}[]>([]);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isRecurringChecked, setIsRecurringChecked] = useState(false);
-  const [isFilterSidebarOpen, setIsFilterSidebarOpen] = useState(false);
-  const [selectedTransactionDetails, setSelectedTransactionDetails] = useState<Transaction | null>(null);
-  const [searchHistory, setSearchHistory] = useState<string[]>(() => {
-    const saved = localStorage.getItem('hera_search_history');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [filters, setFilters] = useState({
-    type: 'all' as 'all' | 'income' | 'expense',
-    accountId: 'all',
-    categoryId: 'all',
-    minAmount: '',
-    maxAmount: '',
-    dateRange: 'all' as 'all' | 'day' | 'week' | 'month' | 'year'
-  });
-
-  const processedRef = useRef<Set<string>>(new Set());
-
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const matchesSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = filters.type === 'all' || t.type === filters.type;
-      const matchesAccount = filters.accountId === 'all' || t.accountId === filters.accountId;
-      const matchesCategory = filters.categoryId === 'all' || t.categoryId === filters.categoryId;
-      const matchesMinAmount = !filters.minAmount || t.amount >= Number(filters.minAmount);
-      const matchesMaxAmount = !filters.maxAmount || t.amount <= Number(filters.maxAmount);
-      
-      let matchesDate = true;
-      const tDate = parseISO(t.date);
-      if (filters.dateRange === 'day') matchesDate = isWithinInterval(tDate, { start: startOfDay(new Date()), end: endOfDay(new Date()) });
-      else if (filters.dateRange === 'week') matchesDate = isWithinInterval(tDate, { start: startOfWeek(new Date()), end: endOfWeek(new Date()) });
-      else if (filters.dateRange === 'month') matchesDate = isWithinInterval(tDate, { start: startOfMonth(new Date()), end: endOfMonth(new Date()) });
-      else if (filters.dateRange === 'year') matchesDate = isWithinInterval(tDate, { start: startOfYear(new Date()), end: endOfYear(new Date()) });
-
-      return matchesSearch && matchesType && matchesAccount && matchesCategory && matchesMinAmount && matchesMaxAmount && matchesDate;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, searchTerm, filters]);
-
-  useEffect(() => {
-    localStorage.setItem('hera_search_history', JSON.stringify(searchHistory));
-  }, [searchHistory]);
-
-  const addToSearchHistory = (term: string) => {
-    if (!term.trim()) return;
-    setSearchHistory(prev => {
-      const filtered = prev.filter(t => t !== term);
-      return [term, ...filtered].slice(0, 10); // Keep 10, but user wants scrollable after 5
-    });
-  };
-
-  const allCategories = useMemo(() => {
-    const merged = [...CATEGORIES];
-    customCategories.forEach(cc => {
-      const index = merged.findIndex(c => c.id === cc.id);
-      if (index !== -1) {
-        merged[index] = { ...merged[index], ...cc };
-      } else {
-        merged.push(cc);
-      }
-    });
-    // Filter out hidden categories
-    return merged.filter(c => !profile?.hiddenCategories?.includes(c.id));
-  }, [customCategories, profile?.hiddenCategories]);
-
-  // Auth Listener
-  useEffect(() => {
-    return onAuthStateChanged(auth, async (u) => {
-      setUser(u);
-      if (u) {
-        const userDoc = await getDoc(doc(db, 'users', u.uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data() as UserProfile;
-          setProfile(data);
-          setTheme(data.theme || 'dark');
-        } else {
-          const newProfile: UserProfile = {
-            uid: u.uid,
-            email: u.email!,
-            displayName: u.displayName || '',
-            photoURL: u.photoURL || '',
-            theme: 'dark',
-            currency: 'EUR',
-            createdAt: new Date().toISOString()
-          };
-          const path = `users/${u.uid}`;
-          try {
-            await setDoc(doc(db, path), newProfile);
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, path);
-          }
-          setProfile(newProfile);
-        }
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
-  }, []);
-
-  // Theme Sync
-  useEffect(() => {
-    if (theme === 'light') {
-      document.documentElement.classList.add('light');
-    } else {
-      document.documentElement.classList.remove('light');
-    }
-  }, [theme]);
-
-  // Data Listeners
-  useEffect(() => {
-    if (!user) return;
-
-    const accountsPath = `users/${user.uid}/accounts`;
-    const unsubAccounts = onSnapshot(collection(db, accountsPath), (snap) => {
-      setAccounts(snap.docs.map(d => ({ ...d.data(), id: d.id } as Account)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, accountsPath));
-
-    const transactionsPath = `users/${user.uid}/transactions`;
-    const unsubTransactions = onSnapshot(collection(db, transactionsPath), (snap) => {
-      setTransactions(snap.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)).sort((a, b) => b.date.localeCompare(a.date)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, transactionsPath));
-
-    const recurringPath = `users/${user.uid}/recurring`;
-    const unsubRecurring = onSnapshot(collection(db, recurringPath), (snap) => {
-      setRecurring(snap.docs.map(d => ({ ...d.data(), id: d.id } as RecurringTransaction)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, recurringPath));
-
-    const categoriesPath = `users/${user.uid}/categories`;
-    const unsubCategories = onSnapshot(collection(db, categoriesPath), (snap) => {
-      setCustomCategories(snap.docs.map(d => ({ ...d.data(), id: d.id } as Category)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, categoriesPath));
-
-    const goalsPath = `users/${user.uid}/goals`;
-    const unsubGoals = onSnapshot(collection(db, goalsPath), (snap) => {
-      setGoals(snap.docs.map(d => ({ ...d.data(), id: d.id } as FinancialGoal)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, goalsPath));
-
-    const automationsPath = `users/${user.uid}/automations`;
-    const unsubAutomations = onSnapshot(collection(db, automationsPath), (snap) => {
-      setAutomations(snap.docs.map(d => ({ ...d.data(), id: d.id } as GoalAutomation)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, automationsPath));
-
-    const contributionsPath = `users/${user.uid}/goalContributions`;
-    const unsubContributions = onSnapshot(collection(db, contributionsPath), (snap) => {
-      setGoalContributions(snap.docs.map(d => ({ ...d.data(), id: d.id } as GoalContribution)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, contributionsPath));
-
-    return () => {
-      unsubAccounts();
-      unsubTransactions();
-      unsubRecurring();
-      unsubCategories();
-      unsubGoals();
-      unsubAutomations();
-      unsubContributions();
-    };
-  }, [user]);
-
-  // AI Suggestions
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (transactions.length === 0) return;
-      setIsLoadingSuggestions(true);
-      const res = await getFinancialSuggestions(transactions);
-      setSuggestions(res);
-      setIsLoadingSuggestions(false);
-    };
-    fetchSuggestions();
-  }, [transactions.length]);
-
-  const handleRefreshSuggestions = useCallback(async () => {
-    if (transactions.length === 0) return;
-    setIsLoadingSuggestions(true);
-    const res = await getFinancialSuggestions(transactions, true);
-    setSuggestions(res);
-    setIsLoadingSuggestions(false);
-  }, [transactions]);
-
-  // Process Recurring
-  useEffect(() => {
-    if (!user || recurring.length === 0) return;
-    const now = new Date();
-    recurring.forEach(async (r) => {
-      if (!r.isActive) return;
-      const next = parseISO(r.nextOccurrence);
-      if (next <= now) {
-        // Prevent duplicate processing of the same recurrence in this session
-        const processedKey = `${r.id}-${r.nextOccurrence}`;
-        if (processedRef.current.has(processedKey)) return;
-        processedRef.current.add(processedKey);
-
-        const transaction: Omit<Transaction, 'id'> = {
-          userId: user.uid,
-          accountId: r.accountId,
-          type: r.type,
-          amount: r.amount,
-          categoryId: r.categoryId,
-          description: r.description,
-          date: r.nextOccurrence,
-          isRecurring: true,
-          recurringId: r.id
-        };
-        const txPath = `users/${user.uid}/transactions`;
-        try {
-          await addDoc(collection(db, txPath), transaction);
-        } catch (err) {
-          handleFirestoreError(err, OperationType.CREATE, txPath);
-        }
-        
-        // Update account balance
-        const account = accounts.find(a => a.id === r.accountId);
-        if (account) {
-          const newBalance = r.type === 'income' ? account.balance + r.amount : account.balance - r.amount;
-          const accPath = `users/${user.uid}/accounts/${r.accountId}`;
-          try {
-            await updateDoc(doc(db, accPath), { balance: newBalance });
-          } catch (err) {
-            handleFirestoreError(err, OperationType.UPDATE, accPath);
-          }
-        }
-
-        // Calculate next
-        let nextDate = new Date(next);
-        if (r.frequency === 'daily') nextDate.setDate(nextDate.getDate() + 1);
-        else if (r.frequency === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
-        else if (r.frequency === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1);
-        else if (r.frequency === 'yearly') nextDate.setFullYear(nextDate.getFullYear() + 1);
-        
-        const recPath = `users/${user.uid}/recurring/${r.id}`;
-        try {
-          await updateDoc(doc(db, recPath), { 
-            nextOccurrence: nextDate.toISOString(),
-            lastProcessed: now.toISOString()
-          });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, recPath);
-        }
-      }
-    });
-  }, [recurring, user, accounts]);
-
-
-
-  const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((acc, t) => acc + t.amount, 0);
-  const totalExpenses = filteredTransactions.filter(t => t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-  const balance = totalIncome - totalExpenses;
-  const totalBalance = accounts.reduce((acc, a) => acc + a.balance, 0);
-
-  // Notification Logic
-  useEffect(() => {
-    if (!user || transactions.length === 0) return;
-    
-    const newNotifs: any[] = [];
-    const sessionAlerts = (window as any).hera_session_alerts || new Set();
-    
-    // 1. Category Limits
-    allCategories.forEach(c => {
-      if (c.budgetLimit) {
-        const spent = transactions.filter(t => t.categoryId === c.id && t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-        if (spent > c.budgetLimit) {
-          const alertId = `limit-exceeded-${c.id}`;
-          newNotifs.push({
-            id: alertId,
-            title: 'Límite Excedido',
-            content: `Has superado el presupuesto de ${c.name} (${formatCurrency(spent)} / ${formatCurrency(c.budgetLimit)})`,
-            date: new Date().toISOString(),
-            read: false
-          });
-          if (!sessionAlerts.has(alertId)) {
-            showToast(`¡Presupuesto excedido en ${c.name}!`, 'error');
-            sessionAlerts.add(alertId);
-          }
-        } else if (spent > c.budgetLimit * 0.8) {
-          const alertId = `limit-approaching-${c.id}`;
-          newNotifs.push({
-            id: alertId,
-            title: 'Límite Cercano',
-            content: `Estás por alcanzar el presupuesto de ${c.name} (${formatCurrency(spent)} / ${formatCurrency(c.budgetLimit)})`,
-            date: new Date().toISOString(),
-            read: false
-          });
-          if (!sessionAlerts.has(alertId)) {
-            showToast(`Estás cerca del límite en ${c.name}`, 'warning');
-            sessionAlerts.add(alertId);
-          }
-        }
-      }
-    });
-
-    (window as any).hera_session_alerts = sessionAlerts;
-
-    // 2. Negative Accounts
-    accounts.forEach(a => {
-      if (a.balance < 0) {
-        newNotifs.push({
-          id: `negative-account-${a.id}`,
-          title: 'Cuenta en Negativo',
-          content: `Tu cuenta "${a.name}" tiene un saldo negativo de ${formatCurrency(a.balance)}`,
-          date: new Date().toISOString(),
-          read: false
-        });
-      }
-    });
-
-    // 3. 50/30/20 Limits
-    const needsActual = transactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'need').reduce((acc, t) => acc + t.amount, 0);
-    const wantsActual = transactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'want').reduce((acc, t) => acc + t.amount, 0);
-    const savingsActual = transactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'saving').reduce((acc, t) => acc + t.amount, 0);
-
-    const needsTarget = totalIncome * 0.5;
-    const wantsTarget = totalIncome * 0.3;
-    const savingsTarget = totalIncome * 0.2;
-
-    if (needsActual > needsTarget && totalIncome > 0) {
-      newNotifs.push({ id: '50-30-20-needs', title: 'Regla 50/30/20', content: 'Has excedido el 50% recomendado para Necesidades.', date: new Date().toISOString(), read: false });
-    }
-    if (wantsActual > wantsTarget && totalIncome > 0) {
-      newNotifs.push({ id: '50-30-20-wants', title: 'Regla 50/30/20', content: 'Has excedido el 30% recomendado para Deseos.', date: new Date().toISOString(), read: false });
-    }
-    if (savingsActual > savingsTarget && totalIncome > 0) {
-      newNotifs.push({ id: '50-30-20-savings', title: 'Regla 50/30/20', content: 'Has excedido el 20% recomendado para Ahorro/Deuda.', date: new Date().toISOString(), read: false });
-    }
-
-    // Filter out existing notifications to avoid duplicates
-    if (newNotifs.length > 0) {
-      setNotifications(prev => {
-        const finalNotifs = newNotifs.filter(nn => !prev.some(n => n.id === nn.id));
-        if (finalNotifs.length === 0) return prev;
-        return [...finalNotifs, ...prev];
-      });
-    }
-  }, [transactions, accounts, allCategories, totalIncome]);
-
-  const getPieData = (txs: Transaction[]) => {
-    const groups: Record<string, { name: string, value: number, color: string }> = {};
-    txs.forEach(t => {
-      const cat = allCategories.find(c => c.id === t.categoryId) || { name: 'Otros', color: '#7A7874' };
-      if (!groups[t.categoryId]) {
-        groups[t.categoryId] = { name: cat.name, value: 0, color: cat.color };
-      }
-      groups[t.categoryId].value += t.amount;
-    });
-    return Object.values(groups);
-  };
-
-  const handleLogin = () => signInWithPopup(auth, googleProvider);
-  const handleLogout = () => signOut(auth);
-
-  const toggleTheme = async () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    if (user) {
-      const path = `users/${user.uid}`;
-      try {
-        await updateDoc(doc(db, path), { theme: newTheme });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, path);
-      }
-    }
-  };
-
-  const handleAddFundsToGoal = async (goalId: string, amount: number, source: 'manual' | 'automation' = 'manual', automationId?: string) => {
-    if (!user || amount <= 0) return;
-    const goal = goals.find(g => g.id === goalId);
-    if (!goal) return;
-
-    const remaining = goal.targetAmount - goal.currentAmount;
-    if (amount > remaining) {
-      showToast(`El monto excede la meta. Solo faltan ${formatCurrency(remaining)}`, 'warning');
-      return;
-    }
-
-    const newAmount = goal.currentAmount + amount;
-    const goalPath = `users/${user.uid}/goals/${goalId}`;
-    const contribPath = `users/${user.uid}/goalContributions`;
-
-    try {
-      await updateDoc(doc(db, goalPath), { currentAmount: newAmount });
-      
-      const contributionData: any = {
-        userId: user.uid,
-        goalId,
-        amount,
-        date: new Date().toISOString(),
-        source
-      };
-
-      if (automationId) {
-        contributionData.automationId = automationId;
-      }
-
-      await addDoc(collection(db, contribPath), contributionData);
-
-      if (newAmount >= goal.targetAmount) {
-        // Deactivate automations for this goal
-        const relatedAutomations = automations.filter(a => a.targetGoalId === goalId && a.isActive);
-        for (const auto of relatedAutomations) {
-          await updateDoc(doc(db, `users/${user.uid}/automations/${auto.id}`), { isActive: false });
-        }
-        showToast(`¡Felicidades! Has alcanzado tu meta: ${goal.name}`, 'success');
-      } else {
-        showToast(`Se han añadido ${formatCurrency(amount)} a ${goal.name}`, 'success');
-      }
-      
-      setIsModalOpen(false);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, goalPath);
-      showToast('Error al procesar la operación', 'error');
-    }
-  };
-
-  const handleAddGoal = async (data: any) => {
-    if (!user) return;
-    const path = `users/${user.uid}/goals`;
-    try {
-      await addDoc(collection(db, path), {
-        ...data,
-        userId: user.uid,
-        createdAt: new Date().toISOString()
-      });
-      setIsModalOpen(false);
-      showToast('Objetivo creado');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, path);
-    }
-  };
-
-  const handleUpdateGoal = async (id: string, data: any) => {
-    if (!user) return;
-    const path = `users/${user.uid}/goals/${id}`;
-    try {
-      await updateDoc(doc(db, path), data);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, path);
-    }
-  };
-
-  const handleDeleteGoal = async (id: string) => {
-    if (!user) return;
-    const path = `users/${user.uid}/goals/${id}`;
-    try {
-      await deleteDoc(doc(db, path));
-      showToast('Objetivo eliminado');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, path);
-    }
-  };
-
-  const handleAddAutomation = async (data: any) => {
-    if (!user) return;
-    const path = `users/${user.uid}/automations`;
-    try {
-      await addDoc(collection(db, path), {
-        ...data,
-        userId: user.uid,
-        isActive: true
-      });
-      setIsModalOpen(false);
-      showToast('Automatización creada');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, path);
-    }
-  };
-
-  const handleDeleteAutomation = async (id: string) => {
-    if (!user) return;
-    const path = `users/${user.uid}/automations/${id}`;
-    try {
-      await deleteDoc(doc(db, path));
-      showToast('Automatización eliminada');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, path);
-    }
-  };
-
-  const handleAddTransaction = async (data: any) => {
-    if (!user) return;
-    try {
-      const { isRecurring, frequency, notify, ...txData } = data;
-      
-      if (!txData.description || txData.description.trim() === '') {
-        txData.description = txData.type === 'income' ? 'Ingreso' : 'Gasto';
-      }
-
-      if (editingTransaction) {
-        // Reverse old balance impact
-        const oldAccount = accounts.find(a => a.id === editingTransaction.accountId);
-        if (oldAccount) {
-          const reversedBalance = editingTransaction.type === 'income' ? oldAccount.balance - editingTransaction.amount : oldAccount.balance + editingTransaction.amount;
-          const accPath = `users/${user.uid}/accounts/${editingTransaction.accountId}`;
-          try {
-            await updateDoc(doc(db, accPath), { balance: reversedBalance });
-          } catch (err) {
-            handleFirestoreError(err, OperationType.UPDATE, accPath);
-          }
-        }
-        
-        const txPath = `users/${user.uid}/transactions/${editingTransaction.id}`;
-        try {
-          await updateDoc(doc(db, txPath), txData);
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, txPath);
-        }
-        
-        // Apply new balance impact
-        const newAccount = accounts.find(a => a.id === txData.accountId);
-        if (newAccount) {
-          const currentBalance = newAccount.id === editingTransaction.accountId ? (editingTransaction.type === 'income' ? newAccount.balance - editingTransaction.amount : newAccount.balance + editingTransaction.amount) : newAccount.balance;
-          const finalBalance = txData.type === 'income' ? currentBalance + txData.amount : currentBalance - txData.amount;
-          const accPath = `users/${user.uid}/accounts/${txData.accountId}`;
-          try {
-            await updateDoc(doc(db, accPath), { balance: finalBalance });
-          } catch (err) {
-            handleFirestoreError(err, OperationType.UPDATE, accPath);
-          }
-        }
-      } else {
-        const txPath = `users/${user.uid}/transactions`;
-        let newTxId = '';
-        try {
-          const docRef = await addDoc(collection(db, txPath), { ...txData, userId: user.uid });
-          newTxId = docRef.id;
-        } catch (err) {
-          handleFirestoreError(err, OperationType.CREATE, txPath);
-        }
-
-        if (isRecurring) {
-          const recPath = `users/${user.uid}/recurring`;
-          const nextOccurrence = new Date(txData.date);
-          if (frequency === 'daily') nextOccurrence.setDate(nextOccurrence.getDate() + 1);
-          else if (frequency === 'weekly') nextOccurrence.setDate(nextOccurrence.getDate() + 7);
-          else if (frequency === 'monthly') nextOccurrence.setMonth(nextOccurrence.getMonth() + 1);
-          else if (frequency === 'yearly') nextOccurrence.setFullYear(nextOccurrence.getFullYear() + 1);
-
-          try {
-            await addDoc(collection(db, recPath), {
-              ...txData,
-              userId: user.uid,
-              frequency,
-              startDate: txData.date,
-              nextOccurrence: nextOccurrence.toISOString(),
-              isActive: true,
-              notify
-            });
-          } catch (err) {
-            handleFirestoreError(err, OperationType.CREATE, recPath);
-          }
-        }
-
-        const account = accounts.find(a => a.id === txData.accountId);
-        if (account) {
-          const newBalance = txData.type === 'income' ? account.balance + txData.amount : account.balance - txData.amount;
-          const accPath = `users/${user.uid}/accounts/${txData.accountId}`;
-          try {
-            await updateDoc(doc(db, accPath), { balance: newBalance });
-          } catch (err) {
-            handleFirestoreError(err, OperationType.UPDATE, accPath);
-          }
-        }
-      }
-      
-      // Trigger Automations
-      if (txData.type === 'income') {
-        const matchingAutomations = automations.filter(a => a.isActive && a.triggerCategoryId === txData.categoryId);
-        for (const auto of matchingAutomations) {
-          const amountToAdd = auto.type === 'fixed' ? auto.value : (txData.amount * (auto.value / 100));
-          if (amountToAdd > 0) {
-            await handleAddFundsToGoal(auto.targetGoalId, amountToAdd, 'automation', auto.id);
-          }
-        }
-      }
-
-      setIsModalOpen(false);
-      setEditingTransaction(null);
-      showToast(editingTransaction ? 'Transacción actualizada' : 'Transacción registrada');
-    } catch (e) {
-      console.error(e);
-      showToast('Error al procesar la transacción', 'error');
-    }
-  };
-
-  const handleDeleteTransaction = async (t: Transaction) => {
-    if (!user) return;
-    if (confirm('¿Estás seguro de eliminar esta transacción?')) {
-      const txPath = `users/${user.uid}/transactions/${t.id}`;
-      try {
-        await deleteDoc(doc(db, txPath));
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, txPath);
-      }
-      const account = accounts.find(a => a.id === t.accountId);
-      if (account) {
-        const newBalance = t.type === 'income' ? account.balance - t.amount : account.balance + t.amount;
-        const accPath = `users/${user.uid}/accounts/${t.accountId}`;
-        try {
-          await updateDoc(doc(db, accPath), { balance: newBalance });
-        } catch (err) {
-          handleFirestoreError(err, OperationType.UPDATE, accPath);
-        }
-      }
-      showToast('Transacción eliminada');
-    }
-  };
-
-  const handleAddAccount = async (data: any) => {
-    if (!user) return;
-    const path = `users/${user.uid}/accounts`;
-    try {
-      await addDoc(collection(db, path), { ...data, userId: user.uid, createdAt: new Date().toISOString() });
-      
-      setIsModalOpen(false);
-      showToast('Cuenta agregada');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, path);
-      showToast('Error al crear cuenta', 'error');
-    }
-  };
-
-  const handleAddCategory = async (data: any) => {
-    if (!user) return;
-    const path = `users/${user.uid}/categories`;
-    try {
-      await addDoc(collection(db, path), { ...data, userId: user.uid });
-      
-      setIsModalOpen(false);
-      showToast('Categoría agregada');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, path);
-      showToast('Error al crear categoría', 'error');
-    }
-  };
-
-  const handleUpdateCategory = async (id: string, data: Partial<Category>) => {
-    if (!user) return;
-    const path = `users/${user.uid}/categories/${id}`;
-    try {
-      // Check if it's a default category
-      const isDefault = CATEGORIES.some(c => c.id === id);
-      if (isDefault) {
-        // If it's default, we save it as a custom override in the categories collection
-        const defaultCat = CATEGORIES.find(c => c.id === id)!;
-        await setDoc(doc(db, `users/${user.uid}/categories`, id), { ...defaultCat, ...data, userId: user.uid });
-      } else {
-        await updateDoc(doc(db, path), data);
-      }
-      showToast('Categoría actualizada');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, path);
-    }
-  };
-
-  const handleDeleteCategory = async (id: string) => {
-    if (!user || !profile) return;
-    
-    // Custom confirmation dialog instead of window.confirm
-    const confirmed = window.confirm('¿Estás seguro de eliminar esta categoría?');
-    if (!confirmed) return;
-
-    const isDefault = CATEGORIES.some(c => c.id === id);
-    if (isDefault) {
-      // Add to hiddenCategories in profile
-      const newHidden = [...(profile.hiddenCategories || []), id];
-      try {
-        await updateDoc(doc(db, `users/${user.uid}`), { hiddenCategories: newHidden });
-        setProfile({ ...profile, hiddenCategories: newHidden });
-        showToast('Categoría ocultada');
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
-      }
-    } else {
-      const path = `users/${user.uid}/categories/${id}`;
-      try {
-        await deleteDoc(doc(db, path));
-        setCustomCategories(prev => prev.filter(c => c.id !== id));
-        showToast('Categoría eliminada');
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, path);
-      }
-    }
-  };
-
-  if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-bg"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-primary"></div></div>;
-
-  if (!user) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-bg p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md w-full bg-surface border border-border p-10 rounded-3xl text-center space-y-8 shadow-2xl"
-        >
-          <div className="mx-auto flex justify-center">
-            <AppLogo size="lg" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-4xl font-display font-bold tracking-tight">Hera</h1>
-            <p className="text-text-secondary">Tu asistente financiero inteligente. Gestiona, ahorra y crece.</p>
-          </div>
-          <button 
-            onClick={handleLogin}
-            className="w-full bg-orange-primary hover:bg-orange-secondary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-95 shadow-lg shadow-orange-primary/20"
-          >
-            <LogIn size={20} />
-            Continuar con Google
-          </button>
-          <p className="text-[10px] text-text-dim uppercase tracking-widest font-bold">Seguro • Privado • Inteligente</p>
-        </motion.div>
-      </div>
-    );
-  }
 
   return (
-    <div className={cn("flex h-screen bg-bg text-text-primary overflow-hidden font-sans transition-colors duration-300", theme)}>
-        {/* Sidebar */}
-        <aside className="hidden lg:flex w-64 bg-sidebar border-r border-border flex-col z-20">
-          <div className="p-6 border-b border-border">
-            <AppLogo />
-          </div>
+    <div className="flex items-center gap-1 select-none cursor-pointer">
+      <img 
+        src="/logo.png" 
+        alt="HeraWallet Logo" 
+        className={cn(sizes[size].img, "object-contain shrink-0 transition-transform hover:scale-[1.03]")} 
+      />
 
-          <nav className="flex-1 py-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
-            <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
-            <NavItem icon={<ArrowUpRight size={20} />} label="Transacciones" active={activeView === 'transactions'} onClick={() => setActiveView('transactions')} />
-            <NavItem icon={<CreditCard size={20} />} label="Mis Cuentas" active={activeView === 'accounts'} onClick={() => setActiveView('accounts')} />
-            <NavItem icon={<Repeat size={20} />} label="Programados" active={activeView === 'recurring'} onClick={() => setActiveView('recurring')} />
-            <NavItem icon={<Target size={20} />} label="Objetivos" active={activeView === 'goals'} onClick={() => setActiveView('goals')} />
-            <NavItem icon={<Tag size={20} />} label="Categorías" active={activeView === 'categories'} onClick={() => setActiveView('categories')} />
-            <div className="pt-6 pb-2 px-4 text-[10px] font-bold uppercase tracking-widest text-text-dim">Preferencias</div>
-            <NavItem icon={<Settings size={20} />} label="Configuración" active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
-          </nav>
-
-          <div className="p-4 border-t border-border space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-surface-2 transition-colors cursor-pointer group" onClick={handleLogout}>
-              <img src={user.photoURL || ''} className="w-10 h-10 rounded-full border border-border" alt="Profile" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{user.displayName}</p>
-                <p className="text-[10px] text-text-secondary truncate">{user.email}</p>
-              </div>
-              <LogOut size={16} className="text-text-dim group-hover:text-red-accent transition-colors" />
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 flex flex-col min-w-0 relative pb-20 lg:pb-0">
-          <header className="h-16 border-b border-border bg-sidebar/50 backdrop-blur-md flex items-center justify-between px-4 lg:px-8 sticky top-0 z-10">
-            <div className="flex items-center gap-4 flex-1 max-w-xl">
-              <div className="lg:hidden">
-                <div className="w-8 h-8 bg-orange-primary rounded-lg flex items-center justify-center">
-                  <Wallet className="text-white w-5 h-5" />
-                </div>
-              </div>
-              <div className="relative w-full group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim group-focus-within:text-orange-primary transition-colors" size={16} />
-                <input 
-                  type="text" 
-                  value={searchTerm}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      addToSearchHistory(searchTerm);
-                      setActiveView('transactions');
-                    }
-                  }}
-                  placeholder="Buscar transacciones, categorías..." 
-                  className="w-full bg-surface-2 border border-border rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-orange-primary/50 transition-all"
-                />
-                <AnimatePresence>
-                  {isSearchFocused && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[400px] flex flex-col"
-                    >
-                      <div className="overflow-y-auto custom-scrollbar p-2 space-y-1">
-                        {!searchTerm && searchHistory.length > 0 && (
-                          <div className="pb-2">
-                            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-text-dim">Recientes</p>
-                            {searchHistory.map((h, i) => (
-                              <button key={i} onClick={() => { setSearchTerm(h); addToSearchHistory(h); setActiveView('transactions'); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors">
-                                <Repeat size={14} className="text-text-dim" />
-                                <span>{h}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {searchTerm && (
-                          <>
-                            {/* Matching Transactions */}
-                            {transactions.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 5).map(t => (
-                              <button key={t.id} onClick={() => { setSelectedTransactionDetails(t); addToSearchHistory(searchTerm); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors text-left">
-                                <div className="w-8 h-8 rounded-lg bg-orange-primary/10 text-orange-primary flex items-center justify-center shrink-0"><ArrowUpRight size={14} /></div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold truncate">{t.description}</p>
-                                  <p className="text-[10px] text-text-dim truncate">{format(parseISO(t.date), 'dd MMM yyyy')}</p>
-                                </div>
-                                <span className="font-bold text-xs">{formatCurrency(t.amount)}</span>
-                              </button>
-                            ))}
-                            {/* Matching Categories */}
-                            {allCategories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map(c => {
-                              const Icon = IconMap[c.icon] || Tag;
-                              return (
-                                <button key={c.id} onClick={() => { setActiveView('categories'); addToSearchHistory(searchTerm); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors text-left">
-                                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${c.color}15`, color: c.color }}><Icon size={14} /></div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-bold truncate">{c.name}</p>
-                                    <p className="text-[10px] text-text-dim truncate">Categoría</p>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                            {/* Matching Accounts */}
-                            {accounts.filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase())).map(a => (
-                              <button key={a.id} onClick={() => { setActiveView('accounts'); addToSearchHistory(searchTerm); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-surface-2 text-sm transition-colors text-left">
-                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${a.color}15`, color: a.color }}><CreditCard size={14} /></div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-bold truncate">{a.name}</p>
-                                  <p className="text-[10px] text-text-dim truncate">Cuenta</p>
-                                </div>
-                              </button>
-                            ))}
-                          </>
-                        )}
-                        {!searchTerm && searchHistory.length === 0 && (
-                          <div className="p-8 text-center text-text-dim text-xs italic">Escribe para buscar...</div>
-                        )}
-                        {searchTerm && transactions.filter(t => t.description.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && 
-                         allCategories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 &&
-                         accounts.filter(a => a.name.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 && (
-                          <div className="p-8 text-center text-text-dim text-xs italic">No se encontraron resultados.</div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <button 
-                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                  className="p-2 text-text-secondary hover:text-text-primary transition-colors relative"
-                >
-                  <Bell size={20} />
-                  {notifications.some(n => !n.read) && (
-                    <span className="absolute top-2 right-2 w-2 h-2 bg-orange-primary rounded-full border-2 border-sidebar"></span>
-                  )}
-                </button>
-                <AnimatePresence>
-                  {isNotificationsOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setIsNotificationsOpen(false)} />
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="fixed inset-x-4 top-20 lg:absolute lg:inset-auto lg:right-0 lg:top-full lg:mt-2 lg:w-80 bg-surface border border-border rounded-2xl shadow-2xl z-50 overflow-hidden"
-                      >
-                        <div className="p-4 border-b border-border bg-sidebar/50 flex items-center justify-between">
-                          <h4 className="font-bold text-sm">Notificaciones</h4>
-                          <button onClick={() => setNotifications([])} className="text-[10px] font-bold uppercase tracking-widest text-orange-primary hover:underline">Limpiar</button>
-                        </div>
-                        <div className="max-h-96 overflow-y-auto divide-y divide-border">
-                          {notifications.length === 0 ? (
-                            <div className="p-8 text-center text-text-dim text-xs">No tienes notificaciones nuevas.</div>
-                          ) : (
-                            notifications.map(n => (
-                              <div key={n.id} className="p-4 hover:bg-surface-2 transition-colors cursor-default">
-                                <p className="text-xs font-bold">{n.title}</p>
-                                <p className="text-[10px] text-text-secondary mt-1">{n.content}</p>
-                                <p className="text-[10px] text-text-dim mt-2">{format(parseISO(n.date), 'HH:mm • dd MMM')}</p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>
-              </div>
-              <div className="h-6 w-px bg-border mx-2"></div>
-              <button 
-                onClick={() => {
-                  setModalType('transaction');
-                  setEditingTransaction(null);
-                  setIsModalOpen(true);
-                }}
-                className="bg-orange-primary hover:bg-orange-secondary text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-orange-primary/20"
-              >
-                <Plus size={18} />
-                <span className="hidden sm:inline">Nuevo Registro</span>
-              </button>
-            </div>
-          </header>
-
-          <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
-            <AnimatePresence mode="wait">
-              {activeView === 'dashboard' && (
-                <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
-                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl font-display font-bold">Hola, {user.displayName?.split(' ')[0]}</h2>
-                      <p className="text-text-secondary mt-1 text-sm lg:text-base hidden sm:block">Aquí tienes un resumen de tus finanzas hoy.</p>
-                    </div>
-                    <div className="flex items-center gap-1 bg-surface rounded-xl p-1 border border-border overflow-x-auto no-scrollbar">
-                      {(['day', 'week', 'month', 'year'] as const).map((range) => (
-                        <button key={range} onClick={() => setTimeRange(range)} className={cn("px-3 lg:px-4 py-1.5 rounded-lg text-[10px] lg:text-xs font-bold transition-all capitalize whitespace-nowrap", timeRange === range ? "bg-orange-primary text-white shadow-md" : "text-text-secondary hover:text-text-primary")}>
-                          {range === 'day' ? 'Hoy' : range === 'week' ? 'Semana' : range === 'month' ? 'Mes' : 'Año'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-                    <KPICard title="Saldo Total" value={formatCurrency(totalBalance)} trend="up" color="blue" icon={<Wallet size={24} />} />
-                    <KPICard title="Ingresos" value={formatCurrency(totalIncome)} trend="up" color="green" icon={<ArrowUpRight size={24} />} />
-                    <KPICard title="Gastos" value={formatCurrency(totalExpenses)} trend="down" color="red" icon={<ArrowDownLeft size={24} />} />
-                    <KPICard 
-                      title="Tasa de Ahorro" 
-                      value={`${totalIncome > 0 ? Math.max(0, Math.round(((totalIncome - totalExpenses) / totalIncome) * 100)) : 0}%`} 
-                      trend={totalIncome - totalExpenses > 0 ? 'up' : 'down'} 
-                      color="orange" 
-                      icon={<TrendingUp size={24} />} 
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2 space-y-8">
-                      <div className="bg-surface border border-border rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-8">
-                          <h3 className="font-bold flex items-center gap-2 text-sm lg:text-base"><TrendingUp size={18} className="text-orange-primary" /> Flujo de Caja</h3>
-                        </div>
-                        <div className="h-[250px] lg:h-[300px] w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={getChartData(filteredTransactions)}>
-                              <defs>
-                                <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1EE07A" stopOpacity={0.3}/><stop offset="95%" stopColor="#1EE07A" stopOpacity={0}/></linearGradient>
-                                <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#FF4757" stopOpacity={0.3}/><stop offset="95%" stopColor="#FF4757" stopOpacity={0}/></linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#7A7874', fontSize: 10 }} />
-                              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#7A7874', fontSize: 10 }} tickFormatter={(val) => `$${val}`} />
-                              <Tooltip content={<CustomTooltip />} />
-                              <Area type="monotone" dataKey="ingresos" stroke="#1EE07A" fillOpacity={1} fill="url(#colorIncome)" strokeWidth={2} />
-                              <Area type="monotone" dataKey="gastos" stroke="#FF4757" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={2} />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <CustomPieChart 
-                          data={getPieData(filteredTransactions.filter(t => t.type === 'income'))}
-                          title="Distribución de Ingresos"
-                          icon={PieChart}
-                          iconColor="text-green-accent"
-                        />
-                        <CustomPieChart 
-                          data={getPieData(filteredTransactions.filter(t => t.type === 'expense'))}
-                          title="Distribución de Gastos"
-                          icon={PieChart}
-                          iconColor="text-red-accent"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-surface border border-border rounded-2xl p-6">
-                          <h3 className="font-bold text-sm mb-6 flex items-center gap-2"><TrendingDown size={16} className="text-red-accent" /> Mayores Gastos</h3>
-                          <div className="space-y-4">
-                            {getPieData(filteredTransactions.filter(t => t.type === 'expense'))
-                              .sort((a, b) => b.value - a.value)
-                              .slice(0, 4)
-                              .map((item, i) => (
-                                <div key={i} className="flex items-center justify-between group">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${item.color}15`, color: item.color }}>
-                                      {(() => {
-                                        const cat = allCategories.find(c => c.name === item.name);
-                                        const Icon = IconMap[cat?.icon || 'Tag'] || Tag;
-                                        return <Icon size={16} />;
-                                      })()}
-                                    </div>
-                                    <div>
-                                      <p className="text-xs font-bold">{item.name}</p>
-                                      <div className="w-24 h-1 bg-surface-2 rounded-full mt-1 overflow-hidden">
-                                        <div className="h-full bg-red-accent/50" style={{ width: `${(item.value / totalExpenses) * 100}%` }} />
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-xs font-bold">{formatCurrency(item.value)}</p>
-                                    <p className="text-[10px] text-text-dim">{Math.round((item.value / totalExpenses) * 100)}% del total</p>
-                                  </div>
-                                </div>
-                              ))}
-                            {totalExpenses === 0 && <p className="text-center text-text-dim text-xs py-4 italic">Sin gastos registrados</p>}
-                          </div>
-                        </div>
-
-                        <div className="bg-surface border border-border rounded-2xl p-6">
-                          <h3 className="font-bold text-sm mb-6 flex items-center gap-2"><Calendar size={16} className="text-blue-accent" /> Próximos Pagos</h3>
-                          <div className="space-y-4">
-                            {recurring.filter(r => r.type === 'expense').slice(0, 4).map((r, i) => {
-                              const cat = allCategories.find(c => c.id === r.categoryId);
-                              const Icon = IconMap[cat?.icon || 'Tag'] || Tag;
-                              return (
-                                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border hover:border-blue-accent/30 transition-all">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${cat?.color || '#7A7874'}15`, color: cat?.color || '#7A7874' }}>
-                                      <Icon size={16} />
-                                    </div>
-                                    <div>
-                                      <p className="text-xs font-bold">{r.description}</p>
-                                      <p className="text-[10px] text-text-dim capitalize">{r.frequency}</p>
-                                    </div>
-                                  </div>
-                                  <p className="text-xs font-bold text-red-accent">-{formatCurrency(r.amount)}</p>
-                                </div>
-                              );
-                            })}
-                            {recurring.length === 0 && <p className="text-center text-text-dim text-xs py-4 italic">No hay pagos recurrentes</p>}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-surface border border-border rounded-2xl overflow-hidden">
-                        <div className="p-6 border-b border-border flex items-center justify-between">
-                          <h3 className="font-bold">Transacciones Recientes</h3>
-                          <button onClick={() => setActiveView('transactions')} className="text-xs text-orange-primary font-bold hover:underline">Ver todo</button>
-                        </div>
-                          <div className="divide-y divide-border">
-                            {filteredTransactions.slice(0, 5).map((t) => (
-                              <TransactionItem 
-                                key={t.id} 
-                                transaction={t} 
-                                accounts={accounts} 
-                                categories={allCategories} 
-                                onClick={() => setSelectedTransactionDetails(t)} 
-                              />
-                            ))}
-                            {filteredTransactions.length === 0 && <div className="p-12 text-center text-text-dim">No hay movimientos recientes.</div>}
-                          </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-8">
-                      <div className="bg-surface border border-border rounded-2xl p-6">
-                        <h3 className="font-bold flex items-center gap-2 mb-6"><Target size={18} className="text-orange-primary" /> Regla 50/30/20</h3>
-                        <div className="space-y-6">
-                          {(() => {
-                            const needsActual = filteredTransactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'need').reduce((acc, t) => acc + t.amount, 0);
-                            const wantsActual = filteredTransactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'want').reduce((acc, t) => acc + t.amount, 0);
-                            const savingsActual = filteredTransactions.filter(t => t.type === 'expense' && allCategories.find(c => c.id === t.categoryId)?.budgetType === 'saving').reduce((acc, t) => acc + t.amount, 0);
-
-                            const needsTarget = totalIncome * 0.5;
-                            const wantsTarget = totalIncome * 0.3;
-                            const savingsTarget = totalIncome * 0.2;
-
-                            return (
-                              <div className="space-y-6">
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-text-secondary">Necesidades (50%)</span>
-                                    <span className={cn("text-xs font-bold", needsActual > needsTarget ? "text-red-accent" : "text-green-accent")}>
-                                      {needsActual > needsTarget ? 'Excedido' : 'En control'}
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
-                                      <p className="text-[10px] text-text-dim uppercase font-bold">Objetivo</p>
-                                      <p className="text-sm font-bold">{formatCurrency(needsTarget)}</p>
-                                    </div>
-                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
-                                      <p className="text-[10px] text-text-dim uppercase font-bold">Gastado</p>
-                                      <p className="text-sm font-bold">{formatCurrency(needsActual)}</p>
-                                    </div>
-                                  </div>
-                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
-                                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (needsActual / (needsTarget || 1)) * 100)}%` }} className={cn("h-full transition-all", needsActual > needsTarget && totalIncome > 0 ? "bg-red-accent" : "bg-blue-accent")} />
-                                  </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-text-secondary">Deseos (30%)</span>
-                                    <span className={cn("text-xs font-bold", wantsActual > wantsTarget ? "text-red-accent" : "text-green-accent")}>
-                                      {wantsActual > wantsTarget ? 'Excedido' : 'En control'}
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
-                                      <p className="text-[10px] text-text-dim uppercase font-bold">Objetivo</p>
-                                      <p className="text-sm font-bold">{formatCurrency(wantsTarget)}</p>
-                                    </div>
-                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
-                                      <p className="text-[10px] text-text-dim uppercase font-bold">Gastado</p>
-                                      <p className="text-sm font-bold">{formatCurrency(wantsActual)}</p>
-                                    </div>
-                                  </div>
-                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
-                                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (wantsActual / (wantsTarget || 1)) * 100)}%` }} className={cn("h-full transition-all", wantsActual > wantsTarget && totalIncome > 0 ? "bg-red-accent" : "bg-orange-primary")} />
-                                  </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-text-secondary">Ahorro (20%)</span>
-                                    <span className={cn("text-xs font-bold", savingsActual > savingsTarget ? "text-red-accent" : "text-green-accent")}>
-                                      {savingsActual > savingsTarget ? 'Excedido' : 'En control'}
-                                    </span>
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
-                                      <p className="text-[10px] text-text-dim uppercase font-bold">Objetivo</p>
-                                      <p className="text-sm font-bold">{formatCurrency(savingsTarget)}</p>
-                                    </div>
-                                    <div className="p-3 bg-surface-2 rounded-xl border border-border">
-                                      <p className="text-[10px] text-text-dim uppercase font-bold">Gastado</p>
-                                      <p className="text-sm font-bold">{formatCurrency(savingsActual)}</p>
-                                    </div>
-                                  </div>
-                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
-                                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, (savingsActual / (savingsTarget || 1)) * 100)}%` }} className={cn("h-full transition-all", savingsActual > savingsTarget && totalIncome > 0 ? "bg-red-accent" : "bg-green-accent")} />
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                          <p className="text-[10px] text-text-dim leading-relaxed italic">Comparativa de gastos reales vs objetivos basados en tus ingresos.</p>
-                        </div>
-                      </div>
-
-                      <div className="bg-surface-2 border border-border rounded-2xl p-6 relative overflow-hidden">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-bold flex items-center gap-2"><Sparkles size={18} className="text-orange-primary" /> Sugerencias IA</h3>
-                          <button 
-                            onClick={handleRefreshSuggestions}
-                            disabled={isLoadingSuggestions}
-                            className="p-1.5 text-text-dim hover:text-text-primary hover:bg-surface-3 rounded-lg transition-all disabled:opacity-50"
-                            title="Recargar sugerencias"
-                          >
-                            <RotateCw size={14} className={cn(isLoadingSuggestions && "animate-spin")} />
-                          </button>
-                        </div>
-                        <div className="space-y-4">
-                          {isLoadingSuggestions ? <div className="space-y-3">{[1, 2].map(i => <div key={i} className="h-20 bg-surface-3 animate-pulse rounded-xl"></div>)}</div> : suggestions.map((s, i) => (
-                            <div key={i} className="p-4 bg-surface-3 rounded-xl border border-border hover:border-orange-primary/30 transition-all group cursor-default">
-                              <div className="flex items-start gap-3">
-                                <div className={cn("p-2 rounded-lg shrink-0", s.type === 'saving' ? "bg-green-accent/10 text-green-accent" : s.type === 'warning' ? "bg-red-accent/10 text-red-accent" : "bg-blue-accent/10 text-blue-accent")}>
-                                  {s.type === 'saving' ? <TrendingUp size={16} /> : s.type === 'warning' ? <AlertCircle size={16} /> : <Lightbulb size={16} />}
-                                </div>
-                                <div>
-                                  <h4 className="text-sm font-bold group-hover:text-orange-primary transition-colors">{s.title}</h4>
-                                  <p className="text-xs text-text-secondary mt-1 leading-relaxed">{s.content}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="bg-surface border border-border rounded-2xl p-6">
-                        <h3 className="font-bold flex items-center gap-2 mb-6"><PieChart size={18} className="text-orange-primary" /> Mis Cuentas</h3>
-                        <div className="space-y-3">
-                          {accounts.map(a => (
-                            <div key={a.id} className="flex items-center justify-between p-3 rounded-xl bg-surface-2 border border-border">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-lg" style={{ backgroundColor: `${a.color}15`, color: a.color }}>
-                                  {(() => {
-                                    const type = ACCOUNT_TYPES.find(at => at.id === a.type);
-                                    const Icon = type?.icon || Wallet;
-                                    return <Icon size={16} />;
-                                  })()}
-                                </div>
-                                <div>
-                                  <p className="text-xs font-bold">{a.name}</p>
-                                  <p className="text-[10px] text-text-dim">{a.lastDigits ? `**** ${a.lastDigits}` : 'Efectivo'}</p>
-                                </div>
-                              </div>
-                              <p className="text-xs font-bold">{formatCurrency(a.balance)}</p>
-                            </div>
-                          ))}
-                          <button onClick={() => { setModalType('account'); setIsModalOpen(true); }} className="w-full py-2 border border-dashed border-border rounded-xl text-[10px] font-bold uppercase tracking-widest text-text-dim hover:text-orange-primary hover:border-orange-primary/50 transition-all">+ Agregar Cuenta</button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeView === 'transactions' && (
-                <motion.div key="transactions" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Historial</h2><p className="text-text-secondary hidden sm:block">Gestiona todos tus movimientos financieros.</p></div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => setIsFilterSidebarOpen(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Filter size={18} /> <span className="hidden sm:inline">Filtrar</span></button>
-                      <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold border border-border hover:bg-surface-2 transition-all"><Download size={18} /> <span className="hidden sm:inline">Exportar</span></button>
-                    </div>
-                  </div>
-                    <div className="bg-surface border border-border rounded-2xl overflow-hidden divide-y divide-border">
-                      {filteredTransactions.map((t) => (
-                        <TransactionItem 
-                          key={t.id} 
-                          transaction={t} 
-                          accounts={accounts} 
-                          categories={allCategories} 
-                          onClick={() => setSelectedTransactionDetails(t)}
-                        />
-                      ))}
-                    </div>
-                </motion.div>
-              )}
-
-              {activeView === 'accounts' && (
-                <motion.div key="accounts" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Mis Cuentas</h2><p className="text-text-secondary hidden sm:block">Gestiona tus tarjetas, bancos y efectivo.</p></div>
-                    <button onClick={() => { setModalType('account'); setIsModalOpen(true); }} className="bg-orange-primary text-white p-2 sm:px-4 sm:py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> <span className="hidden sm:inline">Nueva Cuenta</span></button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {accounts.map(a => (
-                      <div key={a.id} className="bg-surface border border-border rounded-2xl p-6 space-y-6 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity" style={{ color: a.color }}>
-                          {(() => {
-                            const type = ACCOUNT_TYPES.find(at => at.id === a.type);
-                            const Icon = type?.icon || Wallet;
-                            return <Icon size={80} />;
-                          })()}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="p-3 rounded-xl" style={{ backgroundColor: `${a.color}15`, color: a.color }}>
-                            {(() => {
-                              const type = ACCOUNT_TYPES.find(at => at.id === a.type);
-                              const Icon = type?.icon || Wallet;
-                              return <Icon size={24} />;
-                            })()}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button className="p-2 text-text-dim hover:text-text-primary transition-colors"><Settings size={16} /></button>
-                            <button onClick={async () => { if(confirm('¿Eliminar cuenta?')) await deleteDoc(doc(db, 'users', user.uid, 'accounts', a.id)); }} className="p-2 text-text-dim hover:text-red-accent transition-colors"><X size={16} /></button>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-text-secondary uppercase tracking-widest">{a.name}</p>
-                          <h4 className="text-3xl font-display font-bold mt-1">{formatCurrency(a.balance)}</h4>
-                        </div>
-                        <div className="flex items-center justify-between pt-4 border-t border-border">
-                          <span className="text-[10px] font-bold text-text-dim uppercase tracking-widest">{a.type}</span>
-                          {a.lastDigits && <span className="text-[10px] font-mono text-text-secondary">**** {a.lastDigits}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {activeView === 'recurring' && (
-                <motion.div key="recurring" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                  <div className="flex items-center justify-between">
-                    <div><h2 className="text-3xl font-display font-bold">Programados</h2><p className="text-text-secondary hidden sm:block">Automatiza tus ingresos y gastos recurrentes.</p></div>
-                    <button onClick={() => { setModalType('transaction'); setEditingTransaction(null); setIsModalOpen(true); }} className="bg-orange-primary text-white p-2 sm:px-4 sm:py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20 transition-all active:scale-95"><Plus size={18} /> <span className="hidden sm:inline">Nueva Programación</span></button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {recurring.map(r => {
-                      const cat = allCategories.find(c => c.id === r.categoryId) || allCategories[allCategories.length - 1];
-                      const Icon = IconMap[cat.icon] || MoreHorizontal;
-                      return (
-                        <div key={r.id} className="bg-surface border border-border rounded-2xl p-6 flex flex-col justify-between">
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${cat.color}15`, color: cat.color }}><Icon size={24} /></div>
-                              <div>
-                                <h4 className="font-bold">{r.description}</h4>
-                                <p className="text-xs text-text-secondary capitalize">{r.frequency} • {formatCurrency(r.amount)}</p>
-                              </div>
-                            </div>
-                            <div className={cn("px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest", r.isActive ? "bg-green-accent/10 text-green-accent" : "bg-text-dim/10 text-text-dim")}>{r.isActive ? 'Activo' : 'Pausado'}</div>
-                          </div>
-                          <div className="flex items-center justify-between pt-4 border-t border-border">
-                            <div className="text-[10px] text-text-dim">Próximo: {format(parseISO(r.nextOccurrence), 'dd MMM yyyy', { locale: es })}</div>
-                            <div className="flex items-center gap-2">
-                              <button className="p-2 text-text-dim hover:text-text-primary transition-colors"><Settings size={16} /></button>
-                              <button onClick={async () => { if(confirm('¿Eliminar?')) await deleteDoc(doc(db, 'users', user.uid, 'recurring', r.id)); }} className="p-2 text-text-dim hover:text-red-accent transition-colors"><X size={16} /></button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-
-                {activeView === 'goals' && (
-                  <motion.div key="goals" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                    <GoalsView 
-                      goals={goals} 
-                      automations={automations} 
-                      onAddGoal={() => { setModalType('goal'); setIsModalOpen(true); }} 
-                      onAddAutomation={() => { setModalType('automation'); setIsModalOpen(true); }} 
-                      onDeleteGoal={handleDeleteGoal} 
-                      onDeleteAutomation={handleDeleteAutomation}
-                      onAddFunds={(goal: any) => { setSelectedGoal(goal); setModalType('addFunds'); setIsModalOpen(true); }}
-                      onSelectGoal={(goal: any) => { setSelectedGoalDetails(goal); setIsGoalSidebarOpen(true); }}
-                      categories={allCategories}
-                    />
-                  </motion.div>
-                )}
-
-              {activeView === 'categories' && (
-                  <motion.div key="categories" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div><h2 className="text-3xl font-display font-bold">Categorías</h2><p className="text-text-secondary hidden sm:block">Gestiona tus categorías y establece límites de presupuesto.</p></div>
-                      <button onClick={() => { setModalType('category'); setIsModalOpen(true); }} className="bg-orange-primary text-white p-2 sm:px-4 sm:py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-orange-primary/20"><Plus size={18} /> <span className="hidden sm:inline">Nueva Categoría</span></button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {allCategories.map(c => {
-                        const Icon = IconMap[c.icon] || Tag;
-                        const isCustom = customCategories.some(cc => cc.id === c.id);
-                        const spent = transactions.filter(t => t.categoryId === c.id && t.type === 'expense').reduce((acc, t) => acc + t.amount, 0);
-                        const progress = c.budgetLimit ? (spent / c.budgetLimit) * 100 : 0;
-
-                        return (
-                          <div key={c.id} className="bg-surface border border-border rounded-2xl p-6 space-y-4">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${c.color}15`, color: c.color }}><Icon size={20} /></div>
-                                <div>
-                                  <h4 className="font-bold text-sm">{c.name}</h4>
-                                  <span className="text-[10px] uppercase tracking-widest text-text-dim font-bold">{c.budgetType || 'Sin tipo'}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button onClick={() => handleDeleteCategory(c.id)} className="p-2 text-text-dim hover:text-red-accent transition-colors"><Trash2 size={16} /></button>
-                              </div>
-                            </div>
-
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-text-secondary">Gastado: <span className="font-bold text-text-primary">{formatCurrency(spent)}</span></span>
-                                {c.budgetLimit && <span className="text-text-dim">Límite: {formatCurrency(c.budgetLimit)}</span>}
-                              </div>
-                              {c.budgetLimit && (
-                                <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
-                                  <div className={cn("h-full transition-all", progress > 100 ? "bg-red-accent" : progress > 80 ? "bg-orange-primary" : "bg-green-accent")} style={{ width: `${Math.min(100, progress)}%` }} />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="pt-4 border-t border-border grid grid-cols-2 gap-2">
-                              <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-text-dim">Límite</label>
-                                <input 
-                                  type="number" 
-                                  placeholder="Sin límite"
-                                  defaultValue={c.budgetLimit}
-                                  onBlur={(e) => handleUpdateCategory(c.id, { budgetLimit: Number(e.target.value) || undefined })}
-                                  className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-bold text-text-dim">Tipo</label>
-                                <select 
-                                  defaultValue={c.budgetType}
-                                  onChange={(e) => handleUpdateCategory(c.id, { budgetType: e.target.value as any })}
-                                  className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none"
-                                >
-                                  <option value="">Seleccionar</option>
-                                  <option value="need">Necesidad</option>
-                                  <option value="want">Deseo</option>
-                                  <option value="saving">Ahorro</option>
-                                </select>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </motion.div>
-                )}
-                {activeView === 'settings' && (
-                  <motion.div key="settings" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-8">
-                  <div><h2 className="text-3xl font-display font-bold">Configuración</h2><p className="text-text-secondary">Personaliza tu experiencia en Hera.</p></div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
-                      <h3 className="font-bold flex items-center gap-2"><Settings size={18} className="text-orange-primary" /> Preferencias</h3>
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 bg-surface-2 rounded-xl border border-border">
-                          <div>
-                            <p className="text-sm font-bold hidden sm:block">Tema de la aplicación</p>
-                            <p className="text-sm font-bold sm:hidden">Tema</p>
-                            <p className="text-[10px] text-text-secondary">Cambia entre modo claro y oscuro</p>
-                          </div>
-                          <button 
-                            onClick={toggleTheme}
-                            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-3 border border-border hover:border-orange-primary/50 transition-all"
-                          >
-                            {theme === 'dark' ? <Sun size={16} className="text-orange-primary" /> : <Moon size={16} className="text-blue-accent" />}
-                            <span className="text-xs font-bold hidden sm:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Oscuro'}</span>
-                            <span className="text-xs font-bold sm:hidden">{theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
-                      <h3 className="font-bold flex items-center gap-2"><Lightbulb size={18} className="text-orange-primary" /> Productividad</h3>
-                      <div className="space-y-4">
-                        <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-2">
-                          <p className="text-xs font-bold text-orange-primary uppercase tracking-widest">Consejo de Uso</p>
-                          <p className="text-sm leading-relaxed">Usa la barra de búsqueda para encontrar rápidamente transacciones por nombre, categoría o cuenta. ¡Incluso puedes buscar por monto!</p>
-                        </div>
-                        <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-2">
-                          <p className="text-xs font-bold text-blue-accent uppercase tracking-widest">Atajos</p>
-                          <p className="text-sm leading-relaxed">Toca cualquier transacción para ver sus detalles y acceder rápidamente a las opciones de edición o eliminación.</p>
-                        </div>
-                        <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-2">
-                          <p className="text-xs font-bold text-green-accent uppercase tracking-widest">Presupuestos</p>
-                          <p className="text-sm leading-relaxed">Establece límites en tus categorías para que Hera te avise cuando estés cerca de superarlos.</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-surface border border-border rounded-2xl p-6 space-y-6">
-                      <h3 className="font-bold flex items-center gap-2"><UserIcon size={18} className="text-orange-primary" /> Perfil</h3>
-                      <div className="flex items-center gap-4 p-4 bg-surface-2 rounded-xl border border-border">
-                        <img src={user.photoURL || ''} className="w-16 h-16 rounded-full border-2 border-orange-primary/20" alt="Profile" />
-                        <div>
-                          <p className="font-bold text-lg">{user.displayName}</p>
-                          <p className="text-sm text-text-secondary">{user.email}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </main>
-
-        {/* Modals */}
-        <AnimatePresence>
-          {isModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsModalOpen(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-                animate={{ opacity: 1, scale: 1, y: 0 }} 
-                exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-                className={cn(
-                  "relative w-full bg-surface border border-border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300",
-                  (modalType === 'goal' || modalType === 'automation') ? "max-w-2xl" : "max-w-lg"
-                )}
-              >
-                <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
-                  <h3 className="font-display font-bold text-xl">
-                    {modalType === 'transaction' ? (editingTransaction ? 'Editar Registro' : 'Nuevo Registro') : 
-                     modalType === 'account' ? 'Nueva Cuenta' : 
-                     modalType === 'category' ? 'Nueva Categoría' :
-                     modalType === 'goal' ? 'Nuevo Objetivo Financiero' : 'Nueva Automatización'}
-                  </h3>
-                  <button onClick={() => setIsModalOpen(false)} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
-                </div>
-                
-                {modalType === 'transaction' ? (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const fd = new FormData(e.currentTarget);
-                    handleAddTransaction({
-                      type: fd.get('type'),
-                      amount: Number(fd.get('amount')),
-                      accountId: fd.get('accountId'),
-                      categoryId: fd.get('categoryId'),
-                      description: fd.get('description'),
-                      date: new Date(fd.get('date') as string).toISOString(),
-                      isRecurring: fd.get('isRecurring') === 'on',
-                      frequency: fd.get('frequency'),
-                      notify: fd.get('notify') === 'true'
-                    });
-                  }} className="p-4 space-y-4">
-                    <div className="flex p-1 bg-surface-2 rounded-xl border border-border">
-                      <label className="flex-1 cursor-pointer"><input type="radio" name="type" value="expense" defaultChecked={editingTransaction?.type !== 'income'} className="sr-only peer" /><div className="py-2 text-center rounded-lg text-sm font-bold transition-all peer-checked:bg-red-accent peer-checked:text-white text-text-secondary">Gasto</div></label>
-                      <label className="flex-1 cursor-pointer"><input type="radio" name="type" value="income" defaultChecked={editingTransaction?.type === 'income'} className="sr-only peer" /><div className="py-2 text-center rounded-lg text-sm font-bold transition-all peer-checked:bg-green-accent peer-checked:text-white text-text-secondary">Ingreso</div></label>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto</label><div className="relative"><DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} /><input required name="amount" type="number" step="0.01" defaultValue={editingTransaction?.amount || 0} className="w-full bg-surface-2 border border-border rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Fecha</label><div className="relative"><Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} /><input required name="date" type="date" defaultValue={editingTransaction ? format(parseISO(editingTransaction.date), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')} className="w-full bg-surface-2 border border-border rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:border-orange-primary/50" /></div></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Cuenta</label><select required name="accountId" defaultValue={editingTransaction?.accountId} className="w-full bg-surface-2 border border-border rounded-lg py-2 px-3 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">{accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Categoría</label><CategorySelect name="categoryId" defaultValue={editingTransaction?.categoryId} categories={allCategories} /></div>
-                    </div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" defaultValue={editingTransaction?.description} className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
-                    
-                    {!editingTransaction && (
-                      <div className="space-y-3 p-4 bg-surface-2 rounded-xl border border-border relative overflow-hidden">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                          <input 
-                            type="checkbox" 
-                            name="isRecurring" 
-                            checked={isRecurringChecked}
-                            onChange={(e) => setIsRecurringChecked(e.target.checked)}
-                            className="w-4 h-4 rounded border-border text-orange-primary focus:ring-orange-primary transition-all" 
-                          />
-                          <span className="text-xs font-bold group-hover:text-orange-primary transition-colors">¿Convertir en recurrente?</span>
-                        </label>
-                        {isRecurringChecked && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} className="grid grid-cols-2 gap-3 pt-1 overflow-hidden">
-                            <div className="space-y-1">
-                              <label className="text-[10px] uppercase font-bold text-text-dim">Frecuencia</label>
-                              <select name="frequency" className="w-full bg-surface border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
-                                <option value="daily">Diario</option>
-                                <option value="weekly">Semanal</option>
-                                <option value="monthly">Mensual</option>
-                                <option value="yearly">Anual</option>
-                              </select>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[10px] uppercase font-bold text-text-dim">Aviso</label>
-                              <select name="notify" className="w-full bg-surface border border-border rounded-lg py-1.5 px-3 text-xs focus:outline-none focus:border-orange-primary/50 appearance-none">
-                                <option value="true">Sí</option>
-                                <option value="false">No</option>
-                              </select>
-                            </div>
-                          </motion.div>
-                        )}
-                      </div>
-                    )}
-                    <div className="pt-2 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">{editingTransaction ? 'Guardar' : 'Registrar'}</button></div>
-                  </form>
-                ) : modalType === 'account' ? (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const fd = new FormData(e.currentTarget);
-                    handleAddAccount({
-                      name: fd.get('name'),
-                      type: fd.get('type'),
-                      balance: Number(fd.get('balance')),
-                      color: fd.get('color'),
-                      lastDigits: fd.get('lastDigits'),
-                    });
-                  }} className="p-6 space-y-6">
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre de la Cuenta</label><input required name="name" placeholder="ej. Mi Visa, Efectivo Ahorros..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo</label><select name="type" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">{ACCOUNT_TYPES.map(at => <option key={at.id} value={at.id}>{at.name}</option>)}</select></div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Saldo Inicial</label><input required name="balance" type="number" step="0.01" defaultValue={0} placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Últimos 4 dígitos</label><input name="lastDigits" maxLength={4} placeholder="Opcional" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
-                      <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#FF5C1A" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
-                    </div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
-                    <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Cuenta</button></div>
-                  </form>
-                ) : modalType === 'category' ? (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const fd = new FormData(e.currentTarget);
-                    handleAddCategory({
-                      name: fd.get('name'),
-                      icon: fd.get('icon'),
-                      color: fd.get('color'),
-                      budgetType: fd.get('budgetType'),
-                      budgetLimit: Number(fd.get('budgetLimit')) || undefined,
-                    });
-                  }} className="p-6 space-y-6">
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre de la Categoría</label><input required name="name" placeholder="ej. Gimnasio, Mascotas..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo de Presupuesto</label>
-                        <select name="budgetType" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">
-                          <option value="">Ninguno</option>
-                          <option value="need">Necesidad</option>
-                          <option value="want">Deseo</option>
-                          <option value="saving">Ahorro</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Límite Mensual</label>
-                        <input name="budgetLimit" type="number" placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Icono</label>
-                      <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-2 bg-surface-2 border border-border rounded-xl custom-scrollbar">
-                        {Object.keys(IconMap).map(iconName => {
-                          const Icon = IconMap[iconName];
-                          return (
-                            <label key={iconName} className="cursor-pointer group">
-                              <input type="radio" name="icon" value={iconName} defaultChecked={iconName === 'Wallet'} className="sr-only peer" />
-                              <div className="aspect-square rounded-lg flex items-center justify-center border border-transparent peer-checked:border-orange-primary peer-checked:bg-orange-primary/10 hover:bg-surface-3 transition-all">
-                                <Icon size={18} className="text-text-dim group-hover:text-text-primary peer-checked:text-orange-primary" />
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label><input name="color" type="color" defaultValue="#A855F7" className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none" /></div>
-                    <div className="space-y-1.5"><label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Descripción (Opcional)</label><textarea name="description" className="w-full bg-surface-2 border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:border-orange-primary/50 min-h-[40px] resize-none" /></div>
-                    <div className="pt-4 flex gap-3"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button><button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Crear Categoría</button></div>
-                  </form>
-                ) : null}
-
-                {modalType === 'goal' && (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.currentTarget);
-                    const goalData = {
-                      name: formData.get('name'),
-                      targetAmount: Number(formData.get('targetAmount')),
-                      currentAmount: Number(formData.get('currentAmount')) || 0,
-                      deadline: formData.get('deadline'),
-                      color: formData.get('color'),
-                      icon: formData.get('icon')
-                    };
-                    if (selectedGoal) {
-                      handleUpdateGoal(selectedGoal.id, goalData);
-                      setIsModalOpen(false);
-                      setSelectedGoal(null);
-                      showToast('Objetivo actualizado');
-                    } else {
-                      handleAddGoal(goalData);
-                    }
-                  }} className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                      <div className="space-y-1.5 md:col-span-2">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Nombre del Objetivo</label>
-                        <input name="name" required defaultValue={selectedGoal?.name} placeholder="Ej: Viaje a Japón, Fondo de Emergencia..." className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" />
-                      </div>
-                      
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto Objetivo</label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} />
-                          <input name="targetAmount" type="number" required defaultValue={selectedGoal?.targetAmount} placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto Actual</label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} />
-                          <input name="currentAmount" type="number" defaultValue={selectedGoal?.currentAmount || 0} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Fecha Límite (Opcional)</label>
-                        <div className="relative">
-                          <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={14} />
-                          <input name="deadline" type="date" defaultValue={selectedGoal?.deadline ? format(parseISO(selectedGoal.deadline), 'yyyy-MM-dd') : ''} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 pl-9 pr-4 text-sm focus:outline-none focus:border-orange-primary/50" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Color</label>
-                          <input name="color" type="color" defaultValue={selectedGoal?.color || "#FF7A00"} className="w-full h-10 bg-surface-2 border border-border rounded-lg p-1 focus:outline-none cursor-pointer" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Icono</label>
-                          <select name="icon" defaultValue={selectedGoal?.icon || 'Target'} className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50 appearance-none">
-                            {Object.keys(IconMap).map(icon => <option key={icon} value={icon}>{icon}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="pt-4 flex gap-3">
-                      <button type="button" onClick={() => { setIsModalOpen(false); setSelectedGoal(null); }} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button>
-                      <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">{selectedGoal ? 'Guardar Cambios' : 'Crear Objetivo'}</button>
-                    </div>
-                  </form>
-                )}
-
-                {modalType === 'automation' && (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.currentTarget);
-                    handleAddAutomation({
-                      triggerCategoryId: formData.get('triggerCategoryId'),
-                      targetGoalId: formData.get('targetGoalId'),
-                      type: formData.get('type'),
-                      value: Number(formData.get('value'))
-                    });
-                  }} className="p-6 space-y-6">
-                    <div className="space-y-4">
-                      <div className="p-4 bg-orange-primary/5 border border-orange-primary/20 rounded-xl flex gap-3">
-                        <Sparkles className="text-orange-primary shrink-0" size={20} />
-                        <p className="text-xs leading-relaxed text-text-secondary">Las automatizaciones se activan cuando registras un **Ingreso** en la categoría seleccionada.</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Si recibo un ingreso en...</label>
-                        <select name="triggerCategoryId" required className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
-                          {allCategories.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Aumentar el objetivo...</label>
-                        <select name="targetGoalId" required className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
-                          {goals.map(g => (
-                            <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo de Aumento</label>
-                          <select name="type" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
-                            <option value="percentage">Porcentaje (%)</option>
-                            <option value="fixed">Monto Fijo ($)</option>
-                          </select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Valor</label>
-                          <input name="value" type="number" step="0.01" required placeholder="Ej: 10" className="w-full bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="pt-4 flex gap-3">
-                      <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button>
-                      <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Activar Automatización</button>
-                    </div>
-                  </form>
-                )}
-                {modalType === 'addFunds' && selectedGoal && (
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const formData = new FormData(e.currentTarget);
-                    handleAddFundsToGoal(selectedGoal.id, Number(formData.get('amount')));
-                  }} className="p-6 space-y-6">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-4 p-4 bg-surface-2 rounded-2xl border border-border">
-                        <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${selectedGoal.color}15`, color: selectedGoal.color }}>
-                          {React.createElement(IconMap[selectedGoal.icon] || Target, { size: 24 })}
-                        </div>
-                        <div>
-                          <p className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Añadir fondos a</p>
-                          <h4 className="font-bold">{selectedGoal.name}</h4>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Monto a depositar</label>
-                        <div className="relative">
-                          <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" size={16} />
-                          <input name="amount" type="number" step="0.01" required autoFocus placeholder="0.00" className="w-full bg-surface-2 border border-border rounded-lg py-3 pl-10 pr-4 text-lg font-bold focus:outline-none focus:border-orange-primary/50" />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="pt-4 flex gap-3">
-                      <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all">Cancelar</button>
-                      <button type="submit" className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all active:scale-95">Confirmar Depósito</button>
-                    </div>
-                  </form>
-                )}
-              </motion.div>
-            </div>
+      {showText && (
+        <div className="flex flex-col text-left">
+          <span className={cn("font-serif font-semibold tracking-tight text-text-primary leading-none", sizes[size].title)}>
+            era<span className="font-sans font-medium text-brand">Wallet</span>
+          </span>
+          {showSlogan && (
+            <span className={cn("text-text-secondary font-medium tracking-wide mt-0.5", sizes[size].subtitle)}>
+              Tus metas empiezan con un mejor control
+            </span>
           )}
-        </AnimatePresence>
-
-        {/* Bottom Nav - Mobile Only */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-sidebar border-t border-border flex items-center justify-around px-2 py-3 z-30 backdrop-blur-lg bg-sidebar/90">
-          <BottomNavItem icon={<LayoutDashboard size={20} />} active={activeView === 'dashboard'} onClick={() => setActiveView('dashboard')} />
-          <BottomNavItem icon={<ArrowUpRight size={20} />} active={activeView === 'transactions'} onClick={() => setActiveView('transactions')} />
-          <BottomNavItem icon={<Target size={20} />} active={activeView === 'goals'} onClick={() => setActiveView('goals')} />
-          <div className="relative -top-6">
-            <button 
-              onClick={() => { setModalType('transaction'); setEditingTransaction(null); setIsModalOpen(true); }}
-              className="w-14 h-14 bg-orange-primary rounded-full flex items-center justify-center text-white shadow-xl shadow-orange-primary/40 border-4 border-bg active:scale-90 transition-transform"
-            >
-              <Plus size={28} />
-            </button>
-          </div>
-          <BottomNavItem icon={<Repeat size={20} />} active={activeView === 'recurring'} onClick={() => setActiveView('recurring')} />
-          <BottomNavItem icon={<Tag size={20} />} active={activeView === 'categories'} onClick={() => setActiveView('categories')} />
-          <BottomNavItem icon={<Settings size={20} />} active={activeView === 'settings'} onClick={() => setActiveView('settings')} />
-        </nav>
-
-        <FilterSidebar 
-          isOpen={isFilterSidebarOpen} 
-          onClose={() => setIsFilterSidebarOpen(false)} 
-          filters={filters} 
-          setFilters={setFilters}
-          accounts={accounts}
-          categories={allCategories}
-        />
-
-        <TransactionDetailsSidebar 
-          transaction={selectedTransactionDetails}
-          onClose={() => setSelectedTransactionDetails(null)}
-          onEdit={() => { setEditingTransaction(selectedTransactionDetails); setModalType('transaction'); setIsModalOpen(true); }}
-          onDelete={() => handleDeleteTransaction(selectedTransactionDetails!)}
-          accounts={accounts}
-          categories={allCategories}
-        />
-
-        <GoalDetailsSidebar 
-          goal={selectedGoalDetails}
-          contributions={goalContributions.filter(c => c.goalId === selectedGoalDetails?.id)}
-          onClose={() => { setSelectedGoalDetails(null); setIsGoalSidebarOpen(false); }}
-          isOpen={isGoalSidebarOpen}
-          onEdit={() => { setSelectedGoal(selectedGoalDetails); setModalType('goal'); setIsModalOpen(true); }}
-          onDelete={() => { handleDeleteGoal(selectedGoalDetails!.id); setSelectedGoalDetails(null); setIsGoalSidebarOpen(false); }}
-        />
-
-        <Toast />
-      </div>
-  );
-}
-
-// --- Subcomponents ---
-
-function BottomNavItem({ icon, active, onClick }: { icon: React.ReactNode, active?: boolean, onClick: () => void }) {
-  return (
-    <button onClick={onClick} className={cn("p-2 rounded-xl transition-all relative", active ? "text-orange-primary" : "text-text-dim")}>
-      {active && <motion.div layoutId="bottom-nav-active" className="absolute -top-3 left-1/2 -translate-x-1/2 w-1 h-1 bg-orange-primary rounded-full" />}
-      {icon}
-    </button>
-  );
-}
-
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active?: boolean, onClick: () => void }) {
-  return (
-    <button onClick={onClick} className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all group relative", active ? "bg-orange-primary/10 text-orange-primary" : "text-text-secondary hover:bg-surface-2 hover:text-text-primary")}>
-      {active && <motion.div layoutId="nav-active" className="absolute left-0 w-1 h-6 bg-orange-primary rounded-r-full" />}
-      <span className={cn("transition-transform group-hover:scale-110", active ? "text-orange-primary" : "text-text-dim group-hover:text-text-primary")}>{icon}</span>
-      {label}
-    </button>
-  );
-}
-
-function KPICard({ title, value, trend, color, icon }: { title: string, value: string, trend: 'up' | 'down', color: string, icon: React.ReactNode }) {
-  const colors: any = { green: 'text-green-accent', red: 'text-red-accent', blue: 'text-blue-accent', orange: 'text-orange-primary' };
-  const bgColors: any = { green: 'bg-green-accent/10', red: 'bg-red-accent/10', blue: 'bg-blue-accent/10', orange: 'bg-orange-primary/10' };
-  return (
-    <div className="bg-surface border border-border rounded-2xl p-6 relative overflow-hidden group hover:border-border-2 transition-all">
-      <div className={cn("absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity", colors[color])}>{icon}</div>
-      <p className="text-[10px] uppercase font-bold tracking-widest text-text-dim mb-2">{title}</p>
-      <div className="flex items-end justify-between">
-        <h4 className="text-2xl font-display font-bold">{value}</h4>
-        <div className={cn("flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full", bgColors[color], colors[color])}>
-          {trend === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          12.5%
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const GoalCard = ({ goal, onDelete, onAddFunds, onClick }: any) => {
-  const progress = Math.min(100, (goal.currentAmount / goal.targetAmount) * 100);
-  const Icon = IconMap[goal.icon] || Target;
-
-  return (
-    <div 
-      onClick={onClick}
-      className="bg-surface border border-border rounded-2xl p-6 space-y-4 group hover:border-orange-primary/30 transition-all cursor-pointer"
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${goal.color}15`, color: goal.color }}>
-            <Icon size={24} />
-          </div>
-          <div>
-            <h4 className="font-bold">{goal.name}</h4>
-            <p className="text-xs text-text-dim">Meta: {formatCurrency(goal.targetAmount)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-2 hover:bg-surface-2 rounded-lg text-text-dim hover:text-red-accent transition-colors"><Trash2 size={14} /></button>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-bold text-text-secondary">{formatCurrency(goal.currentAmount)}</span>
-          <span className="text-text-dim">{Math.round(progress)}%</span>
-        </div>
-        <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
-          <motion.div 
-            initial={{ width: 0 }} 
-            animate={{ width: `${progress}%` }} 
-            className="h-full transition-all"
-            style={{ backgroundColor: goal.color }}
-          />
-        </div>
-      </div>
-
-      <div className="pt-2">
-        <button 
-          onClick={(e) => { e.stopPropagation(); onAddFunds(); }}
-          className="w-full py-2 bg-surface-2 hover:bg-orange-primary hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border border-border hover:border-orange-primary"
-        >
-          Añadir Fondos
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const GoalsView = ({ goals, automations, onAddGoal, onAddAutomation, onDeleteGoal, onDeleteAutomation, onAddFunds, onSelectGoal, categories }: any) => {
-  return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl lg:text-3xl font-display font-bold">Objetivos Financieros</h2>
-          <p className="text-text-secondary text-sm lg:text-base hidden sm:block">Ahorra para lo que más importa.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={onAddAutomation}
-            className="flex items-center gap-2 p-2 sm:px-4 sm:py-2 bg-surface border border-border rounded-xl text-sm font-bold hover:bg-surface-2 transition-all"
-          >
-            <Repeat size={18} className="text-orange-primary" />
-            <span className="hidden sm:inline">Automatizar</span>
-          </button>
-          <button 
-            onClick={onAddGoal}
-            className="flex items-center gap-2 p-2 sm:px-4 sm:py-2 bg-orange-primary text-white rounded-xl text-sm font-bold hover:bg-orange-secondary transition-all shadow-lg shadow-orange-primary/20"
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">Nuevo Objetivo</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {goals.map((g: any) => (
-          <GoalCard 
-            key={g.id} 
-            goal={g} 
-            onDelete={() => onDeleteGoal(g.id)} 
-            onAddFunds={() => onAddFunds(g)} 
-            onClick={() => onSelectGoal(g)}
-          />
-        ))}
-        {goals.length === 0 && (
-          <div className="col-span-full py-20 text-center space-y-4 bg-surface border border-dashed border-border rounded-3xl">
-            <div className="w-16 h-16 bg-surface-2 rounded-full flex items-center justify-center mx-auto">
-              <Target size={32} className="text-text-dim" />
-            </div>
-            <div>
-              <p className="font-bold">No tienes objetivos aún</p>
-              <p className="text-sm text-text-dim">Crea tu primer objetivo de ahorro hoy mismo.</p>
-            </div>
-            <button onClick={onAddGoal} className="text-orange-primary font-bold hover:underline">Comenzar ahora</button>
-          </div>
-        )}
-      </div>
-
-      {automations.length > 0 && (
-        <div className="space-y-6">
-          <h3 className="font-bold flex items-center gap-2"><Repeat size={18} className="text-orange-primary" /> Automatizaciones Activas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {automations.map((a: any) => {
-              const goal = goals.find((g: any) => g.id === a.targetGoalId);
-              const cat = categories.find((c: any) => c.id === a.triggerCategoryId);
-              return (
-                <div key={a.id} className="bg-surface border border-border rounded-2xl p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 bg-green-accent/10 text-green-accent rounded-lg">
-                      <TrendingUp size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold">
-                        {a.type === 'percentage' ? `${a.value}% de` : `${formatCurrency(a.value)} de`} {cat?.name || 'Ingresos'}
-                      </p>
-                      <p className="text-xs text-text-dim">Destinado a: <span className="text-text-primary font-medium">{goal?.name || 'Objetivo'}</span></p>
-                    </div>
-                  </div>
-                  <button onClick={() => onDeleteAutomation(a.id)} className="p-2 text-text-dim hover:text-red-accent transition-colors">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
     </div>
   );
-};
-
-function TransactionItem({ transaction, accounts, categories, onClick }: any) {
-  const category = categories.find((c: any) => c.id === transaction.categoryId) || categories[categories.length - 1];
-  const account = accounts.find((a: any) => a.id === transaction.accountId);
-  const Icon = IconMap[category.icon] || MoreHorizontal;
-
-  return (
-    <div 
-      onClick={onClick}
-      className="group flex items-center gap-4 p-4 hover:bg-surface-2 transition-all cursor-pointer"
-    >
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${category.color}15`, color: category.color }}><Icon size={20} /></div>
-      <div className="flex-1 min-w-0">
-        <h5 className="text-sm font-bold truncate group-hover:text-orange-primary transition-colors">{transaction.description}</h5>
-        <p className="text-[10px] text-text-dim uppercase tracking-wider font-medium">{category.name} • {account?.name} • {format(parseISO(transaction.date), 'dd MMM yyyy', { locale: es })}</p>
-      </div>
-      <div className="text-right">
-        <div className={cn("text-sm font-bold", transaction.type === 'income' ? "text-green-accent" : "text-text-primary")}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</div>
-      </div>
-    </div>
-  );
 }
 
-function CategorySelect({ name, defaultValue, categories }: { name: string, defaultValue?: string, categories: Category[] }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [selected, setSelected] = useState(defaultValue || 'others');
-  const cat = categories.find(c => c.id === selected) || categories[categories.length - 1];
-  const Icon = IconMap[cat.icon] || MoreHorizontal;
+export function formatCompactNumber(val: number | string | undefined | null): string {
+  const num = typeof val === 'string' ? parseFloat(val) : (val || 0);
+  if (isNaN(num)) return '0';
+  const abs = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
 
-  return (
-    <div className="relative">
-      <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between bg-surface-2 border border-border rounded-lg py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${cat.color}15`, color: cat.color }}><Icon size={12} /></div>
-          <span>{cat.name}</span>
-        </div>
-        <ChevronDown size={14} className="text-text-dim" />
-      </button>
-      <input type="hidden" name={name} value={selected} />
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 5 }} className="absolute top-full left-0 right-0 mt-2 bg-surface-3 border border-border rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto p-2 grid grid-cols-1 gap-1">
-            {categories.map(c => {
-              const CIcon = IconMap[c.icon] || MoreHorizontal;
-              return (
-                <button key={c.id} type="button" onClick={() => { setSelected(c.id); setIsOpen(false); }} className={cn("flex items-center gap-3 p-2 rounded-lg text-xs font-medium transition-all", selected === c.id ? "bg-orange-primary/10 text-orange-primary" : "hover:bg-surface-2 text-text-secondary")}>
-                  <div className="w-6 h-6 rounded flex items-center justify-center" style={{ backgroundColor: `${c.color}15`, color: c.color }}><CIcon size={14} /></div>
-                  {c.name}
-                </button>
-              );
-            })}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function TransactionDetailsSidebar({ transaction, onClose, onEdit, onDelete, accounts, categories }: any) {
-  if (!transaction) return null;
-  const category = categories.find((c: any) => c.id === transaction.categoryId) || categories[categories.length - 1];
-  const account = accounts.find((a: any) => a.id === transaction.accountId);
-  const Icon = IconMap[category.icon] || Tag;
-
-  return (
-    <AnimatePresence>
-      {transaction && (
-        <>
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
-            onClick={onClose} 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" 
-          />
-          <motion.div 
-            initial={{ x: '100%' }} 
-            animate={{ x: 0 }} 
-            exit={{ x: '100%' }} 
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 h-full w-full max-w-sm bg-surface border-l border-border z-[70] shadow-2xl flex flex-col"
-          >
-            <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
-              <h3 className="font-display font-bold text-xl">Detalle de Registro</h3>
-              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-              <div className="text-center space-y-4">
-                <div className="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center shadow-xl" style={{ backgroundColor: `${category.color}15`, color: category.color }}>
-                  <Icon size={40} />
-                </div>
-                <div>
-                  <h4 className="text-2xl font-display font-bold">{transaction.description}</h4>
-                  <p className="text-text-dim uppercase tracking-widest text-[10px] font-bold mt-1">{category.name}</p>
-                </div>
-                <div className={cn("text-4xl font-display font-bold", transaction.type === 'income' ? "text-green-accent" : "text-text-primary")}>
-                  {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 bg-surface-2 rounded-2xl border border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-primary/10 text-orange-primary flex items-center justify-center"><CreditCard size={20} /></div>
-                    <div>
-                      <p className="text-[10px] text-text-dim uppercase font-bold">Cuenta</p>
-                      <p className="text-sm font-bold">{account?.name}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-surface-2 rounded-2xl border border-border">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-primary/10 text-orange-primary flex items-center justify-center"><Calendar size={20} /></div>
-                    <div>
-                      <p className="text-[10px] text-text-dim uppercase font-bold">Fecha</p>
-                      <p className="text-sm font-bold">{format(parseISO(transaction.date), 'dd MMMM yyyy', { locale: es })}</p>
-                    </div>
-                  </div>
-                </div>
-                {transaction.isRecurring && (
-                  <div className="flex items-center justify-between p-4 bg-surface-2 rounded-2xl border border-border">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-orange-primary/10 text-orange-primary flex items-center justify-center"><Repeat size={20} /></div>
-                      <div>
-                        <p className="text-[10px] text-text-dim uppercase font-bold">Recurrente</p>
-                        <p className="text-sm font-bold">Cada {transaction.frequency}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="p-6 border-t border-border bg-sidebar/30 flex gap-3">
-              <button 
-                onClick={() => { onEdit(); onClose(); }}
-                className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all flex items-center justify-center gap-2"
-              >
-                <Settings size={18} /> Editar
-              </button>
-              <button 
-                onClick={() => { onDelete(); onClose(); }}
-                className="flex-1 py-3 rounded-xl text-sm font-bold bg-red-accent/10 text-red-accent hover:bg-red-accent hover:text-white transition-all flex items-center justify-center gap-2"
-              >
-                <Trash2 size={18} /> Eliminar
-              </button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-function GoalDetailsSidebar({ goal, contributions, onClose, isOpen, onEdit, onDelete }: any) {
-  const [filter, setFilter] = useState<'all' | 'manual' | 'automation'>('all');
-  const filteredContributions = contributions
-    .filter((c: any) => filter === 'all' || c.source === filter)
-    .sort((a: any, b: any) => b.date.localeCompare(a.date));
-
-  const progress = goal ? Math.min(100, (goal.currentAmount / goal.targetAmount) * 100) : 0;
-  const Icon = goal ? (IconMap[goal.icon] || Target) : Target;
-
-  return (
-    <AnimatePresence>
-      {isOpen && goal && (
-        <>
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
-            onClick={onClose} 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" 
-          />
-          <motion.div 
-            initial={{ x: '100%' }} 
-            animate={{ x: 0 }} 
-            exit={{ x: '100%' }} 
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 h-full w-full max-w-md bg-surface border-l border-border z-[70] shadow-2xl flex flex-col"
-          >
-            <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
-              <h3 className="font-display font-bold text-xl flex items-center gap-2">Detalles del Objetivo</h3>
-              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              {/* Header Info */}
-              <div className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${goal.color}15`, color: goal.color }}>
-                    <Icon size={32} />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">{goal.name}</h2>
-                    <p className="text-sm text-text-dim">Creado el {format(parseISO(goal.createdAt), 'dd MMM yyyy', { locale: es })}</p>
-                  </div>
-                </div>
-
-                <div className="bg-surface-2 border border-border rounded-2xl p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-text-dim uppercase tracking-widest">Progreso Actual</span>
-                    <span className="text-lg font-bold text-orange-primary">{Math.round(progress)}%</span>
-                  </div>
-                  <div className="h-3 bg-surface rounded-full overflow-hidden">
-                    <motion.div 
-                      initial={{ width: 0 }} 
-                      animate={{ width: `${progress}%` }} 
-                      className="h-full transition-all"
-                      style={{ backgroundColor: goal.color }}
-                    />
-                  </div>
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <p className="text-[10px] uppercase font-bold text-text-dim mb-1">Ahorrado</p>
-                      <p className="text-xl font-bold">{formatCurrency(goal.currentAmount)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] uppercase font-bold text-text-dim mb-1">Meta</p>
-                      <p className="text-xl font-bold text-text-secondary">{formatCurrency(goal.targetAmount)}</p>
-                    </div>
-                  </div>
-                  {goal.deadline && (
-                    <div className="pt-4 border-t border-border flex items-center gap-2 text-xs text-text-dim">
-                      <Calendar size={14} />
-                      <span>Fecha límite: {format(parseISO(goal.deadline), 'dd MMM yyyy', { locale: es })}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* History */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-sm uppercase tracking-widest text-text-dim">Historial de Aportes</h4>
-                  <div className="flex bg-surface-2 rounded-lg p-1 border border-border">
-                    {(['all', 'manual', 'automation'] as const).map(f => (
-                      <button 
-                        key={f}
-                        onClick={() => setFilter(f)}
-                        className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", filter === f ? "bg-orange-primary text-white" : "text-text-dim hover:text-text-primary")}
-                      >
-                        {f === 'all' ? 'Todo' : f === 'manual' ? 'Manual' : 'Auto'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {filteredContributions.length === 0 ? (
-                    <div className="py-8 text-center border-2 border-dashed border-border rounded-2xl">
-                      <p className="text-xs text-text-dim">No hay aportes registrados aún.</p>
-                    </div>
-                  ) : (
-                    filteredContributions.map((c: any) => (
-                      <div key={c.id} className="bg-surface-2 border border-border rounded-xl p-4 flex items-center justify-between group hover:border-orange-primary/30 transition-all">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", c.source === 'automation' ? "bg-purple-accent/10 text-purple-accent" : "bg-blue-accent/10 text-blue-accent")}>
-                            {c.source === 'automation' ? <Repeat size={14} /> : <UserIcon size={14} />}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold">{formatCurrency(c.amount)}</p>
-                            <p className="text-[10px] text-text-dim">{format(parseISO(c.date), 'dd MMM, HH:mm', { locale: es })}</p>
-                          </div>
-                        </div>
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-dim">
-                          {c.source === 'automation' ? 'Automático' : 'Manual'}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-border bg-sidebar/30 flex gap-3">
-              <button 
-                onClick={() => { onEdit(); }}
-                className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all flex items-center justify-center gap-2"
-              >
-                <Settings size={18} /> Editar
-              </button>
-              <button 
-                onClick={() => { onDelete(); }}
-                className="flex-1 py-3 rounded-xl text-sm font-bold bg-red-accent/10 text-red-accent hover:bg-red-accent hover:text-white transition-all flex items-center justify-center gap-2"
-              >
-                <Trash2 size={18} /> Eliminar
-              </button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
-}
-
-function FilterSidebar({ isOpen, onClose, filters, setFilters, accounts, categories }: any) {
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }} 
-            onClick={onClose} 
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]" 
-          />
-          <motion.div 
-            initial={{ x: '100%' }} 
-            animate={{ x: 0 }} 
-            exit={{ x: '100%' }} 
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 h-full w-full max-w-sm bg-surface border-l border-border z-[70] shadow-2xl flex flex-col"
-          >
-            <div className="p-6 border-b border-border flex items-center justify-between bg-sidebar/50">
-              <h3 className="font-display font-bold text-xl flex items-center gap-2"><Filter size={20} className="text-orange-primary" /> Filtros</h3>
-              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-primary transition-colors"><X size={20} /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              <div className="space-y-3">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Rango de Fecha</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['all', 'day', 'week', 'month', 'year'] as const).map(range => (
-                    <button 
-                      key={range} 
-                      onClick={() => setFilters({ ...filters, dateRange: range })}
-                      className={cn("px-3 py-2 rounded-xl text-xs font-bold border transition-all", filters.dateRange === range ? "bg-orange-primary border-orange-primary text-white" : "border-border hover:bg-surface-2 text-text-secondary")}
-                    >
-                      {range === 'all' ? 'Todo' : range === 'day' ? 'Hoy' : range === 'week' ? 'Semana' : range === 'month' ? 'Mes' : 'Año'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Tipo</label>
-                <div className="flex gap-2">
-                  {(['all', 'income', 'expense'] as const).map(type => (
-                    <button 
-                      key={type} 
-                      onClick={() => setFilters({ ...filters, type })}
-                      className={cn("flex-1 px-3 py-2 rounded-xl text-xs font-bold border transition-all", filters.type === type ? "bg-orange-primary border-orange-primary text-white" : "border-border hover:bg-surface-2 text-text-secondary")}
-                    >
-                      {type === 'all' ? 'Todo' : type === 'income' ? 'Ingreso' : 'Gasto'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Cuenta</label>
-                <select 
-                  value={filters.accountId} 
-                  onChange={(e) => setFilters({ ...filters, accountId: e.target.value })}
-                  className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
-                >
-                  <option value="all">Todas las cuentas</option>
-                  {accounts.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Categoría</label>
-                <select 
-                  value={filters.categoryId} 
-                  onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
-                  className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
-                >
-                  <option value="all">Todas las categorías</option>
-                  {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="space-y-3">
-                <label className="text-[10px] uppercase font-bold tracking-widest text-text-dim">Rango de Monto</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <input 
-                    type="number" 
-                    placeholder="Min" 
-                    value={filters.minAmount}
-                    onChange={(e) => setFilters({ ...filters, minAmount: e.target.value })}
-                    className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
-                  />
-                  <input 
-                    type="number" 
-                    placeholder="Max" 
-                    value={filters.maxAmount}
-                    onChange={(e) => setFilters({ ...filters, maxAmount: e.target.value })}
-                    className="w-full bg-surface-2 border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:border-orange-primary/50"
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="p-6 border-t border-border bg-sidebar/30 flex gap-3">
-              <button 
-                onClick={() => setFilters({ type: 'all', accountId: 'all', categoryId: 'all', minAmount: '', maxAmount: '', dateRange: 'all' })}
-                className="flex-1 py-3 rounded-xl text-sm font-bold border border-border hover:bg-surface-2 transition-all"
-              >
-                Limpiar
-              </button>
-              <button 
-                onClick={onClose}
-                className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-primary text-white hover:bg-orange-secondary shadow-lg shadow-orange-primary/20 transition-all"
-              >
-                Aplicar
-              </button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
-  );
+  if (abs >= 1000000) {
+    const formatted = (abs / 1000000).toFixed(1).replace(/\.0$/, '');
+    return `${sign}${formatted}M`;
+  }
+  if (abs >= 1000) {
+    const formatted = (abs / 1000).toFixed(1).replace(/\.0$/, '');
+    return `${sign}${formatted}k`;
+  }
+  return `${sign}${Math.round(abs * 100) / 100}`;
 }
 
 function Toast() {
@@ -2643,118 +118,4366 @@ function Toast() {
   const Icon = type === 'success' ? Check : 
                type === 'error' ? AlertCircle : 
                type === 'warning' ? AlertCircle : Lightbulb;
-  
-  const iconColor = type === 'success' ? 'bg-green-accent/20 text-green-accent' :
-                    type === 'error' ? 'bg-red-accent/20 text-red-accent' :
-                    type === 'warning' ? 'bg-orange-primary/20 text-orange-primary' :
-                    'bg-blue-accent/20 text-blue-accent';
 
   return (
     <AnimatePresence>
       {visible && (
-        <div className="fixed top-6 left-0 right-0 flex justify-center z-[100] pointer-events-none px-4">
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -20 }} 
-            className="bg-surface-2 border border-border px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 min-w-[280px] max-w-full pointer-events-auto"
-          >
-            <div className={cn("w-8 h-8 rounded-full flex items-center justify-center shrink-0", iconColor)}>
-              <Icon size={16} />
-            </div>
-            <span className="text-sm font-bold text-text-primary">{message}</span>
-          </motion.div>
-        </div>
+        <motion.div 
+          initial={{ opacity: 0, y: -20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-surface border border-border shadow-xl text-text-primary text-xs font-medium"
+        >
+          <Icon size={16} className={cn(
+            type === 'success' && 'text-success',
+            type === 'error' && 'text-error',
+            type === 'warning' && 'text-warning',
+            type === 'info' && 'text-brand'
+          )} />
+          <span>{message}</span>
+        </motion.div>
       )}
     </AnimatePresence>
   );
 }
 
 function showToast(msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') { 
-  if ((window as any).showToast) (window as any).showToast(msg, type); 
+  if ((window as any).showToast) (window as any).showToast(msg, type);
 }
 
-function getChartData(transactions: Transaction[]) {
-  const last7Days = Array.from({ length: 7 }, (_, i) => {
-    const d = subDays(new Date(), 6 - i);
-    return { name: format(d, 'EEE', { locale: es }), date: format(d, 'yyyy-MM-dd'), ingresos: 0, gastos: 0 };
-  });
-  transactions.forEach(t => {
-    const dateStr = format(parseISO(t.date), 'yyyy-MM-dd');
-    const day = last7Days.find(d => d.date === dateStr);
-    if (day) { if (t.type === 'income') day.ingresos += t.amount; else day.gastos += t.amount; }
-  });
-  return last7Days;
+// Styled Markdown Renderer for AI responses
+function FormattedMarkdown({ content }: { content: string }) {
+  if (!content) return null;
+
+  const lines = content.split('\n');
+
+  const renderFormattedText = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    let keyIdx = 0;
+    const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+    const splitParts = text.split(regex);
+
+    splitParts.forEach(part => {
+      if (!part) return;
+      if (part.startsWith('**') && part.endsWith('**')) {
+        parts.push(
+          <strong key={keyIdx++} className="font-semibold text-text-primary">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      } else if (part.startsWith('`') && part.endsWith('`')) {
+        parts.push(
+          <code key={keyIdx++} className="font-mono text-[11px] bg-bg border border-border px-1.5 py-0.5 rounded text-brand">
+            {part.slice(1, -1)}
+          </code>
+        );
+      } else if (part.startsWith('*') && part.endsWith('*')) {
+        parts.push(
+          <em key={keyIdx++} className="italic text-text-secondary">
+            {part.slice(1, -1)}
+          </em>
+        );
+      } else {
+        parts.push(part);
+      }
+    });
+
+    return parts;
+  };
+
+  return (
+    <div className="space-y-2 text-xs leading-relaxed font-sans text-text-primary">
+      {lines.map((line, idx) => {
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith('### ')) {
+          return <h4 key={idx} className="font-serif font-semibold text-sm text-text-primary mt-2">{renderFormattedText(trimmed.slice(4))}</h4>;
+        }
+        if (trimmed.startsWith('## ') || trimmed.startsWith('# ')) {
+          return <h3 key={idx} className="font-serif font-semibold text-base text-text-primary mt-2 border-b border-border/50 pb-1">{renderFormattedText(trimmed.replace(/^#+\s*/, ''))}</h3>;
+        }
+        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          return (
+            <div key={idx} className="flex gap-2 items-start pl-1">
+              <span className="text-brand font-bold shrink-0 mt-0.5">•</span>
+              <span>{renderFormattedText(trimmed.slice(2))}</span>
+            </div>
+          );
+        }
+        if (/^\d+\.\s/.test(trimmed)) {
+          const num = trimmed.match(/^(\d+)\.\s/)?.[1];
+          const rest = trimmed.replace(/^\d+\.\s/, '');
+          return (
+            <div key={idx} className="flex gap-2 items-start pl-1">
+              <span className="font-mono font-bold text-brand shrink-0">{num}.</span>
+              <span>{renderFormattedText(rest)}</span>
+            </div>
+          );
+        }
+        if (!trimmed) {
+          return <div key={idx} className="h-1" />;
+        }
+
+        return <p key={idx}>{renderFormattedText(line)}</p>;
+      })}
+    </div>
+  );
 }
 
-function CustomTooltip({ active, payload }: any) {
-  if (active && payload && payload.length) {
+const COUNTRY_PREFIXES = [
+  { flag: '🇨🇺', code: '+53', country: 'Cuba', example: '54232684' },
+  { flag: '🇪🇸', code: '+34', country: 'España', example: '612 345 678' },
+  { flag: '🇺🇸', code: '+1', country: 'Estados Unidos', example: '202 555 0123' },
+  { flag: '🇲🇽', code: '+52', country: 'México', example: '55 1234 5678' },
+  { flag: '🇦🇷', code: '+54', country: 'Argentina', example: '11 1234 5678' },
+  { flag: '🇨🇱', code: '+56', country: 'Chile', example: '9 1234 5678' },
+  { flag: '🇨🇴', code: '+57', country: 'Colombia', example: '300 123 4567' },
+  { flag: '🇵🇪', code: '+51', country: 'Perú', example: '912 345 678' },
+  { flag: '🇻🇪', code: '+58', country: 'Venezuela', example: '412 123 4567' },
+  { flag: '🇩🇴', code: '+1809', country: 'República Dominicana', example: '809 123 4567' },
+  { flag: '🇨🇷', code: '+506', country: 'Costa Rica', example: '8888 8888' },
+  { flag: '🇪🇨', code: '+593', country: 'Ecuador', example: '99 123 4567' },
+  { flag: '🇺🇾', code: '+598', country: 'Uruguay', example: '99 123 456' },
+  { flag: '🇬🇹', code: '+502', country: 'Guatemala', example: '5123 4567' },
+  { flag: '🇵🇦', code: '+507', country: 'Panamá', example: '6123 4567' },
+  { flag: '🇧🇴', code: '+591', country: 'Bolivia', example: '7123 4567' },
+  { flag: '🇵🇾', code: '+595', country: 'Paraguay', example: '981 123 456' },
+  { flag: '🇸🇻', code: '+503', country: 'El Salvador', example: '7123 4567' },
+  { flag: '🇭🇳', code: '+504', country: 'Honduras', example: '9123 4567' },
+  { flag: '🇳🇮', code: '+505', country: 'Nicaragua', example: '8123 4567' },
+  { flag: '🇵🇷', code: '+1787', country: 'Puerto Rico', example: '787 123 4567' },
+  { flag: '🇧🇷', code: '+55', country: 'Brasil', example: '11 91234 5678' },
+  { flag: '🇵🇹', code: '+351', country: 'Portugal', example: '912 345 678' },
+  { flag: '🇮🇹', code: '+39', country: 'Italia', example: '312 345 6789' },
+  { flag: '🇫🇷', code: '+33', country: 'Francia', example: '6 12 34 56 78' },
+  { flag: '🇩🇪', code: '+49', country: 'Alemania', example: '151 23456789' },
+  { flag: '🇬🇧', code: '+44', country: 'Reino Unido', example: '7123 456789' }
+];
+
+export default function App() {
+  const [user, setUserState] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
+    return (localStorage.getItem('hera_theme') as 'system' | 'light' | 'dark') || 'dark';
+  });
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Active Tab & View State (/panel URL route handling)
+  const isPanelRoute = typeof window !== 'undefined' && window.location.pathname === '/panel';
+  const [activeTab, setActiveTab] = useState<'chat' | 'timeline' | 'reports' | 'goals'>('chat');
+  const [showAdmin, setShowAdmin] = useState(isPanelRoute);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setShowAdmin(window.location.pathname === '/panel');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // OTP Login State
+  const [phone, setPhone] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpError, setOtpError] = useState('');
+  const [otpTimer, setOtpTimer] = useState(0);
+  const [otpStatus, setOtpStatus] = useState<'typing' | 'error' | 'success'>('typing');
+  const [phonePrefix, setPhonePrefix] = useState('+53');
+  const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
+  const countryPickerRef = useRef<HTMLDivElement>(null);
+  const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (otpSent && otpTimer > 0) {
+      const interval = setInterval(() => setOtpTimer(t => t - 1), 1000);
+      return () => clearInterval(interval);
+    }
+  }, [otpSent, otpTimer]);
+
+  useEffect(() => {
+    if (otpStatus === 'error') {
+      const t = setTimeout(() => {
+        setOtpCode('');
+        setOtpStatus('typing');
+        otpInputsRef.current[0]?.focus();
+      }, 600);
+      return () => clearTimeout(t);
+    }
+  }, [otpStatus]);
+
+  // Onboarding State
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [onbStep, setOnbStep] = useState(0);
+  const [onbName, setOnbName] = useState('');
+  const [onbBirthDate, setOnbBirthDate] = useState('');
+  const [onbPhoto, setOnbPhoto] = useState('');
+  const [onbEmail, setOnbEmail] = useState('');
+  const [onbPhone, setOnbPhone] = useState('');
+  const [onbAddress, setOnbAddress] = useState('');
+  const [onbSaving, setOnbSaving] = useState(false);
+  const [onbDone, setOnbDone] = useState(false);
+
+  // User Finance Data State
+  const [overview, setOverview] = useState<any>(null);
+  const [timeline, setTimeline] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [goals, setGoals] = useState<any[]>([]);
+
+  // Chat & AI State
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+
+  // Real-time Audio Waveform State (Web Audio API)
+  const [audioLevels, setAudioLevels] = useState<number[]>([15, 25, 35, 20, 45, 30, 60, 40, 25, 35, 20, 15]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  // Accounts & Goals State
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  const [newAccName, setNewAccName] = useState('');
+  const [newAccType, setNewAccType] = useState('bank');
+  const [newAccBalance, setNewAccBalance] = useState('');
+  const [selectedAccountDetail, setSelectedAccountDetail] = useState<any | null>(null);
+  const [accountTxs, setAccountTxs] = useState<any[]>([]);
+
+  // Quick Add 2-Step Voice AI Flow State
+  const [addModalStep, setAddModalStep] = useState<1 | 2>(1);
+  const [isAiParsingAudio, setIsAiParsingAudio] = useState(false);
+  const [aiParsedPreview, setAiParsedPreview] = useState<{
+    type: 'expense' | 'income';
+    amount: number;
+    category: string;
+    description: string;
+    accountId: string;
+  } | null>(null);
+
+  // AI API Keys State
+  const [deepseekKeyInput, setDeepseekKeyInput] = useState('');
+  const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  const [showAddGoalModal, setShowAddGoalModal] = useState(false);
+  const [newGoalName, setNewGoalName] = useState('');
+  const [newGoalTarget, setNewGoalTarget] = useState('');
+  const [newGoalCurrent, setNewGoalCurrent] = useState('');
+  const [newGoalDeadline, setNewGoalDeadline] = useState('');
+
+  // AI Executive Report State
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportStepIndex, setReportStepIndex] = useState(0);
+  const [aiReportData, setAiReportData] = useState<any>(null);
+
+  // Chat AI Thinking & Reasoning Stream State
+  const [chatThinkingStepIndex, setChatThinkingStepIndex] = useState(0);
+  const [currentReasoningText, setCurrentReasoningText] = useState('');
+  const [actionProcessing, setActionProcessing] = useState<string | null>(null);
+
+  const chatThinkingStepTexts = [
+    "Analizando consulta...",
+    "Evaluando saldos...",
+    "Procesando contexto...",
+    "Sintetizando..."
+  ];
+
+  // Chat History & Bottom Sheet Modal State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<Array<{
+    id: string;
+    title: string;
+    messages: any[];
+    updatedAt: string;
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem('hera_chat_history');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'demo-1',
+          title: '¿En qué he gastado más este mes en restaurantes?',
+          messages: [
+            { id: '1', role: 'user', content: '¿En qué he gastado más este mes en restaurantes?' },
+            { id: '2', role: 'assistant', content: 'Tus gastos en la categoría Restaurantes suman **145.50€** este mes. El mayor gasto fue de **45.00€** en *Restaurante El Patio*.' }
+          ],
+          updatedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString()
+        },
+        {
+          id: 'demo-2',
+          title: '¿Cómo va mi meta del fondo de emergencia?',
+          messages: [
+            { id: '1', role: 'user', content: '¿Cómo va mi meta del fondo de emergencia?' },
+            { id: '2', role: 'assistant', content: 'Tu meta **Fondo de Emergencia** lleva un avance del **61%** (3,050€ de 5,000€). Vas según el plan proyectado.' }
+          ],
+          updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString()
+        }
+      ];
+    } catch {
+      return [];
+    }
+  });
+
+  const formatRelativeTime = (isoString: string) => {
+    try {
+      const date = new Date(isoString);
+      const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+      if (diffSec < 60) return 'Hace un momento';
+      if (diffSec < 3600) return `Hace ${Math.floor(diffSec / 60)} min`;
+      if (diffSec < 86400) return `Hace ${Math.floor(diffSec / 3600)} h`;
+      if (diffSec < 172800) return 'Ayer';
+      return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    } catch {
+      return '';
+    }
+  };
+
+  const handleLoadSession = (session: any) => {
+    setChatMessages(session.messages);
+    setCurrentSessionId(session.id);
+    setShowHistoryModal(false);
+    setActiveTab('chat');
+  };
+
+  const handleDeleteSession = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setChatHistory(prev => {
+      const filtered = prev.filter(s => s.id !== sessionId);
+      try { localStorage.setItem('hera_chat_history', JSON.stringify(filtered)); } catch {}
+      return filtered;
+    });
+    if (currentSessionId === sessionId) {
+      setChatMessages([]);
+      setCurrentSessionId(null);
+    }
+    showToast('Consulta eliminada del historial', 'info');
+  };
+
+  // --- Configuration & Settings State ---
+  const [defaultCurrency, setDefaultCurrency] = useState<string>(() => {
+    return localStorage.getItem('hera_currency') || 'USD';
+  });
+  const [customAgentRules, setCustomAgentRules] = useState<string>(() => {
+    return localStorage.getItem('hera_custom_rules') || '';
+  });
+  const [emailNotifications, setEmailNotifications] = useState<{
+    weeklySummary: boolean;
+    budgetAlerts: boolean;
+    securityUpdates: boolean;
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('hera_email_notifications');
+      return saved ? JSON.parse(saved) : { weeklySummary: true, budgetAlerts: true, securityUpdates: true };
+    } catch {
+      return { weeklySummary: true, budgetAlerts: true, securityUpdates: true };
+    }
+  });
+
+  // Custom Searchable Currency Selector State
+  const [isCurrencyDropdownOpen, setIsCurrencyDropdownOpen] = useState(false);
+  const [currencySearchQuery, setCurrencySearchQuery] = useState('');
+  const currencyMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (currencyMenuRef.current && !currencyMenuRef.current.contains(e.target as Node)) {
+        setIsCurrencyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const CURRENCY_SYMBOLS: Record<string, string> = {
+    USD: '$',
+    EUR: '€',
+    CUP: '$',
+    MXN: '$',
+    ARS: '$',
+    COP: '$',
+    CLP: '$',
+    BRL: 'R$',
+    GBP: '£',
+    JPY: '¥',
+    CAD: 'C$',
+    AUD: 'A$',
+    CHF: 'CHF',
+    CNY: '¥',
+    INR: '₹',
+    KRW: '₩',
+    PEN: 'S/',
+    UYU: '$U',
+    DOP: 'RD$',
+    CRC: '₡',
+    GTQ: 'Q',
+    HNL: 'L',
+    NIO: 'C$',
+    PAB: 'B/.',
+    PYG: '₲',
+    VES: 'Bs.'
+  };
+
+  const ALL_CURRENCIES = [
+    { code: 'USD', name: 'Dólar Estadounidense', flag: '🇺🇸', symbol: '$' },
+    { code: 'EUR', name: 'Euro (Unión Europea)', flag: '🇪🇺', symbol: '€' },
+    { code: 'CUP', name: 'Peso Cubano', flag: '🇨🇺', symbol: '$' },
+    { code: 'MXN', name: 'Peso Mexicano', flag: '🇲🇽', symbol: '$' },
+    { code: 'ARS', name: 'Peso Argentino', flag: '🇦🇷', symbol: '$' },
+    { code: 'COP', name: 'Peso Colombiano', flag: '🇨🇴', symbol: '$' },
+    { code: 'CLP', name: 'Peso Chileno', flag: '🇨🇱', symbol: '$' },
+    { code: 'BRL', name: 'Real Brasileño', flag: '🇧🇷', symbol: 'R$' },
+    { code: 'GBP', name: 'Libra Esterlina', flag: '🇬🇧', symbol: '£' },
+    { code: 'JPY', name: 'Yen Japonés', flag: '🇯🇵', symbol: '¥' },
+    { code: 'CAD', name: 'Dólar Canadiense', flag: '🇨🇦', symbol: 'C$' },
+    { code: 'AUD', name: 'Dólar Australiano', flag: '🇦🇺', symbol: 'A$' },
+    { code: 'CHF', name: 'Franco Suizo', flag: '🇨🇭', symbol: 'CHF' },
+    { code: 'CNY', name: 'Yuan Chino', flag: '🇨🇳', symbol: '¥' },
+    { code: 'INR', name: 'Rupia India', flag: '🇮🇳', symbol: '₹' },
+    { code: 'KRW', name: 'Won Surcoreano', flag: '🇰🇷', symbol: '₩' },
+    { code: 'PEN', name: 'Sol Peruano', flag: '🇵🇪', symbol: 'S/' },
+    { code: 'UYU', name: 'Peso Uruguayo', flag: '🇺🇾', symbol: '$U' },
+    { code: 'DOP', name: 'Peso Dominicano', flag: '🇩🇴', symbol: 'RD$' },
+    { code: 'CRC', name: 'Colón Costarricense', flag: '🇨🇷', symbol: '₡' },
+    { code: 'GTQ', name: 'Quetzal Guatemalteco', flag: '🇬🇹', symbol: 'Q' },
+    { code: 'HNL', name: 'Lempira Hondureño', flag: '🇭🇳', symbol: 'L' },
+    { code: 'NIO', name: 'Córdoba Nicaragüense', flag: '🇳🇮', symbol: 'C$' },
+    { code: 'PAB', name: 'Balboa Panameño', flag: '🇵🇦', symbol: 'B/.' },
+    { code: 'PYG', name: 'Guaraní Paraguayo', flag: '🇵🇾', symbol: '₲' },
+    { code: 'VES', name: 'Bolívar Venezolano', flag: '🇻🇪', symbol: 'Bs.' },
+    { code: 'SEK', name: 'Corona Sueca', flag: '🇸🇪', symbol: 'kr' },
+    { code: 'NOK', name: 'Corona Noruega', flag: '🇳🇴', symbol: 'kr' },
+    { code: 'DKK', name: 'Corona Danesa', flag: '🇩🇰', symbol: 'kr' },
+    { code: 'PLN', name: 'Złoty Polaco', flag: '🇵🇱', symbol: 'zł' },
+    { code: 'TRY', name: 'Lira Turca', flag: '🇹🇷', symbol: '₺' },
+    { code: 'AED', name: 'Dírham de EAU', flag: '🇦🇪', symbol: 'AED' },
+    { code: 'SAR', name: 'Riyal Saudí', flag: '🇸🇦', symbol: 'SAR' },
+    { code: 'EGP', name: 'Libra Egipcia', flag: '🇪🇬', symbol: 'E£' }
+  ];
+
+  const handleUpdateCurrency = (code: string) => {
+    setDefaultCurrency(code);
+    localStorage.setItem('hera_currency', code);
+    if (profile) {
+      setProfile(prev => prev ? { ...prev, defaultCurrency: code } : null);
+    }
+    showToast(`Moneda predeterminada cambiada a ${code}`, 'success');
+  };
+
+  const handleSaveAgentRules = () => {
+    localStorage.setItem('hera_custom_rules', customAgentRules);
+    showToast('Reglas del Agente Hera guardadas correctamente', 'success');
+  };
+
+  const handleCreateAccount = async () => {
+    if (!newAccName.trim()) return;
+    try {
+      await api('/finance/accounts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newAccName,
+          type: newAccType,
+          balance: parseFloat(newAccBalance) || 0,
+          currency: defaultCurrency
+        })
+      });
+      showToast('Nueva cuenta creada correctamente', 'success');
+      setShowAddAccountModal(false);
+      setNewAccName('');
+      setNewAccBalance('');
+      loadUserData();
+    } catch (err: any) {
+      showToast('Error al crear cuenta', 'error');
+    }
+  };
+
+  const handleDeleteAccount = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    try {
+      await api(`/finance/accounts/${id}`, { method: 'DELETE' });
+      showToast('Cuenta eliminada', 'info');
+      if (selectedAccountDetail?.id === id) {
+        setSelectedAccountDetail(null);
+      }
+      loadUserData();
+    } catch (err: any) {
+      showToast('Error al eliminar cuenta', 'error');
+    }
+  };
+
+  const handleSaveAiKey = async (provider: 'DeepSeek' | 'Gemini', key: string) => {
+    if (!key.trim()) return;
+    try {
+      await api('/settings/ai-keys', {
+        method: 'POST',
+        body: JSON.stringify({ provider, apiKey: key.trim() })
+      });
+      showToast(`Clave API de ${provider} guardada y activada correctamente`, 'success');
+      loadUserData();
+    } catch {
+      showToast(`Error al guardar clave de ${provider}`, 'error');
+    }
+  };
+
+  const handleOpenAccountDetail = (acc: any) => {
+    setSelectedAccountDetail(acc);
+    const allItems = timeline.flatMap(day => day.items || []);
+    const filtered = allItems.filter((t: any) => t.accountId === acc.id);
+    setAccountTxs(filtered);
+  };
+
+  const handleCreateGoal = async () => {
+    if (!newGoalName.trim() || !newGoalTarget) return;
+    try {
+      await api('/finance/goals', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newGoalName,
+          targetAmount: parseFloat(newGoalTarget) || 0,
+          currentAmount: parseFloat(newGoalCurrent) || 0,
+          deadline: newGoalDeadline || new Date().toISOString().split('T')[0]
+        })
+      });
+      showToast('Nueva meta de ahorro creada correctamente', 'success');
+      setShowAddGoalModal(false);
+      setNewGoalName('');
+      setNewGoalTarget('');
+      setNewGoalCurrent('');
+      setNewGoalDeadline('');
+      loadUserData();
+    } catch (err: any) {
+      showToast('Error al crear meta de ahorro', 'error');
+    }
+  };
+
+  const handleChatScroll = () => {
+    if (!chatContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+    const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
+    setShowScrollBottom(isScrolledUp);
+  };
+
+  const scrollToBottom = () => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleEditMessage = (msgId: string, content: string) => {
+    setChatInput(content);
+    const msgIndex = chatMessages.findIndex(m => m.id === msgId);
+    if (msgIndex !== -1) {
+      setChatMessages(prev => prev.slice(0, msgIndex));
+    }
+  };
+
+  // Rotating Prompt Placeholders (Claude-style UI)
+  const PROMPT_EXAMPLES = [
+    "¿Cuánto he gastado este mes en restaurantes?",
+    "¿Cómo va mi meta del fondo de emergencia?",
+    "¿Cuál es mi score financiero actual?",
+    "¿Qué gastos puedo recortar esta semana?"
+  ];
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex(prev => (prev + 1) % PROMPT_EXAMPLES.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Quick Add (+) Voice Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addType, setAddType] = useState<'expense' | 'income'>('expense');
+  const [addText, setAddText] = useState('');
+  const [addParsing, setAddParsing] = useState(false);
+
+  // Timeline Filter State
+  const now = new Date();
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const [timelineCategories, setTimelineCategories] = useState<string[]>([]);
+  const [timelineType, setTimelineType] = useState<'all' | 'expense' | 'income'>('all');
+  const [timelineCategorySearch, setTimelineCategorySearch] = useState('');
+  const [timelineStartDate, setTimelineStartDate] = useState(firstDayOfMonth);
+  const [timelineEndDate, setTimelineEndDate] = useState(lastDayOfMonth);
+  const [showTimelineFilters, setShowTimelineFilters] = useState(false);
+  const [timelineMinAmount, setTimelineMinAmount] = useState<number>(0);
+  const [timelineMaxAmount, setTimelineMaxAmount] = useState<number>(1000);
+
+  // Admin Panel State
+  const [adminToken, setAdminToken] = useState<string | null>(localStorage.getItem('hera_admin_token'));
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminStats, setAdminStats] = useState<any>(null);
+  const [aiProviders, setAiProviders] = useState<any[]>([]);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminLogs, setAdminLogs] = useState<any[]>([]);
+  const [newProviderName, setNewProviderName] = useState('');
+  const [newProviderModel, setNewProviderModel] = useState('');
+  const [newProviderKey, setNewProviderKey] = useState('');
+
+  const openOnboarding = useCallback((initialData: { name?: string; birthDate?: string; email?: string; address?: string; phone?: string; photoURL?: string }) => {
+    setOnbStep(0);
+    setOnbSaving(false);
+    setOnbDone(false);
+    setOnbName(initialData.name && initialData.name !== initialData.phone ? initialData.name : '');
+    setOnbBirthDate(initialData.birthDate || '');
+    setOnbEmail(initialData.email && !initialData.email.endsWith('@hera.app') ? initialData.email : '');
+    setOnbAddress(initialData.address || '');
+    setOnbPhone(initialData.phone || '');
+    setOnbPhoto(initialData.photoURL || '');
+    setShowOnboarding(true);
+  }, []);
+
+  const loadUserData = useCallback(async (customParams?: { startDate?: string; endDate?: string; category?: string; type?: string; minAmount?: number; maxAmount?: number }) => {
+    try {
+      const sDate = customParams?.startDate !== undefined ? customParams.startDate : timelineStartDate;
+      const eDate = customParams?.endDate !== undefined ? customParams.endDate : timelineEndDate;
+      const cat = customParams?.category !== undefined ? customParams.category : (timelineCategories.length > 0 ? timelineCategories.join(',') : 'all');
+      const tType = customParams?.type !== undefined ? customParams.type : timelineType;
+      const minAmt = customParams?.minAmount !== undefined ? customParams.minAmount : timelineMinAmount;
+      const maxAmt = customParams?.maxAmount !== undefined ? customParams.maxAmount : timelineMaxAmount;
+
+      const queryParts: string[] = [];
+      if (sDate) queryParts.push(`startDate=${encodeURIComponent(sDate)}`);
+      if (eDate) queryParts.push(`endDate=${encodeURIComponent(eDate)}`);
+      if (cat && cat !== 'all') queryParts.push(`category=${encodeURIComponent(cat)}`);
+      if (tType && tType !== 'all') queryParts.push(`type=${encodeURIComponent(tType)}`);
+      if (minAmt > 0) queryParts.push(`minAmount=${minAmt}`);
+      if (maxAmt > 0 && maxAmt < 5000) queryParts.push(`maxAmount=${maxAmt}`);
+
+      const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
+
+      const [ovData, tlData] = await Promise.all([
+        api('/finance/overview'),
+        api(`/finance/timeline${queryStr}`)
+      ]);
+      setOverview(ovData);
+      setAccounts(ovData.accounts || []);
+      setGoals(ovData.goals || []);
+      setTimeline(tlData || []);
+    } catch {}
+  }, [timelineStartDate, timelineEndDate, timelineCategories, timelineType, timelineMinAmount, timelineMaxAmount]);
+
+  const reportStepTexts = [
+    "Analizando patrimonio neto e ingresos...",
+    "Midiendo métricas de liquidez y patrones de gasto...",
+    "Detectando oportunidades de ahorro y fugas...",
+    "Hera AI sintetizando informe financiero ejecutivo..."
+  ];
+
+  const fetchAiReport = useCallback(async () => {
+    setReportLoading(true);
+    setReportStepIndex(0);
+
+    const interval = setInterval(() => {
+      setReportStepIndex(prev => (prev + 1) % 4);
+    }, 1100);
+
+    try {
+      const data = await api('/finance/reports/ai-analysis');
+      setAiReportData(data);
+    } catch {
+      showToast('Error al generar informe con IA', 'error');
+    } finally {
+      clearInterval(interval);
+      setReportLoading(false);
+    }
+  }, []);
+
+  const handleExecuteRecommendationWithHera = useCallback((rec: string) => {
+    const prompt = `Hera, por favor ayúdame a ejecutar esta recomendación de mi informe financiero: "${rec}". ¿Cómo lo iniciamos?`;
+    setActiveTab('chat');
+    showToast('Enviando recomendación directamente a Hera AI...', 'info');
+    setTimeout(() => {
+      if ((window as any).sendChatMessage) {
+        (window as any).sendChatMessage(prompt);
+      }
+    }, 150);
+  }, []);
+
+  const handleConfirmChatAction = useCallback(async (msgId: string, actionData: any) => {
+    setActionProcessing(msgId);
+    try {
+      const res = await api('/finance/confirm-action', {
+        method: 'POST',
+        body: JSON.stringify(actionData)
+      });
+
+      if (res.success) {
+        setChatMessages(prev => prev.map(m => m.id === msgId ? { ...m, actionState: 'confirmed' } : m));
+        showToast(res.message || 'Registro creado con éxito en tus transacciones', 'success');
+        loadUserData();
+      }
+    } catch {
+      showToast('Error al confirmar la operación', 'error');
+    } finally {
+      setActionProcessing(null);
+    }
+  }, [loadUserData]);
+
+  const handleCancelChatAction = useCallback((msgId: string) => {
+    setChatMessages(prev => prev.map(m => m.id === msgId ? { ...m, actionState: 'cancelled' } : m));
+    showToast('Operación cancelada', 'info');
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'reports' && !aiReportData && !reportLoading) {
+      fetchAiReport();
+    }
+  }, [activeTab, aiReportData, reportLoading, fetchAiReport]);
+
+  // Auth Listener on mount (only runs once)
+  useEffect(() => {
+    const token = localStorage.getItem('hera_token');
+    if (token && token !== 'null' && token !== 'undefined') {
+      setToken(token);
+      api('/me').then(u => {
+        if (!u || !u.id) throw new Error('Invalid user');
+        const profileData: UserProfile = { 
+          uid: u.id, 
+          email: u.email, 
+          displayName: u.displayName, 
+          theme: u.theme || 'dark', 
+          currency: u.currency || 'EUR', 
+          photoURL: u.photoURL || '', 
+          birthDate: u.birthDate,
+          address: u.address,
+          phone: u.phone,
+          createdAt: u.createdAt || '' 
+        };
+        setUserState({ uid: u.id, email: u.email, displayName: u.displayName, phone: u.phone, photoURL: u.photoURL || '' });
+        setUser({ uid: u.id, email: u.email, displayName: u.displayName, phone: u.phone, photoURL: u.photoURL || '' });
+        setProfile(profileData);
+        setTheme(u.theme || 'dark');
+        loadUserData();
+
+        const isProfileIncomplete = !u.displayName || 
+          u.displayName === u.phone || 
+          !u.email || 
+          u.email.endsWith('@hera.app') || 
+          !u.birthDate || 
+          !u.address;
+
+        if (isProfileIncomplete) {
+          openOnboarding({
+            name: u.displayName,
+            birthDate: u.birthDate,
+            email: u.email,
+            address: u.address,
+            phone: u.phone,
+            photoURL: u.photoURL
+          });
+        }
+      }).catch(() => {
+        localStorage.removeItem('hera_token');
+        setToken(null);
+        setUserState(null);
+        setUser(null);
+        setProfile(null);
+      }).finally(() => setLoading(false));
+    } else {
+      localStorage.removeItem('hera_token');
+      setToken(null);
+      setLoading(false);
+    }
+  }, []);
+
+  // Scroll chat to bottom
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  // Click outside listener for profile dropdown menu
+  useEffect(() => {
+    if (!isProfileMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const targetNode = e.target as Node;
+      if (!document.body.contains(targetNode)) return;
+      if (menuRef.current && !menuRef.current.contains(targetNode)) {
+        setIsProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isProfileMenuOpen]);
+  // Click outside listener for country picker
+  useEffect(() => {
+    if (!isCountryModalOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const targetNode = e.target as Node;
+      if (!document.body.contains(targetNode)) return;
+      if (countryPickerRef.current && !countryPickerRef.current.contains(targetNode)) {
+        setIsCountryModalOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isCountryModalOpen]);
+  const updateThemeMode = useCallback((newTheme: 'system' | 'light' | 'dark') => {
+    const isDark = newTheme === 'dark' || (newTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    const vars: Record<string, string> = isDark
+      ? {
+          '--bg': '#20201F',
+          '--surface': '#2C2C2A',
+          '--surface-hover': '#353533',
+          '--border': '#3A3A38',
+          '--text-primary': '#ECE7E1',
+          '--text-secondary': '#B4AEA8',
+          '--text-dim': '#8B857E',
+          '--brand': '#D97757',
+          '--brand-hover': '#E08668',
+          '--success': '#5DAF84',
+          '--warning': '#E2B04C',
+          '--error': '#E06A6A'
+        }
+      : {
+          '--bg': '#F9F9F7',
+          '--surface': '#FFFFFF',
+          '--surface-hover': '#F3F2EF',
+          '--border': '#E7E3DD',
+          '--text-primary': '#2E2B28',
+          '--text-secondary': '#6F6B66',
+          '--text-dim': '#9A958E',
+          '--brand': '#D97757',
+          '--brand-hover': '#C96A4D',
+          '--success': '#3E8E68',
+          '--warning': '#D89A36',
+          '--error': '#C45454'
+        };
+
+    const s = document.documentElement.style;
+    for (const k in vars) {
+      s.setProperty(k, vars[k]);
+    }
+
+    document.getElementById('hera-root')?.setAttribute('data-theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+    setTheme(newTheme);
+    localStorage.setItem('hera_theme', newTheme);
+    if (user) {
+      api('/me', { method: 'PUT', body: JSON.stringify({ theme: newTheme }) }).catch(() => {});
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = () => updateThemeMode('system');
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, [theme, updateThemeMode]);
+
+  const handleSendOTP = async () => {
+    const fullPhone = phonePrefix + phone;
+    if (phone.length < 3) {
+      setOtpError('Por favor ingresa tu número de teléfono');
+      return;
+    }
+
+    localStorage.removeItem('hera_token');
+    setToken(null);
+    setOtpLoading(true);
+    setOtpError('');
+
+    try {
+      const data = await api('/send-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone: fullPhone })
+      });
+      showToast(`Código de prueba: ${data.devCode || '000000'}`, 'info');
+    } catch (err: any) {
+      showToast('Código de prueba: 000000', 'info');
+    } finally {
+      setOtpSent(true);
+      setOtpTimer(300);
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async (codeToVerify?: string) => {
+    const code = codeToVerify || otpCode;
+    if (code.length !== 6) return;
+    
+    setOtpLoading(true);
+    setOtpError('');
+    const fullPhone = phonePrefix + phone;
+    try {
+      const data = await api('/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ phone: fullPhone, code })
+      });
+
+      setToken(data.token);
+      const userData = { uid: data.user.id, email: data.user.email, displayName: data.user.displayName, phone: data.user.phone, photoURL: data.user.photoURL || '' };
+      setUserState(userData);
+      setUser(userData);
+      
+      const userProfile: UserProfile = {
+        uid: data.user.id,
+        email: data.user.email,
+        displayName: data.user.displayName,
+        photoURL: data.user.photoURL || '',
+        birthDate: data.user.birthDate,
+        address: data.user.address,
+        phone: data.user.phone,
+        theme: data.user.theme || 'dark',
+        currency: data.user.currency || 'EUR',
+        createdAt: new Date().toISOString()
+      };
+      setProfile(userProfile);
+      loadUserData();
+
+      if (data.isNewUser || !data.user.displayName || data.user.displayName === fullPhone || !data.user.birthDate) {
+        openOnboarding({ name: data.user.displayName, phone: fullPhone, photoURL: data.user.photoURL });
+      } else {
+        showToast('¡Bienvenido a HeraWallet!', 'success');
+      }
+      setOtpStatus('success');
+    } catch (err: any) {
+      setOtpStatus('error');
+      setOtpError(err.message);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsProfileMenuOpen(false);
+    setShowLogoutModal(true);
+    setIsLoggingOut(true);
+
+    setTimeout(() => {
+      setShowLogoutModal(false);
+      
+      setTimeout(async () => {
+        await signOut();
+        setUserState(null);
+        setProfile(null);
+        setShowOnboarding(false);
+        setOtpSent(false);
+        setOtpCode('');
+        setIsLoggingOut(false);
+      }, 300);
+    }, 1500);
+  };
+
+  // --- Voice Dictation (Whisper Local Server & Live Web Audio Waveform) ---
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+
+      // Initialize Web Audio API Real-time Frequency Visualizer
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const audioCtx = new AudioContextClass();
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          audioCtxRef.current = audioCtx;
+
+          const bufferLength = analyser.frequencyBinCount;
+          const dataArray = new Uint8Array(bufferLength);
+
+          const updateVisualizer = () => {
+            analyser.getByteFrequencyData(dataArray);
+            const barsCount = 12;
+            const step = Math.floor(bufferLength / barsCount) || 1;
+            const levels: number[] = [];
+            for (let i = 0; i < barsCount; i++) {
+              const rawVal = dataArray[i * step] || 0;
+              const pct = Math.max(15, Math.min(100, Math.round((rawVal / 255) * 100)));
+              levels.push(pct);
+            }
+            setAudioLevels(levels);
+            animFrameRef.current = requestAnimationFrame(updateVisualizer);
+          };
+          updateVisualizer();
+        }
+      } catch (e) {
+        console.error('Error inicializando visualizador de audio:', e);
+      }
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+          const base64Audio = reader.result as string;
+          try {
+            if (showAddModal) {
+              setIsAiParsingAudio(true);
+              showToast('Analizando dictado e interpretando intención con IA...', 'info');
+              const res = await api('/transcribe', {
+                method: 'POST',
+                body: JSON.stringify({ audio: base64Audio })
+              });
+              const transcribedText = res.text || 'Gasto registrado por voz';
+              const parsedRes = await api('/finance/parse-voice-tx', {
+                method: 'POST',
+                body: JSON.stringify({ text: transcribedText, defaultType: addType })
+              });
+              if (parsedRes.success && parsedRes.transaction) {
+                const defaultAccId = selectedAccountId || accounts[0]?.id || '';
+                setSelectedAccountId(defaultAccId);
+                setAiParsedPreview({
+                  type: parsedRes.transaction.type || addType || 'expense',
+                  amount: parsedRes.transaction.amount || 10,
+                  category: parsedRes.transaction.category || 'General',
+                  description: parsedRes.transaction.description || transcribedText,
+                  accountId: defaultAccId
+                });
+                setAddModalStep(2); // Advance to Step 2 confirmation!
+              } else {
+                showToast('No se pudo interpretar el dictado', 'error');
+              }
+            } else {
+              setChatLoading(true);
+              showToast('Procesando dictado por voz...', 'info');
+              const res = await api('/transcribe', {
+                method: 'POST',
+                body: JSON.stringify({ audio: base64Audio })
+              });
+              if (res.text) {
+                setChatInput(res.text);
+                sendChatMessage(res.text);
+              }
+            }
+          } catch (err: any) {
+            showToast(err.message || 'Error en procesamiento de voz con IA', 'error');
+          } finally {
+            setChatLoading(false);
+            setIsAiParsingAudio(false);
+          }
+        };
+      };
+
+      recorder.start();
+      mediaRecorderRef.current = recorder;
+      setIsRecording(true);
+      showToast('Escuchando... Habla ahora', 'info');
+    } catch (err) {
+      showToast('No se pudo acceder al micrófono', 'error');
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
+    }
+  };
+
+  // --- Send Message to AI Function Calling Engine ---
+  const sendChatMessage = async (overrideText?: string) => {
+    const textToSend = overrideText || chatInput;
+    if (!textToSend.trim() || chatLoading) return;
+
+    const userMsg = { id: Date.now().toString(), role: 'user', content: textToSend };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setChatLoading(true);
+    setCurrentReasoningText('');
+    setChatThinkingStepIndex(0);
+
+    const stepInterval = setInterval(() => {
+      setChatThinkingStepIndex(prev => (prev + 1) % 4);
+    }, 1100);
+
+    try {
+      const data = await api('/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message: textToSend })
+      });
+
+      if (data.reasoningContent) {
+        setCurrentReasoningText(data.reasoningContent);
+      }
+
+      const aiMsg = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.reply,
+        reasoningContent: data.reasoningContent || '',
+        type: data.widgetType,
+        data: data.widgetData
+      };
+
+      setChatMessages(prev => {
+        const newMsgs = [...prev, aiMsg];
+        // Save/update session in chatHistory
+        setChatHistory(hPrev => {
+          const sessionTitle = newMsgs[0]?.content || textToSend;
+          const existingIndex = hPrev.findIndex(s => s.id === currentSessionId);
+          let updated: any[];
+          if (existingIndex !== -1) {
+            updated = [...hPrev];
+            updated[existingIndex] = {
+              ...updated[existingIndex],
+              messages: newMsgs,
+              updatedAt: new Date().toISOString()
+            };
+          } else {
+            const newId = Date.now().toString();
+            setCurrentSessionId(newId);
+            updated = [
+              {
+                id: newId,
+                title: sessionTitle,
+                messages: newMsgs,
+                updatedAt: new Date().toISOString()
+              },
+              ...hPrev
+            ];
+          }
+          try { localStorage.setItem('hera_chat_history', JSON.stringify(updated)); } catch {}
+          return updated;
+        });
+        return newMsgs;
+      });
+      loadUserData();
+    } catch (err: any) {
+      showToast('Error al conectar con la IA', 'error');
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    (window as any).sendChatMessage = sendChatMessage;
+  }, [sendChatMessage]);
+
+  // --- Receipt Scanner Upload ---
+  const handleReceiptUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Img = reader.result as string;
+      setChatLoading(true);
+      showToast('Escaneando recibo con IA...', 'info');
+
+      try {
+        const res = await api('/scan-receipt', {
+          method: 'POST',
+          body: JSON.stringify({ image: base64Img })
+        });
+
+        const receiptMsg = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: `¡Recibo escaneado y registrado con éxito!\n\n**Comercio**: ${res.merchant}\n**Importe**: ${res.amount}€\n**Categoría**: ${res.category}\n**Fecha**: ${res.date}`,
+          type: 'receipt_summary',
+          data: res
+        };
+
+        setChatMessages(prev => [...prev, receiptMsg]);
+        loadUserData();
+        showToast('Transacción registrada automáticamente', 'success');
+      } catch (err: any) {
+        showToast('Error al escanear recibo', 'error');
+      } finally {
+        setChatLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // --- Admin Login & Data Fetching ---
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminLoading(true);
+    try {
+      const res = await fetch('http://localhost:4000/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: adminUsername, password: adminPassword })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Credenciales incorrectas');
+
+      localStorage.setItem('hera_admin_token', data.token);
+      setAdminToken(data.token);
+      showToast('Sesión de administrador iniciada', 'success');
+      loadAdminData(data.token);
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const loadAdminData = useCallback(async (token?: string) => {
+    const t = token || adminToken;
+    if (!t) return;
+    try {
+      const headers = { 'Authorization': `Bearer ${t}` };
+      const [statsRes, provsRes, usersRes, logsRes] = await Promise.all([
+        fetch('http://localhost:4000/api/admin/stats', { headers }).then(r => r.json()),
+        fetch('http://localhost:4000/api/admin/providers', { headers }).then(r => r.json()),
+        fetch('http://localhost:4000/api/admin/users', { headers }).then(r => r.json()),
+        fetch('http://localhost:4000/api/admin/logs', { headers }).then(r => r.json())
+      ]);
+
+      setAdminStats(statsRes);
+      setAiProviders(provsRes || []);
+      setAdminUsers(usersRes || []);
+      setAdminLogs(logsRes || []);
+    } catch {}
+  }, [adminToken]);
+
+  useEffect(() => {
+    if (showAdmin && adminToken) {
+      loadAdminData();
+    }
+  }, [showAdmin, adminToken, loadAdminData]);
+
+  const handleUpdateProviderKey = async (id: string, apiKey: string, isActive: number) => {
+    if (!adminToken) return;
+    try {
+      await fetch(`http://localhost:4000/api/admin/providers/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ apiKey, isActive })
+      });
+      showToast('Proveedor de IA actualizado', 'success');
+      loadAdminData();
+    } catch {
+      showToast('Error al actualizar proveedor', 'error');
+    }
+  };
+
+  const handleAddProvider = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProviderName || !newProviderModel || !adminToken) return;
+    try {
+      await fetch('http://localhost:4000/api/admin/providers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ name: newProviderName, model: newProviderModel, apiKey: newProviderKey })
+      });
+      setNewProviderName('');
+      setNewProviderModel('');
+      setNewProviderKey('');
+      showToast('Nuevo proveedor añadido', 'success');
+      loadAdminData();
+    } catch {
+      showToast('Error al añadir proveedor', 'error');
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="bg-surface border border-border p-3 rounded-xl shadow-2xl backdrop-blur-md">
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
-            <p className="text-xs font-bold text-text-secondary">{entry.name}:</p>
-            <p className="text-sm font-bold text-text-primary">{formatCurrency(entry.value)}</p>
-          </div>
-        ))}
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-bg text-text-primary">
+        <HeraWalletLogo size="lg" showText={true} />
+        <div className="mt-6 flex items-center gap-2 text-xs text-text-secondary">
+          <Sparkles size={14} className="animate-spin text-brand" />
+          <span>Cargando tu espacio HeraWallet...</span>
+        </div>
       </div>
     );
   }
-  return null;
-}
 
-function CustomPieChart({ data, title, icon: Icon, iconColor }: any) {
-  const total = data.reduce((acc: number, curr: any) => acc + curr.value, 0);
-  
-  return (
-    <div className="bg-surface border border-border rounded-2xl p-6 flex flex-col h-full">
-      <h3 className="font-bold text-sm mb-6 flex items-center gap-2">
-        <Icon size={16} className={iconColor} /> {title}
-      </h3>
-      <div className="flex-1 flex flex-col lg:flex-row items-center gap-6">
-        <div className="h-[180px] w-full lg:w-1/2 relative">
-          <ResponsiveContainer width="100%" height="100%">
-            <RePieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={80}
-                paddingAngle={4}
-                dataKey="value"
-                stroke="none"
-              >
-                {data.map((entry: any, index: number) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-            </RePieChart>
-          </ResponsiveContainer>
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[10px] text-text-dim uppercase font-bold tracking-widest">Total</span>
-            <span className="text-lg font-display font-bold">{formatCurrency(total)}</span>
+  // --- OTP Login Screen ---
+  if (!user && !showAdmin) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-bg p-4">
+        <Toast />
+        <motion.div 
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+          className="max-w-md w-full bg-surface border border-border p-8 sm:p-10 rounded-3xl text-center space-y-8 shadow-xl"
+        >
+          <div className="mx-auto flex justify-center">
+            <HeraWalletLogo size="lg" showText={false} />
           </div>
-        </div>
-        <div className="w-full lg:w-1/2 space-y-2 max-h-[180px] overflow-y-auto custom-scrollbar pr-2">
-          {data.sort((a: any, b: any) => b.value - a.value).map((item: any, i: number) => (
-            <div key={i} className="flex items-center justify-between text-xs group">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                <span className="text-text-secondary truncate group-hover:text-text-primary transition-colors">{item.name}</span>
+
+          <div className="space-y-2 text-center">
+            <h1 className="text-3xl font-serif font-semibold tracking-tight text-text-primary">HeraWallet</h1>
+            <p className="text-xs text-text-secondary max-w-xs mx-auto">
+              {!otpSent 
+                ? 'Tus metas empiezan con un mejor control. Accede con tu número de teléfono.'
+                : 'Ya estás a un solo paso de cumplir tus metas.'
+              }
+            </p>
+          </div>
+          
+          {!otpSent ? (
+            <div className="space-y-4 text-left">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium uppercase tracking-wider text-text-secondary">Número de teléfono</label>
+                <div className="flex gap-2">
+                  {/* Custom Country Picker (28% width, trigger shows only flag & prefix, modal has search) */}
+                  <div className="relative w-[28%]" ref={countryPickerRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsCountryModalOpen(prev => !prev)}
+                      className="w-full h-full bg-bg border border-border hover:border-brand/60 rounded-2xl px-2.5 py-3 text-xs font-mono text-text-primary flex items-center justify-between transition-all cursor-pointer shadow-sm active:scale-[0.97]"
+                    >
+                      <span className="truncate flex items-center gap-1 font-semibold">
+                        <span>{COUNTRY_PREFIXES.find(c => c.code === phonePrefix)?.flag || '🇨🇺'}</span>
+                        <span>{phonePrefix}</span>
+                      </span>
+                      <ChevronDown size={14} className={cn("text-text-dim transition-transform shrink-0 ml-0.5", isCountryModalOpen && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCountryModalOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.95, y: 4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95, y: 4 }}
+                          transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
+                          className="absolute left-0 top-full mt-2 w-72 bg-surface border border-border rounded-3xl shadow-2xl p-3 z-50 space-y-2"
+                          onMouseDown={e => e.stopPropagation()}
+                        >
+                          <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
+                            <input
+                              type="text"
+                              value={countrySearch}
+                              onChange={e => setCountrySearch(e.target.value)}
+                              placeholder="Buscar país o código..."
+                              className="w-full bg-bg border border-border rounded-xl pl-8 pr-3 py-2 text-xs text-text-primary placeholder:text-text-dim focus:outline-none focus:border-brand/60"
+                              autoFocus
+                            />
+                          </div>
+
+                          <div className="max-h-56 overflow-y-auto space-y-1 pr-1 font-sans">
+                            {COUNTRY_PREFIXES.filter(c => 
+                              c.country.toLowerCase().includes(countrySearch.toLowerCase()) || 
+                              c.code.includes(countrySearch)
+                            ).map((item, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setPhonePrefix(item.code);
+                                  setIsCountryModalOpen(false);
+                                  setCountrySearch('');
+                                }}
+                                className={cn(
+                                  "w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer text-left",
+                                  phonePrefix === item.code ? "bg-brand/10 text-brand font-semibold border border-brand/20" : "hover:bg-surface-hover text-text-primary"
+                                )}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <span className="text-base leading-none">{item.flag}</span>
+                                  <span className="truncate">{item.country}</span>
+                                </div>
+                                <span className="font-mono text-text-dim shrink-0">{item.code}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <input 
+                    type="tel" 
+                    value={phone}
+                    onChange={e => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendOTP(); } }}
+                    placeholder={COUNTRY_PREFIXES.find(c => c.code === phonePrefix)?.example || '54232684'}
+                    className="flex-1 bg-bg border border-border rounded-2xl px-4 py-3 text-sm font-sans text-text-primary placeholder:text-text-dim focus:outline-none focus:border-brand/60"
+                    autoFocus
+                  />
+                </div>
+                {otpError && <p className="text-xs text-error mt-1">{otpError}</p>}
               </div>
-              <span className="font-bold ml-2">{formatCurrency(item.value)}</span>
+
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSendOTP(); }}
+                disabled={otpLoading || !phone}
+                className="w-full bg-brand hover:bg-brand-hover text-white font-medium py-3.5 rounded-2xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer"
+              >
+                {otpLoading ? <Sparkles size={16} className="animate-spin" /> : 'Continuar con SMS'}
+              </button>
             </div>
-          ))}
-          {data.length === 0 && (
-            <div className="h-full flex items-center justify-center text-text-dim italic text-[10px]">
-              Sin datos
+          ) : (
+            <div className="space-y-6 text-left">
+              <div className="space-y-3">
+                <label className="text-xs font-medium uppercase tracking-wider text-text-secondary">Código de verificación</label>
+                
+                <motion.div 
+                  className="grid grid-cols-6 gap-2 sm:gap-2.5 w-full"
+                  animate={otpStatus === 'error' ? { x: [-10, 10, -10, 10, 0] } : {}}
+                  transition={{ duration: 0.4 }}
+                >
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <input
+                      key={i}
+                      ref={el => { otpInputsRef.current[i] = el; }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={otpCode[i] || ''}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        if (!val && e.target.value) return; // ignore non-numeric typing
+                        const newCode = otpCode.split('');
+                        newCode[i] = val.slice(-1);
+                        const finalCode = newCode.join('');
+                        setOtpCode(finalCode);
+                        setOtpStatus('typing');
+                        setOtpError('');
+                        
+                        if (val && i < 5) otpInputsRef.current[i + 1]?.focus();
+                        if (finalCode.length === 6) handleVerifyOTP(finalCode);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Backspace') {
+                          e.preventDefault();
+                          const newCode = otpCode.split('');
+                          if (newCode[i]) {
+                            newCode[i] = '';
+                            setOtpCode(newCode.join(''));
+                          } else if (i > 0) {
+                            newCode[i - 1] = '';
+                            setOtpCode(newCode.join(''));
+                            otpInputsRef.current[i - 1]?.focus();
+                          }
+                          setOtpStatus('typing');
+                          setOtpError('');
+                        } else if (e.key === 'ArrowLeft' && i > 0) {
+                          e.preventDefault();
+                          otpInputsRef.current[i - 1]?.focus();
+                        } else if (e.key === 'ArrowRight' && i < 5) {
+                          e.preventDefault();
+                          otpInputsRef.current[i + 1]?.focus();
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (otpCode.length === 6) handleVerifyOTP(otpCode);
+                        }
+                      }}
+                      onPaste={(e) => {
+                        e.preventDefault();
+                        const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+                        if (pasted) {
+                          setOtpCode(pasted);
+                          if (pasted.length === 6) {
+                            otpInputsRef.current[5]?.focus();
+                            handleVerifyOTP(pasted);
+                          } else {
+                            otpInputsRef.current[pasted.length]?.focus();
+                          }
+                        }
+                      }}
+                      className={cn(
+                        "w-full h-14 bg-bg border-2 rounded-xl text-center text-xl font-mono text-text-primary focus:outline-none transition-colors",
+                        otpStatus === 'error' ? "border-error text-error bg-error/5" :
+                        otpStatus === 'success' ? "border-success text-success bg-success/5" :
+                        otpCode[i] ? "border-brand shadow-[0_0_10px_rgba(217,119,87,0.2)]" : "border-border focus:border-brand/60"
+                      )}
+                      autoFocus={i === 0}
+                    />
+                  ))}
+                </motion.div>
+                {otpError && <p className="text-xs text-error mt-2 text-center">{otpError}</p>}
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setOtpSent(false); setOtpCode(''); setOtpError(''); }}
+                  className="text-xs text-brand font-medium hover:text-brand-hover transition-colors cursor-pointer"
+                >
+                  Cambiar número
+                </button>
+                
+                {otpTimer > 0 ? (
+                  <span className="text-xs font-mono font-medium text-text-secondary">
+                    {String(Math.floor(otpTimer / 60)).padStart(2, '0')}:{String(otpTimer % 60).padStart(2, '0')}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); handleSendOTP(); }}
+                    disabled={otpLoading}
+                    className="text-xs text-brand font-medium hover:text-brand-hover transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {otpLoading && <Sparkles size={12} className="animate-spin" />}
+                    Reenviar OTP
+                  </button>
+                )}
+              </div>
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
+    );
+  }
+
+  // --- Main HeraWallet App Shell ---
+  return (
+    <div 
+      id="hera-root" 
+      data-theme={theme} 
+      className={cn(
+        "bg-bg text-text-primary flex flex-col font-sans",
+        activeTab === 'chat' && chatMessages.length > 0 
+          ? "h-screen h-[100dvh] overflow-hidden" 
+          : "min-h-screen pb-20 sm:pb-0"
+      )}
+    >
+      <Toast />
+      
+      {/* Header Navbar (Hidden when in active chat thread) */}
+      {!(activeTab === 'chat' && chatMessages.length > 0) && (
+        <header className="bg-surface/80 backdrop-blur-xl sticky top-0 z-40 mx-1.5 sm:mx-2.5 mt-1.5 rounded-2xl border border-border shadow-lg shadow-black/5">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+            <div onClick={() => { setActiveTab('chat'); setShowAdmin(false); }}>
+              <HeraWalletLogo size="sm" showText={true} />
+            </div>
+
+          <div className="flex items-center gap-2">
+            {/* Quick Add Button (+) to the left of User Profile */}
+            <button
+              type="button"
+              onClick={() => setShowAddModal(true)}
+              className="bg-surface/80 hover:bg-surface-hover border border-border/80 hover:border-brand/40 text-text-primary hover:text-brand flex items-center justify-center h-10 px-3.5 rounded-2xl shadow-xs text-xs font-medium cursor-pointer transition-all active:scale-95 gap-1.5 shrink-0"
+              title="Nuevo Registro por Voz o Texto"
+            >
+              <Plus size={16} strokeWidth={2.5} className="text-brand" />
+              <span className="hidden sm:inline font-semibold">Nuevo</span>
+            </button>
+
+            {/* Profile Dropdown Trigger & Menu */}
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsProfileMenuOpen(prev => !prev);
+                }}
+                className={cn(
+                  "w-10 h-10 rounded-2xl border transition-all p-0.5 flex items-center justify-center active:scale-[0.95] shadow-sm overflow-hidden cursor-pointer",
+                  (profile?.photoURL || user?.photoURL)
+                    ? "border-border bg-surface hover:bg-surface-hover hover:border-brand/40"
+                    : "border-transparent bg-transparent hover:bg-surface-hover/50"
+                )}
+                title="Perfil"
+              >
+                <img 
+                  src={profile?.photoURL || user?.photoURL || "/defaultuser.png"} 
+                  alt="Foto de perfil" 
+                  className={cn(
+                    "w-full h-full rounded-xl",
+                    (profile?.photoURL || user?.photoURL) ? "object-cover" : "object-contain"
+                  )}
+                />
+              </button>
+
+              <AnimatePresence>
+                {isProfileMenuOpen && (
+                  <motion.div
+                    key="profile-dropdown"
+                    initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                    transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                    className="absolute right-0 mt-2 w-72 bg-surface border border-border rounded-3xl shadow-2xl p-4 z-50 space-y-3.5"
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-3 p-2.5 bg-bg border border-border/60 rounded-2xl">
+                      <img 
+                        src={profile?.photoURL || user?.photoURL || "/defaultuser.png"} 
+                        alt="Foto de perfil" 
+                        className="w-10 h-10 rounded-xl object-cover border border-brand/20 shrink-0" 
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate text-text-primary leading-tight">
+                          {profile?.displayName || user?.displayName || 'Usuario'}
+                        </p>
+                        <p className="text-[11px] text-text-secondary truncate mt-0.5">
+                          {profile?.email || 'Sin correo'}
+                        </p>
+                        <p className="text-[10px] font-mono text-text-dim truncate">
+                          {profile?.phone || user?.phone}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsProfileMenuOpen(false);
+                        openOnboarding({ 
+                          name: profile?.displayName, 
+                          birthDate: profile?.birthDate, 
+                          email: profile?.email, 
+                          address: profile?.address, 
+                          phone: profile?.phone,
+                          photoURL: profile?.photoURL || user?.photoURL
+                        });
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-surface-hover text-xs font-medium text-text-primary transition-colors text-left group cursor-pointer"
+                    >
+                      <div className="w-7.5 h-7.5 rounded-xl bg-brand/10 text-brand flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                        <UserIcon size={15} />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-medium text-text-primary">Editar perfil</span>
+                        <p className="text-[10px] text-text-secondary">Nombre, correo y dirección</p>
+                      </div>
+                    </button>
+
+                    {/* Configuration Option */}
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsProfileMenuOpen(false);
+                        setActiveTab('settings');
+                        setShowAdmin(false);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-surface-hover text-xs font-medium text-text-primary transition-colors text-left group cursor-pointer"
+                    >
+                      <div className="w-7.5 h-7.5 rounded-xl bg-brand/10 text-brand flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                        <Settings size={15} />
+                      </div>
+                      <div className="flex-1">
+                        <span className="font-medium text-text-primary">Configuración</span>
+                        <p className="text-[10px] text-text-secondary">Moneda, suscripción y reglas de IA</p>
+                      </div>
+                    </button>
+
+                    <div className="pt-2 border-t border-border space-y-2">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-xs font-medium text-text-primary">Apariencia</span>
+                      </div>
+
+                      <div className="bg-bg border border-border p-1 rounded-2xl flex items-center justify-between gap-1">
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateThemeMode('system'); }}
+                          className={cn(
+                            "flex-1 flex items-center justify-center py-2 rounded-xl transition-all text-xs font-medium gap-1.5 cursor-pointer",
+                            theme === 'system' ? "bg-surface text-brand shadow-sm font-semibold" : "text-text-secondary hover:text-text-primary"
+                          )}
+                          title="Tema del sistema"
+                        >
+                          <Monitor size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateThemeMode('light'); }}
+                          className={cn(
+                            "flex-1 flex items-center justify-center py-2 rounded-xl transition-all text-xs font-medium gap-1.5 cursor-pointer",
+                            theme === 'light' ? "bg-surface text-brand shadow-sm font-semibold" : "text-text-secondary hover:text-text-primary"
+                          )}
+                          title="Tema claro"
+                        >
+                          <Sun size={15} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateThemeMode('dark'); }}
+                          className={cn(
+                            "flex-1 flex items-center justify-center py-2 rounded-xl transition-all text-xs font-medium gap-1.5 cursor-pointer",
+                            theme === 'dark' ? "bg-surface text-brand shadow-sm font-semibold" : "text-text-secondary hover:text-text-primary"
+                          )}
+                          title="Tema oscuro"
+                        >
+                          <Moon size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+
+                    <div className="pt-2 border-t border-border">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleLogout();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-error/10 text-xs font-medium text-error transition-colors text-left group cursor-pointer"
+                      >
+                        <div className="w-7.5 h-7.5 rounded-xl bg-error/10 text-error flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                          <LogOut size={15} />
+                        </div>
+                        <span>Cerrar sesión</span>
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </div>
+      </header>
+      )}
+
+      {/* Main Workspace Area */}
+      <main className={cn("flex-1 max-w-7xl w-full mx-auto flex flex-col min-h-0 overflow-hidden", activeTab === 'chat' && chatMessages.length > 0 ? "px-3 pt-2 pb-1 sm:px-6" : "p-3 sm:p-6")}>
+        {showAdmin ? (
+          /* --- ADMIN PANEL (/panel) --- */
+          <div className="space-y-6">
+            {!adminToken ? (
+              <motion.div 
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                className="max-w-md mx-auto bg-surface border border-border p-8 sm:p-10 rounded-3xl text-center space-y-8 shadow-xl"
+              >
+                <div className="mx-auto flex justify-center">
+                  <ShieldCheck size={28} />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-serif font-bold text-text-primary">Panel de Administración</h2>
+                  <p className="text-xs text-text-secondary">Autenticación requerida para acceder al área de control del sistema.</p>
+                </div>
+
+                <form onSubmit={handleAdminLogin} className="space-y-4">
+                  <div className="space-y-1 text-left">
+                    <label className="text-xs font-medium text-text-secondary">Usuario Administrador</label>
+                    <input 
+                      type="text" 
+                      value={adminUsername} 
+                      onChange={e => setAdminUsername(e.target.value)} 
+                      placeholder="admin" 
+                      className="w-full bg-bg border border-border p-3 rounded-2xl text-xs focus:outline-none focus:border-brand text-text-primary" 
+                    />
+                  </div>
+                  <div className="space-y-1 text-left">
+                    <label className="text-xs font-medium text-text-secondary font-mono">Clave Secreta</label>
+                    <input 
+                      type="password" 
+                      value={adminPassword} 
+                      onChange={e => setAdminPassword(e.target.value)} 
+                      placeholder="••••••••" 
+                      className="w-full bg-bg border border-border p-3 rounded-2xl text-xs focus:outline-none focus:border-brand text-text-primary" 
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={adminLoading}
+                    className="w-full py-3 bg-brand hover:bg-brand-hover text-white font-medium rounded-2xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    {adminLoading ? <Sparkles size={16} className="animate-spin" /> : <Key size={16} />}
+                    <span>Iniciar Sesión en Panel</span>
+                  </button>
+                </form>
+              </motion.div>
+            ) : (
+              /* Authorized Admin View */
+              <div className="space-y-6">
+                <div className="flex items-center justify-between bg-surface border border-border p-4 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center">
+                      <Users size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-text-primary">Administrador Autenticado</h2>
+                      <p className="text-[11px] text-text-secondary font-mono">Gestión global de API Keys y logs de seguridad</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => { localStorage.removeItem('hera_admin_token'); setAdminToken(null); }}
+                    className="px-3 py-1.5 bg-surface hover:bg-surface-hover border border-border rounded-xl text-xs text-error font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <LogOut size={14} />
+                    <span>Cerrar Sesión</span>
+                  </button>
+                </div>
+
+                {/* System Providers API Keys */}
+                <div className="bg-surface border border-border p-5 rounded-3xl space-y-4">
+                  <h3 className="text-base font-semibold flex items-center gap-2">
+                    <DbIcon size={18} className="text-brand" />
+                    Proveedores de IA y Modelos LLM
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {aiProviders.map(p => (
+                      <div key={p.id} className="p-4 bg-bg border border-border rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-xs text-text-primary uppercase tracking-wider">{p.name}</span>
+                          <span className={cn(
+                            "text-[10px] font-mono px-2 py-0.5 rounded-full font-bold",
+                            p.isActive === 1 ? "bg-success/20 text-success" : "bg-text-dim/20 text-text-dim"
+                          )}>
+                            {p.isActive === 1 ? 'ACTIVO' : 'INACTIVO'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="password" 
+                            placeholder="Introducir API Key" 
+                            defaultValue={p.apiKey}
+                            onBlur={(e) => handleUpdateProviderKey(p.id, e.target.value, p.isActive)}
+                            className="bg-surface border border-border px-3 py-1.5 rounded-xl text-xs font-mono text-text-primary focus:outline-none flex-1" 
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* --- USER WORKSPACE --- */
+          <div className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
+            {activeTab === 'chat' && (
+              /* --- HERA MAIN INTEGRATED WORKSPACE (Claude App Inspired UI) --- */
+              <div className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full min-h-0 overflow-hidden">
+                {chatMessages.length === 0 ? (
+                  /* Empty State / Centered Input Hero View */
+                  <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-8 space-y-8">
+                    {/* Hero Header with Organic Entrance */}
+                    <motion.div 
+                      initial={{ opacity: 0, y: 14, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                      className="flex flex-col items-center gap-3"
+                    >
+                      <div className="w-16 h-16 rounded-3xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shadow-sm">
+                        <HeraWalletLogo size="lg" showText={false} />
+                      </div>
+                      <h1 className="text-3xl sm:text-4xl font-serif font-semibold tracking-tight text-text-primary max-w-lg leading-tight mt-2">
+                        {(() => {
+                          const hour = new Date().getHours();
+                          const userName = profile?.displayName || user?.displayName;
+                          const nameStr = userName && userName !== user?.phone ? `, ${userName.split(' ')[0]}` : '';
+                          if (hour < 12) return `Fichando para la jornada matutina${nameStr}.`;
+                          if (hour < 19) return `Fichando para el turno de la tarde${nameStr}.`;
+                          return `Organizando tus metas de la noche${nameStr}.`;
+                        })()}
+                      </h1>
+                    </motion.div>
+
+                    {/* Centered Large Prompt Input Card with Staggered Organic Scale & Animated Placeholders */}
+                    <motion.div 
+                      initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.32, delay: 0.08, ease: [0.23, 1, 0.32, 1] }}
+                      className="w-full max-w-2xl bg-surface border border-border/80 rounded-3xl p-3.5 sm:p-4 shadow-2xl space-y-2.5 text-left"
+                    >
+                      {/* Real-time Voice Waveform Visualizer (Pure Wave Bars) */}
+                      <AnimatePresence>
+                        {isRecording && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0, scale: 0.96 }}
+                            animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                            exit={{ opacity: 0, height: 0, scale: 0.96 }}
+                            transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+                            className="flex items-center justify-center p-2 rounded-2xl mb-2 bg-brand/10 border border-brand/20 backdrop-blur-md"
+                          >
+                            <div className="flex items-center justify-center gap-1.5 h-7 px-2 w-full">
+                              {audioLevels.map((lvl, idx) => (
+                                <motion.div
+                                  key={idx}
+                                  animate={{ height: `${lvl}%` }}
+                                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                                  className="w-1.5 bg-brand rounded-full shadow-xs shadow-brand/50"
+                                  style={{ minHeight: '6px' }}
+                                />
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                      <div className="relative flex items-center min-h-[38px]">
+                        {!chatInput && (
+                          <div className="absolute inset-0 pointer-events-none text-sm text-text-dim font-sans overflow-hidden py-1 px-0 flex items-center">
+                            <AnimatePresence mode="wait">
+                              <motion.span
+                                key={placeholderIndex}
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -5 }}
+                                transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                                className="block truncate leading-tight"
+                              >
+                                {PROMPT_EXAMPLES[placeholderIndex]}
+                              </motion.span>
+                            </AnimatePresence>
+                          </div>
+                        )}
+                        <textarea
+                          value={chatInput}
+                          onChange={e => setChatInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              if (chatInput.trim()) sendChatMessage(chatInput);
+                            }
+                          }}
+                          rows={1}
+                          className="w-full bg-transparent text-sm text-text-primary focus:outline-none resize-none font-sans relative z-10 py-1 leading-tight"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-border/60 relative z-20">
+                        <div className="flex items-center gap-2">
+                          <label className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary cursor-pointer transition-colors" title="Escanear recibo">
+                            <Paperclip size={18} />
+                            <input type="file" accept="image/*" className="hidden" onChange={handleReceiptUpload} />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                            className={cn(
+                              "p-2.5 rounded-xl transition-colors cursor-pointer",
+                              isRecording ? "bg-error text-white animate-pulse" : "hover:bg-surface-hover text-text-secondary hover:text-text-primary"
+                            )}
+                            title="Dictar por voz"
+                          >
+                            {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowHistoryModal(true)}
+                            className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                            title="Historial de consultas"
+                          >
+                            <History size={18} />
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => { if (chatInput.trim()) sendChatMessage(chatInput); }}
+                          disabled={!chatInput.trim() || chatLoading}
+                          className="px-4 py-2 bg-brand hover:bg-brand-hover text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow-md disabled:opacity-40 transition-all active:scale-[0.97] cursor-pointer"
+                        >
+                          {chatLoading ? <Sparkles size={14} className="animate-spin" /> : <Send size={14} />}
+                          <span>Consultar</span>
+                        </button>
+                      </div>
+                    </motion.div>
+
+                    {/* Quick Action Suggestion Pills with Soft Stagger */}
+                    <motion.div 
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.28, delay: 0.16, ease: [0.23, 1, 0.32, 1] }}
+                      className="flex flex-wrap items-center justify-center gap-2 max-w-xl"
+                    >
+                      {[
+                        { label: 'Transacciones', query: '¿En qué he gastado más este mes?', icon: Receipt },
+                        { label: 'Ahorros', query: '¿Cuál es mi saldo de ahorro y capacidad de reserva?', icon: Coins },
+                        { label: 'Metas', query: '¿Cómo van mis metas de ahorro?', icon: Target },
+                        { label: 'Score', query: '¿Cuál es mi Score Financiero?', icon: Activity },
+                        { label: 'Reportes', query: 'Genera un informe rápido de mi patrimonio', icon: PieChart }
+                      ].map((pill, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => sendChatMessage(pill.query)}
+                          className="px-4 py-2 rounded-2xl bg-surface hover:bg-surface-hover border border-border text-text-primary text-xs font-medium flex items-center gap-2 shadow-xs transition-all cursor-pointer active:scale-[0.97]"
+                        >
+                          <pill.icon size={14} className="text-brand" />
+                          <span>{pill.label}</span>
+                        </button>
+                      ))}
+                    </motion.div>
+                  </div>
+                ) : (
+                  /* Conversation Thread View */
+                  <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative pb-1">
+                    {/* Thread Header (Left: Quick nav icons, Right: + Nueva consulta) */}
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2.5 px-0 shrink-0">
+                      <div className="flex items-center gap-1.5 bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-1.5 shadow-lg shadow-black/5">
+                        <button
+                          onClick={() => setActiveTab('timeline')}
+                          className="p-1.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                          title="Ver Timeline de movimientos"
+                        >
+                          <Clock size={15} className="text-brand" />
+                          <span className="hidden sm:inline">Timeline</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('reports')}
+                          className="p-1.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                          title="Ver Reportes financieros"
+                        >
+                          <PieChart size={15} className="text-brand" />
+                          <span className="hidden sm:inline">Reportes</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('goals')}
+                          className="p-1.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                          title="Ver Score financiero"
+                        >
+                          <Activity size={15} className="text-brand" />
+                          <span className="hidden sm:inline">Score</span>
+                        </button>
+                        <div className="w-[1px] h-4 bg-border/80 mx-0.5" />
+                        <button
+                          onClick={() => setShowAddModal(true)}
+                          className="p-1.5 rounded-xl bg-brand/10 hover:bg-brand/20 text-brand transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+                          title="Crear nuevo registro rápido"
+                        >
+                          <Plus size={15} />
+                          <span>Nuevo</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => setChatMessages([])}
+                        className="text-xs text-brand font-medium hover:underline cursor-pointer"
+                      >
+                        + Nueva consulta
+                      </button>
+                    </div>
+
+                    {/* Animated Message Thread Feed with Scroll Listener */}
+                    <div 
+                      ref={chatContainerRef}
+                      onScroll={handleChatScroll}
+                      className="flex-1 overflow-y-auto space-y-4 pr-1 py-3"
+                    >
+                      {chatMessages.map(msg => (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                          className={cn(
+                            "group flex gap-2.5 max-w-3xl items-start",
+                            msg.role === 'user' ? "ml-auto flex-row-reverse" : "mr-auto"
+                          )}
+                        >
+                          {msg.role === 'assistant' ? (
+                            <div className="w-8 h-8 rounded-xl bg-surface border border-border/80 p-1 flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                              <img src="/logo.png" alt="Hera Logo" className="w-full h-full object-contain" />
+                            </div>
+                          ) : (
+                            <img 
+                              src={profile?.photoURL || user?.photoURL || "/defaultuser.png"} 
+                              alt="Usuario" 
+                              className="w-8 h-8 rounded-xl object-cover border border-border shrink-0 mt-0.5" 
+                            />
+                          )}
+
+                          <div className={cn(
+                            "p-4 rounded-2xl text-xs leading-relaxed space-y-3 max-w-xl relative",
+                            msg.role === 'user'
+                              ? "bg-brand text-white rounded-tr-none shadow-sm"
+                              : "bg-surface border border-border text-text-primary rounded-tl-none shadow-sm"
+                          )}>
+                            {msg.role === 'assistant' ? (
+                              <>
+                                <FormattedMarkdown content={msg.content} />
+
+                                {/* 1. Interactive Financial Operation Confirmation Card */}
+                                {(msg.type === 'pending_action' || msg.data?.actionType) && msg.data && (
+                                  <div className="mt-3 bg-bg/90 border border-brand/40 p-4 rounded-2xl space-y-3 shadow-md">
+                                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                                      <div className="flex items-center gap-2">
+                                        <div className={cn(
+                                          "w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0",
+                                          msg.data.type === 'income' ? "bg-success/15 text-success" : "bg-error/15 text-error"
+                                        )}>
+                                          {msg.data.type === 'income' ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
+                                        </div>
+                                        <div>
+                                          <h4 className="font-semibold text-xs text-text-primary">
+                                            {msg.data.actionType === 'create_goal' ? 'Nueva Meta de Ahorro' : (msg.data.type === 'income' ? 'Registro de Ingreso' : 'Registro de Gasto')}
+                                          </h4>
+                                          <span className="text-[10px] text-text-secondary">Operación pendiente de confirmación</span>
+                                        </div>
+                                      </div>
+                                      <span className={cn(
+                                        "px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase",
+                                        msg.actionState === 'confirmed' ? "bg-success/20 text-success" : msg.actionState === 'cancelled' ? "bg-text-dim/20 text-text-dim" : "bg-brand/20 text-brand"
+                                      )}>
+                                        {msg.actionState === 'confirmed' ? 'Confirmado' : msg.actionState === 'cancelled' ? 'Cancelado' : 'Pendiente'}
+                                      </span>
+                                    </div>
+
+                                    {/* Operation Details Grid */}
+                                    <div className="grid grid-cols-2 gap-2 text-xs bg-surface/80 p-3 rounded-xl border border-border/60">
+                                      <div>
+                                        <span className="text-[10px] text-text-dim block uppercase font-mono">Importe</span>
+                                        <span className="font-bold font-mono text-sm text-text-primary">
+                                          {formatCompactNumber(msg.data.amount || msg.data.targetAmount)}€
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[10px] text-text-dim block uppercase font-mono">Categoría / Nombre</span>
+                                        <span className="font-medium text-text-primary">{msg.data.category || msg.data.name}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[10px] text-text-dim block uppercase font-mono">Cuenta / Fuente</span>
+                                        <span className="font-medium text-text-secondary">{msg.data.accountName || 'Cuenta Principal'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[10px] text-text-dim block uppercase font-mono">Descripción</span>
+                                        <span className="font-medium text-text-secondary">{msg.data.description || msg.data.name || 'Sin detalles'}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* 2 Action Buttons: Confirm & Cancel */}
+                                    {msg.actionState === 'confirmed' ? (
+                                      <div className="p-2.5 bg-success/15 border border-success/30 rounded-xl text-xs text-success font-medium flex items-center justify-center gap-1.5">
+                                        <CheckCircle2 size={16} />
+                                        <span>Operación ejecutada y guardada en tus transacciones</span>
+                                      </div>
+                                    ) : msg.actionState === 'cancelled' ? (
+                                      <div className="p-2.5 bg-bg border border-border rounded-xl text-xs text-text-dim font-medium text-center">
+                                        Operación cancelada. No se hicieron cambios en tus cuentas.
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleConfirmChatAction(msg.id, msg.data)}
+                                          disabled={actionProcessing === msg.id}
+                                          className="flex-1 px-3.5 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-sm transition-all duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-50"
+                                        >
+                                          {actionProcessing === msg.id ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                                          <span>Confirmar y Proceder</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCancelChatAction(msg.id)}
+                                          disabled={actionProcessing === msg.id}
+                                          className="px-3.5 py-2 bg-bg border border-border text-text-secondary hover:text-text-primary rounded-xl text-xs font-medium transition-all duration-150 active:scale-[0.97] cursor-pointer"
+                                        >
+                                          <span>Cancelar</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* 2. Progress Bar Widget */}
+                                {msg.type === 'progress' && msg.data && (
+                                  <div className="mt-3 bg-bg/90 border border-brand/40 p-4 rounded-2xl space-y-2.5 shadow-md">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-xs text-text-primary flex items-center gap-1.5">
+                                        <Target size={15} className="text-brand" />
+                                        {msg.data.title || 'Progreso de Ahorro'}
+                                      </span>
+                                      <span className="text-[11px] font-mono font-bold text-brand bg-brand/10 border border-brand/20 px-2 py-0.5 rounded-full">
+                                        {Math.round(((msg.data.current || 0) / (msg.data.target || 1)) * 100)}%
+                                      </span>
+                                    </div>
+
+                                    {/* Animated Progress Bar */}
+                                    <div className="w-full bg-surface-hover h-2.5 rounded-full overflow-hidden border border-border/60">
+                                      <motion.div
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${Math.min(100, Math.round(((msg.data.current || 0) / (msg.data.target || 1)) * 100))}%` }}
+                                        transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
+                                        className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full shadow-xs"
+                                      />
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[11px] font-mono text-text-secondary pt-0.5">
+                                      <span>Actual: {formatCompactNumber(msg.data.current || 0)} {msg.data.unit || '€'}</span>
+                                      <span>Objetivo: {formatCompactNumber(msg.data.target || 0)} {msg.data.unit || '€'}</span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 3. Mini Chart Widget */}
+                                {msg.type === 'chart' && msg.data && msg.data.data && (
+                                  <div className="mt-3 bg-bg/90 border border-border p-4 rounded-2xl space-y-2 shadow-md">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-xs text-text-primary flex items-center gap-1.5">
+                                        <PieChart size={15} className="text-brand" />
+                                        {msg.data.title || 'Gráfico de Análisis'}
+                                      </span>
+                                    </div>
+                                    <div className="h-44 w-full pt-2">
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={msg.data.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                          <XAxis dataKey="label" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                          <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `${formatCompactNumber(v)}`} />
+                                          <Tooltip 
+                                            formatter={(value: any) => [`${formatCompactNumber(Number(value))} €`, 'Importe']}
+                                            contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: '1px solid #1e293b', fontSize: '11px', color: '#f8fafc' }}
+                                          />
+                                          <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                                            {msg.data.data.map((_: any, idx: number) => (
+                                              <Cell key={idx} fill={idx % 2 === 0 ? 'var(--color-brand, #3b82f6)' : '#10b981'} />
+                                            ))}
+                                          </Bar>
+                                        </BarChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 4. Interactive Table Widget */}
+                                {msg.type === 'table' && msg.data && (
+                                  <div className="mt-3 bg-bg/90 border border-border p-3.5 rounded-2xl space-y-2.5 shadow-md overflow-hidden">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-semibold text-xs text-text-primary flex items-center gap-1.5">
+                                        <Receipt size={15} className="text-brand" />
+                                        {msg.data.title || 'Tabla de Resumen'}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const csvContent = "data:text/csv;charset=utf-8," + [msg.data.columns.join(','), ...msg.data.rows.map((r: any) => r.join(','))].join('\n');
+                                          const encodedUri = encodeURI(csvContent);
+                                          const link = document.createElement('a');
+                                          link.setAttribute('href', encodedUri);
+                                          link.setAttribute('download', `Reporte_Hera_${Date.now()}.csv`);
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                          showToast('CSV exportado correctamente', 'success');
+                                        }}
+                                        className="px-2.5 py-1 rounded-xl bg-surface border border-border text-[11px] text-text-secondary hover:text-brand transition-colors cursor-pointer flex items-center gap-1 font-medium"
+                                      >
+                                        <span>Exportar CSV</span>
+                                      </button>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-[11px] text-left border-collapse">
+                                        <thead>
+                                          <tr className="border-b border-border/80 text-text-dim uppercase font-mono text-[10px]">
+                                            {msg.data.columns?.map((col: string, idx: number) => (
+                                              <th key={idx} className="pb-2 font-bold px-2">{col}</th>
+                                            ))}
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border/40">
+                                          {msg.data.rows?.map((row: any[], rIdx: number) => (
+                                            <tr key={rIdx} className="hover:bg-surface/50 transition-colors">
+                                              {row.map((cell: any, cIdx: number) => (
+                                                <td key={cIdx} className="py-2 px-2 text-text-primary font-medium">
+                                                  {cell}
+                                                </td>
+                                              ))}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 5. Downloadable Document Card Widget */}
+                                {msg.type === 'document' && msg.data && (
+                                  <div className="mt-3 bg-bg/90 border border-brand/40 p-4 rounded-2xl space-y-3 shadow-md flex items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-2xl bg-brand/10 border border-brand/30 flex items-center justify-center text-brand shrink-0">
+                                        <Printer size={20} />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-semibold text-xs text-text-primary">{msg.data.title || 'Informe Ejecutivo PDF'}</h4>
+                                        <div className="flex items-center gap-2 text-[10px] text-text-secondary font-mono mt-0.5">
+                                          <span className="bg-brand/20 text-brand px-1.5 py-0.2 rounded font-bold">{msg.data.format || 'PDF'}</span>
+                                          <span>{msg.data.size || '340 KB'}</span>
+                                          <span>• {msg.data.date || 'Hoy'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        window.print();
+                                        showToast('Abriendo ventana de impresión / PDF...', 'info');
+                                      }}
+                                      className="px-3.5 py-2 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all active:scale-[0.97] cursor-pointer shrink-0"
+                                    >
+                                      <Printer size={14} />
+                                      <span>Descargar / Imprimir</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="whitespace-pre-wrap">{msg.content}</div>
+                            )}
+                          </div>
+
+                          {/* Edit Badge for User Messages (Always Visible) */}
+                          {msg.role === 'user' && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditMessage(msg.id, msg.content)}
+                              className="self-center p-1.5 rounded-xl bg-surface border border-border text-text-secondary hover:text-brand hover:border-brand/40 transition-all cursor-pointer shadow-xs shrink-0"
+                              title="Editar este mensaje"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          )}
+                        </motion.div>
+                      ))}
+                      {chatLoading && (
+                        <motion.div 
+                          initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                          className="flex gap-3 items-start text-xs max-w-lg"
+                        >
+                          <div className="w-8 h-8 rounded-2xl bg-surface border border-border p-1 flex items-center justify-center shrink-0 shadow-xs mt-0.5 relative">
+                            <img src="/logo.png" alt="Hera Logo" className="w-full h-full object-contain" />
+                          </div>
+
+                          <div className="bg-surface border border-border/80 p-3.5 rounded-2xl space-y-2 shadow-xs text-xs">
+                            <div className="flex items-center gap-3">
+                              {/* 3 Emil-Style Animated Bouncing Dots (No badge background) */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" />
+                              </div>
+
+                              <span className="font-medium text-text-primary text-xs font-sans tracking-tight">
+                                {chatThinkingStepTexts[chatThinkingStepIndex]}
+                              </span>
+                            </div>
+
+                            {/* Live Stream Reasoning Tokens Box (if active) */}
+                            {currentReasoningText && (
+                              <div className="bg-bg/80 border border-border/60 p-2.5 rounded-xl space-y-1 font-mono text-[11px] mt-1">
+                                <div className="flex items-center justify-between text-[10px] text-brand font-semibold tracking-wider border-b border-border/40 pb-1">
+                                  <span>Razonamiento Hera AI</span>
+                                  <span>{currentReasoningText.length} tokens</span>
+                                </div>
+                                <p className="whitespace-pre-wrap leading-relaxed text-text-secondary text-[11px] max-h-32 overflow-y-auto pt-0.5">
+                                  {currentReasoningText}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                      <div ref={chatBottomRef} />
+                    </div>
+
+                    {/* Scroll to Bottom Arrow Button (when scrolled up) */}
+                    <AnimatePresence>
+                      {showScrollBottom && (
+                        <motion.button
+                          initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.9 }}
+                          onClick={scrollToBottom}
+                          className="absolute bottom-24 left-1/2 -translate-x-1/2 z-40 p-2.5 rounded-full bg-surface border border-border text-brand shadow-xl hover:bg-surface-hover cursor-pointer transition-all flex items-center justify-center active:scale-95"
+                          title="Bajar al final"
+                        >
+                          <ChevronDown size={18} />
+                        </motion.button>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Fixed / Sticky Bottom Chat Input Card */}
+                    <div className="sticky bottom-0 z-30 pt-1 shrink-0">
+                      <div className="w-full max-w-4xl mx-auto bg-surface border border-border/80 rounded-3xl p-3.5 sm:p-4 shadow-2xl space-y-2.5 text-left">
+                        {/* Real-time Voice Waveform Visualizer (Pure Wave Bars) */}
+                        <AnimatePresence>
+                          {isRecording && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0, scale: 0.96 }}
+                              animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                              exit={{ opacity: 0, height: 0, scale: 0.96 }}
+                              transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+                              className="flex items-center justify-center p-2 rounded-2xl mb-2 bg-brand/10 border border-brand/20 backdrop-blur-md"
+                            >
+                              <div className="flex items-center justify-center gap-1.5 h-7 px-2 w-full">
+                                {audioLevels.map((lvl, idx) => (
+                                  <motion.div
+                                    key={idx}
+                                    animate={{ height: `${lvl}%` }}
+                                    transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                                    className="w-1.5 bg-brand rounded-full shadow-xs shadow-brand/50"
+                                    style={{ minHeight: '6px' }}
+                                  />
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                        <div className="relative flex items-center min-h-[38px]">
+                          {!chatInput && (
+                            <div className="absolute inset-0 pointer-events-none text-sm text-text-dim font-sans overflow-hidden py-1 px-0 flex items-center">
+                              <AnimatePresence mode="wait">
+                                <motion.span
+                                  key={placeholderIndex}
+                                  initial={{ opacity: 0, y: 5 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  exit={{ opacity: 0, y: -5 }}
+                                  transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                                  className="block truncate leading-tight"
+                                >
+                                  {PROMPT_EXAMPLES[placeholderIndex]}
+                                </motion.span>
+                              </AnimatePresence>
+                            </div>
+                          )}
+                          <textarea
+                            value={chatInput}
+                            onChange={e => setChatInput(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                if (chatInput.trim()) sendChatMessage(chatInput);
+                              }
+                            }}
+                            rows={1}
+                            className="w-full bg-transparent text-sm text-text-primary focus:outline-none resize-none font-sans relative z-10 py-1 leading-tight"
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                          <div className="flex items-center gap-2">
+                            <label className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary cursor-pointer transition-colors" title="Escanear recibo">
+                              <Paperclip size={18} />
+                              <input type="file" accept="image/*" className="hidden" onChange={handleReceiptUpload} />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                              className={cn(
+                                "p-2.5 rounded-xl transition-colors cursor-pointer",
+                                isRecording ? "bg-error text-white animate-pulse" : "hover:bg-surface-hover text-text-secondary hover:text-text-primary"
+                              )}
+                              title="Dictar por voz"
+                            >
+                              {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowHistoryModal(true)}
+                              className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary transition-colors cursor-pointer"
+                              title="Historial de consultas"
+                            >
+                              <History size={18} />
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => { if (chatInput.trim()) sendChatMessage(chatInput); }}
+                            disabled={!chatInput.trim() || chatLoading}
+                            className="px-4 py-2 bg-brand hover:bg-brand-hover text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow-md disabled:opacity-40 transition-all active:scale-[0.97] cursor-pointer"
+                          >
+                            {chatLoading ? <Sparkles size={14} className="animate-spin" /> : <Send size={14} />}
+                            <span>Consultar</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'timeline' && (
+              /* --- TIMELINE TAB --- */
+              <div className="space-y-4">
+                <div className="bg-surface border border-border p-5 rounded-3xl">
+                  <h2 className="text-xl font-serif font-semibold">Transacciones</h2>
+                  <p className="text-xs text-text-secondary">Historia cronológica diaria de tus ingresos y gastos reales</p>
+                </div>
+
+                {/* Timeline Filters Bar (Date Range & Far-Right Filter Icon) */}
+                <div className="bg-surface border border-border p-4 rounded-3xl space-y-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        value={timelineStartDate}
+                        onChange={e => {
+                          setTimelineStartDate(e.target.value);
+                          loadUserData({ startDate: e.target.value });
+                        }}
+                        className="bg-bg border border-border rounded-xl px-2.5 py-1.5 text-text-primary focus:outline-none cursor-pointer"
+                      />
+                      <span className="text-text-dim">-</span>
+                      <input
+                        type="date"
+                        value={timelineEndDate}
+                        onChange={e => {
+                          setTimelineEndDate(e.target.value);
+                          loadUserData({ endDate: e.target.value });
+                        }}
+                        className="bg-bg border border-border rounded-xl px-2.5 py-1.5 text-text-primary focus:outline-none cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Filter Icon Button Pushed to the Far Right */}
+                    <button
+                      type="button"
+                      onClick={() => setShowTimelineFilters(!showTimelineFilters)}
+                      title="Filtros"
+                      className={cn(
+                        "p-2.5 rounded-xl border flex items-center justify-center cursor-pointer transition-all relative shrink-0 ml-auto",
+                        showTimelineFilters || timelineCategories.length > 0 || timelineType !== 'all' || timelineMinAmount > 0 || timelineMaxAmount < 1000
+                          ? "bg-brand/15 border-brand text-brand shadow-xs"
+                          : "bg-bg border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                      )}
+                    >
+                      <SlidersHorizontal size={16} />
+                      {(timelineCategories.length > 0 || timelineType !== 'all' || timelineMinAmount > 0 || timelineMaxAmount < 1000) && (
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand ring-2 ring-surface animate-pulse" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Collapsible Filters Drawer */}
+                  {showTimelineFilters && (
+                    <div className="pt-3 border-t border-border/70 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                      {/* 1. Filtro por Tipo de Transacción (Ingreso / Gasto) SIN EMOJIS */}
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+                          Tipo de Movimiento
+                        </label>
+                        <div className="flex gap-2">
+                          {[
+                            { id: 'all', label: 'Todos' },
+                            { id: 'expense', label: 'Gastos' },
+                            { id: 'income', label: 'Ingresos' }
+                          ].map(t => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => {
+                                setTimelineType(t.id as any);
+                                loadUserData({ type: t.id });
+                              }}
+                              className={cn(
+                                "px-3.5 py-1.5 rounded-xl text-xs font-medium border transition-all cursor-pointer",
+                                timelineType === t.id
+                                  ? "bg-brand text-white border-brand shadow-xs"
+                                  : "bg-bg border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                              )}
+                            >
+                              {t.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 2. Filtro de Categoría con Buscador y Selección Múltiple */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                            <span>Categorías</span>
+                            {timelineCategories.length > 0 && (
+                              <span className="text-[10px] bg-brand/20 text-brand px-1.5 py-0.5 rounded-full font-mono">
+                                {timelineCategories.length} seleccionadas
+                              </span>
+                            )}
+                          </label>
+                          {timelineCategories.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTimelineCategories([]);
+                                setTimelineCategorySearch('');
+                                loadUserData({ category: 'all' });
+                              }}
+                              className="text-[10px] text-brand hover:underline font-medium cursor-pointer"
+                            >
+                              Limpiar Selección
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Buscador de Categoría */}
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
+                          <input
+                            type="text"
+                            value={timelineCategorySearch}
+                            onChange={e => setTimelineCategorySearch(e.target.value)}
+                            placeholder="Buscar categoría (ej. Restaurantes, Salario, Ropa)..."
+                            className="w-full bg-bg border border-border rounded-xl pl-9 pr-8 py-2 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                          />
+                          {timelineCategorySearch && (
+                            <button
+                              type="button"
+                              onClick={() => setTimelineCategorySearch('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-primary p-0.5 cursor-pointer"
+                            >
+                              <X size={12} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Multi-Select Categoría Chips */}
+                        <div className="flex flex-wrap gap-1.5 pt-0.5 max-h-36 overflow-y-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTimelineCategories([]);
+                              loadUserData({ category: 'all' });
+                            }}
+                            className={cn(
+                              "px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border",
+                              timelineCategories.length === 0
+                                ? "bg-brand text-white border-brand shadow-xs"
+                                : "bg-bg border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                            )}
+                          >
+                            Todas las Categorías
+                          </button>
+                          {[
+                            'Restaurantes',
+                            'Supermercado',
+                            'Ropa & Moda',
+                            'Transporte',
+                            'Servicios',
+                            'Salario',
+                            'Ocio & Entretenimiento',
+                            'Salud',
+                            'Tecnología',
+                            'General'
+                          ]
+                            .filter(cat => cat.toLowerCase().includes(timelineCategorySearch.toLowerCase()))
+                            .map(catName => {
+                              const isSelected = timelineCategories.includes(catName);
+                              return (
+                                <button
+                                  key={catName}
+                                  type="button"
+                                  onClick={() => {
+                                    let next: string[];
+                                    if (isSelected) {
+                                      next = timelineCategories.filter(c => c !== catName);
+                                    } else {
+                                      next = [...timelineCategories, catName];
+                                    }
+                                    setTimelineCategories(next);
+                                    loadUserData({ category: next.length > 0 ? next.join(',') : 'all' });
+                                  }}
+                                  className={cn(
+                                    "px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border flex items-center gap-1",
+                                    isSelected
+                                      ? "bg-brand text-white border-brand shadow-xs font-semibold"
+                                      : "bg-bg border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+                                  )}
+                                >
+                                  {isSelected && <Check size={12} />}
+                                  <span>{catName}</span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      {/* 3. Rango de Montos Slider Bar */}
+                      <div className="space-y-2 pt-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+                            Rango de Montos (€)
+                          </label>
+                          <span className="text-xs font-mono font-semibold text-brand">
+                            {timelineMinAmount}€ — {timelineMaxAmount >= 1000 ? '1000€+' : `${timelineMaxAmount}€`}
+                          </span>
+                        </div>
+
+                        <div className="space-y-3 bg-bg border border-border p-3.5 rounded-2xl">
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] text-text-dim font-mono">
+                              <span>Mínimo: {timelineMinAmount}€</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1000"
+                              step="10"
+                              value={timelineMinAmount}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                setTimelineMinAmount(val);
+                                loadUserData({ minAmount: val });
+                              }}
+                              className="w-full accent-brand cursor-pointer"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] text-text-dim font-mono">
+                              <span>Máximo: {timelineMaxAmount >= 1000 ? 'Sin Límite (1000€+)' : `${timelineMaxAmount}€`}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="10"
+                              max="1000"
+                              step="20"
+                              value={timelineMaxAmount}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                setTimelineMaxAmount(val);
+                                loadUserData({ maxAmount: val });
+                              }}
+                              className="w-full accent-brand cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Restablecer Filtros Button */}
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTimelineType('all');
+                            setTimelineCategories([]);
+                            setTimelineCategorySearch('');
+                            setTimelineMinAmount(0);
+                            setTimelineMaxAmount(1000);
+                            loadUserData({ type: 'all', category: 'all', minAmount: 0, maxAmount: 1000 });
+                          }}
+                          className="px-3 py-1.5 bg-bg border border-border text-text-secondary hover:text-text-primary rounded-xl text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <RefreshCw size={12} />
+                          <span>Restablecer Filtros</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  {timeline.map((dayGroup, idx) => (
+                    <div key={idx} className="bg-surface border border-border p-4 rounded-3xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                        <span className="text-xs font-mono font-bold text-brand uppercase">{dayGroup.date}</span>
+                        <span className="text-[11px] text-text-dim">{dayGroup.items?.length || 0} movimientos</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {dayGroup.items?.map((item: any) => (
+                          <div key={item.id} className="p-3 bg-bg border border-border/50 rounded-2xl flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs",
+                                item.type === 'income' ? "bg-success/15 text-success" : "bg-error/15 text-error"
+                              )}>
+                                {item.type === 'income' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-text-primary">{item.description || item.category}</p>
+                                <p className="text-[10px] text-text-secondary">{item.accountName || 'Cuenta'} • {item.category}</p>
+                              </div>
+                            </div>
+                            <span className={cn(
+                              "font-mono font-semibold text-xs",
+                              item.type === 'income' ? "text-success" : "text-text-primary"
+                            )}>
+                              {item.type === 'income' ? '+' : '-'}{item.amount}€
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'accounts' && (
+              /* --- ACCOUNTS & CARDS MANAGEMENT TAB --- */
+              <div className="space-y-6">
+                <div className="bg-surface border border-border p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-serif font-semibold">Gestión de Cuentas & Tarjetas</h2>
+                    <p className="text-xs text-text-secondary">Administra tus tarjetas de crédito, cuentas bancarias, efectivo y cripto</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAddAccountModal(true)}
+                    className="px-4 py-2 bg-brand text-white rounded-2xl text-xs font-medium flex items-center gap-2 shadow-sm hover:bg-brand-hover transition-colors cursor-pointer self-start sm:self-auto"
+                  >
+                    <Plus size={16} />
+                    <span>Nueva Cuenta / Tarjeta</span>
+                  </button>
+                </div>
+
+                {/* Accounts Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {accounts.map(acc => (
+                    <div 
+                      key={acc.id} 
+                      onClick={() => handleOpenAccountDetail(acc)}
+                      className="bg-surface border border-border hover:border-brand/60 p-5 rounded-3xl space-y-4 shadow-sm relative overflow-hidden group cursor-pointer transition-all active:scale-[0.98]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-brand/10 text-brand flex items-center justify-center font-bold">
+                            {acc.type === 'bank' && <Building2 size={20} />}
+                            {acc.type === 'card' && <CreditCard size={20} />}
+                            {acc.type === 'cash' && <Wallet size={20} />}
+                            {acc.type === 'crypto' && <Coins size={20} />}
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-sm text-text-primary group-hover:text-brand transition-colors">{acc.name}</h3>
+                            <span className="text-[10px] font-mono text-text-dim uppercase tracking-wider">{acc.type}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => handleDeleteAccount(acc.id, e)}
+                          className="p-1.5 rounded-xl hover:bg-error/10 text-text-dim hover:text-error transition-colors cursor-pointer"
+                          title="Eliminar cuenta"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1 pt-2 border-t border-border/60">
+                        <span className="text-[11px] text-text-secondary">Saldo Disponible</span>
+                        <p className="text-2xl font-bold font-mono text-text-primary">{acc.balance} {acc.currency || 'EUR'}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'reports' && (
+              /* --- REPORTS STUDIO TAB (DESIGN ENGINEERING POLISHED) --- */
+              <div className="space-y-6 print:space-y-2">
+                {/* Fixed Header Bar (Always Visible) */}
+                <div className="bg-surface border border-border p-5 rounded-3xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 print:hidden">
+                  <div>
+                    <h2 className="text-xl font-serif font-semibold">Centro Financiero & Reportes Studio</h2>
+                    <p className="text-xs text-text-secondary">Informe ejecutivo con Inteligencia Artificial en tiempo real, gráficos de barras y métricas en formato abreviado (k, M)</p>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button 
+                      type="button"
+                      onClick={fetchAiReport} 
+                      disabled={reportLoading}
+                      className="px-3.5 py-2 bg-bg border border-border text-text-primary rounded-xl text-xs font-medium flex items-center gap-1.5 hover:bg-surface-hover transition-all duration-150 active:scale-[0.97] cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw size={14} className={cn(reportLoading && "animate-spin text-brand")} />
+                      <span>{reportLoading ? "Analizando..." : "Regenerar Informe IA"}</span>
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => window.print()} 
+                      className="px-4 py-2 bg-brand text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm hover:bg-brand-hover transition-all duration-150 active:scale-[0.97] cursor-pointer"
+                    >
+                      <Printer size={14} />
+                      <span>Imprimir PDF</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* AI LOADING ANIMATION STATE */}
+                {reportLoading ? (
+                  <div className="bg-surface border border-border p-12 rounded-3xl flex flex-col items-center justify-center text-center space-y-6 min-h-[420px] shadow-sm animate-in fade-in duration-300">
+                    <div className="relative flex items-center justify-center">
+                      <div className="absolute w-24 h-24 rounded-full bg-brand/15 animate-ping opacity-75" />
+                      <div className="w-20 h-20 rounded-3xl bg-bg border border-brand/30 flex items-center justify-center shadow-lg relative z-10">
+                        <HeraWalletLogo size="lg" showText={false} />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-brand animate-bounce" />
+                    </div>
+
+                    <div className="space-y-1.5 max-w-md">
+                      <p className="text-sm font-semibold text-text-primary transition-all duration-300 font-mono">
+                        {reportStepTexts[reportStepIndex]}
+                      </p>
+                      <p className="text-[11px] text-text-secondary">
+                        Procesando datos reales de tus cuentas y generando informe estratégico con Inteligencia Artificial
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* RICH EXECUTIVE BENTO GRID REPORT TEMPLATE */
+                  <div className="space-y-6 animate-in fade-in duration-300">
+                    {/* Header KPI Cards (Formatted in k, M) */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 print:grid-cols-2">
+                      <div className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-brand/40 transition-colors">
+                        <span className="text-[11px] text-text-secondary font-medium">Patrimonio Neto</span>
+                        <p className="text-2xl font-bold font-mono text-brand">
+                          {formatCompactNumber(overview?.summary?.totalBalance)}€
+                        </p>
+                      </div>
+                      <div className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-success/40 transition-colors">
+                        <span className="text-[11px] text-text-secondary font-medium">Ingresos Totales</span>
+                        <p className="text-2xl font-bold font-mono text-success">
+                          +{formatCompactNumber(overview?.summary?.totalIncome)}€
+                        </p>
+                      </div>
+                      <div className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-error/40 transition-colors">
+                        <span className="text-[11px] text-text-secondary font-medium">Gastos Totales</span>
+                        <p className="text-2xl font-bold font-mono text-text-primary">
+                          -{formatCompactNumber(overview?.summary?.totalExpense)}€
+                        </p>
+                      </div>
+                      <div className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-brand/40 transition-colors">
+                        <span className="text-[11px] text-text-secondary font-medium">Ahorro Proyectado (30d)</span>
+                        <p className="text-2xl font-bold font-mono text-brand flex items-center gap-1">
+                          <TrendingUp size={18} />
+                          <span>+{formatCompactNumber(aiReportData?.projectedSavings30d || 280)}€</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* AI Executive Analysis Bento Card */}
+                    {aiReportData && (
+                      <div className="bg-surface border border-border p-6 rounded-3xl space-y-6">
+                        <div className="flex items-center justify-between border-b border-border/80 pb-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-xl bg-brand/10 text-brand">
+                              <Sparkles size={20} />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-base text-text-primary">Diagnóstico Hera</h3>
+                              <p className="text-xs text-text-secondary">Análisis financiero ejecutivo en tiempo real por Hera AI</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 bg-success/15 border border-success/30 px-3 py-1.5 rounded-full">
+                            <ShieldCheck size={14} className="text-success" />
+                            <span className="text-xs font-mono font-bold text-success">
+                              HEALTH SCORE: {aiReportData.healthScore || 88}/100
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Executive Summary Paragraph */}
+                        <div className="p-4 bg-bg border border-border rounded-2xl">
+                          <p className="text-xs text-text-primary leading-relaxed">
+                            {aiReportData.executiveSummary}
+                          </p>
+                        </div>
+
+                        {/* Top Insights & Recommendations */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                          {/* Top Insights */}
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-semibold text-text-primary flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                              <Activity size={14} className="text-brand" />
+                              <span>Hallazgos Clave</span>
+                            </h4>
+                            <div className="space-y-2">
+                              {aiReportData.topInsights?.map((insight: string, idx: number) => (
+                                <div key={idx} className="p-3 bg-bg border border-border/60 rounded-xl text-xs text-text-secondary flex items-start gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-brand shrink-0 mt-1.5" />
+                                  <span>{insight}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Recommendations with Action Button */}
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-semibold text-text-primary flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+                              <Lightbulb size={14} className="text-brand" />
+                              <span>Recomendaciones Estratégicas</span>
+                            </h4>
+                            <div className="space-y-2">
+                              {aiReportData.recommendations?.map((rec: string, idx: number) => (
+                                <div key={idx} className="p-3.5 bg-bg border border-border/60 rounded-xl text-xs space-y-2.5">
+                                  <div className="flex items-start gap-2 text-text-secondary">
+                                    <CheckCircle2 size={15} className="text-success shrink-0 mt-0.5" />
+                                    <span className="text-text-primary font-medium">{rec}</span>
+                                  </div>
+                                  <div className="flex justify-end pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExecuteRecommendationWithHera(rec)}
+                                      className="px-3 py-1.5 bg-brand/10 hover:bg-brand/20 border border-brand/30 text-brand rounded-xl text-[11px] font-semibold flex items-center gap-1.5 transition-all duration-150 active:scale-[0.97] cursor-pointer"
+                                    >
+                                      <Sparkles size={12} />
+                                      <span>Ejecutar con Hera</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Financial Distribution & Chart Section */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      {/* Bar Chart: Ingresos vs Gastos vs Ahorro (Fixed & Polished) */}
+                      <div className="lg:col-span-2 bg-surface border border-border p-6 rounded-3xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                          <div className="flex items-center gap-2">
+                            <PieChart size={18} className="text-brand" />
+                            <h3 className="font-semibold text-sm text-text-primary">Comparativa Global del Periodo</h3>
+                          </div>
+                          <span className="text-[11px] font-mono text-text-dim">Valores en k / M</span>
+                        </div>
+
+                        <div className="h-64 w-full pt-2 min-h-[220px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={[
+                              { name: 'Ingresos', amount: Number(overview?.summary?.totalIncome) || 3300, fill: '#10B981' },
+                              { name: 'Gastos', amount: Number(overview?.summary?.totalExpense) || 1511.89, fill: '#EF4444' },
+                              { name: 'Ahorro Neto', amount: Math.max(0, (Number(overview?.summary?.totalIncome) || 3300) - (Number(overview?.summary?.totalExpense) || 1511.89)), fill: '#F59E0B' }
+                            ]} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                              <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
+                              <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val: any) => `${formatCompactNumber(val)}€`} />
+                              <Tooltip 
+                                cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                                contentStyle={{ backgroundColor: '#18181B', borderColor: '#27272A', borderRadius: '12px', fontSize: '12px', color: '#FFF' }} 
+                                formatter={(val: any) => [`${formatCompactNumber(val)}€ (${val}€)`, 'Importe']}
+                              />
+                              <Bar dataKey="amount" radius={[8, 8, 0, 0]} barSize={40}>
+                                {[
+                                  { fill: '#10B981' },
+                                  { fill: '#EF4444' },
+                                  { fill: '#F59E0B' }
+                                ].map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Accounts Distribution List */}
+                      <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                        <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                          <div className="flex items-center gap-2">
+                            <CreditCard size={18} className="text-brand" />
+                            <h3 className="font-semibold text-sm text-text-primary">Distribución por Cuentas</h3>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2.5">
+                          {accounts.map(acc => (
+                            <div key={acc.id} className="p-3 bg-bg border border-border/60 hover:border-brand/40 rounded-2xl flex items-center justify-between transition-colors">
+                              <div>
+                                <p className="text-xs font-medium text-text-primary">{acc.name}</p>
+                                <p className="text-[10px] text-text-secondary uppercase font-mono">{acc.type}</p>
+                              </div>
+                              <span className="font-mono font-semibold text-xs text-text-primary">{formatCompactNumber(acc.balance)}€</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Timeline Activity Highlights */}
+                    <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                      <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Clock size={18} className="text-brand" />
+                          <h3 className="font-semibold text-sm text-text-primary">Timeline de Movimientos Recientes del Informe</h3>
+                        </div>
+                        <span className="text-[11px] font-mono text-text-dim">Últimas Actividades</span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {timeline.slice(0, 3).flatMap(g => g.items || []).slice(0, 5).map((item: any) => (
+                          <div key={item.id} className="p-3 bg-bg border border-border/50 rounded-2xl flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "w-7 h-7 rounded-xl flex items-center justify-center font-bold text-[10px]",
+                                item.type === 'income' ? "bg-success/15 text-success" : "bg-error/15 text-error"
+                              )}>
+                                {item.type === 'income' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                              </div>
+                              <div>
+                                <p className="font-medium text-text-primary">{item.description || item.category}</p>
+                                <p className="text-[10px] text-text-secondary">{item.date} • {item.category}</p>
+                              </div>
+                            </div>
+                            <span className={cn(
+                              "font-mono font-semibold",
+                              item.type === 'income' ? "text-success" : "text-text-primary"
+                            )}>
+                              {item.type === 'income' ? '+' : '-'}{formatCompactNumber(item.amount)}€
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Professional Printable PDF Template (Visible strictly during print) */}
+                    <div className="hidden print:block space-y-6 text-black bg-white p-6 font-sans">
+                      <div className="flex items-center justify-between border-b-2 border-gray-900 pb-4">
+                        <div className="flex items-center gap-3">
+                          <img src="/logo.png" alt="Hera Logo" className="h-10 w-10 object-contain" />
+                          <div>
+                            <h1 className="text-xl font-bold font-serif text-gray-900">HeraWallet — Informe Financiero Ejecutivo</h1>
+                            <p className="text-xs text-gray-600">Emisión Oficial por Hera AI Studio para {profile?.displayName || 'Usuario'}</p>
+                          </div>
+                        </div>
+                        <div className="text-right text-xs font-mono text-gray-600">
+                          <p className="font-bold text-gray-900">FECHA: {new Date().toLocaleDateString('es-ES')}</p>
+                          <p>SCORE: {aiReportData?.healthScore || 88}/100</p>
+                        </div>
+                      </div>
+
+                      {/* PDF Summary Table */}
+                      <div className="grid grid-cols-4 gap-3 text-center">
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-[10px] uppercase text-gray-500 block font-semibold">Patrimonio Neto</span>
+                          <span className="text-base font-bold font-mono text-gray-900">{formatCompactNumber(overview?.summary?.totalBalance)}€</span>
+                        </div>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-[10px] uppercase text-gray-500 block font-semibold">Ingresos Totales</span>
+                          <span className="text-base font-bold font-mono text-green-700">+{formatCompactNumber(overview?.summary?.totalIncome)}€</span>
+                        </div>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-[10px] uppercase text-gray-500 block font-semibold">Gastos Totales</span>
+                          <span className="text-base font-bold font-mono text-red-700">-{formatCompactNumber(overview?.summary?.totalExpense)}€</span>
+                        </div>
+                        <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
+                          <span className="text-[10px] uppercase text-gray-500 block font-semibold">Proyección 30d</span>
+                          <span className="text-base font-bold font-mono text-amber-700">+{formatCompactNumber(aiReportData?.projectedSavings30d || 280)}€</span>
+                        </div>
+                      </div>
+
+                      {/* PDF Executive Narrative */}
+                      <div className="p-4 border border-gray-300 rounded-lg bg-gray-50 space-y-1.5">
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-900">Diagnóstico Hera AI</h3>
+                        <p className="text-xs leading-relaxed text-gray-800">{aiReportData?.executiveSummary}</p>
+                      </div>
+
+                      {/* PDF Insights & Recommendations Grid */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="border border-gray-300 rounded-lg p-3 space-y-2">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900">Hallazgos Clave</h4>
+                          <ul className="text-xs space-y-1 text-gray-700 list-disc list-inside">
+                            {aiReportData?.topInsights?.map((ins: string, i: number) => (
+                              <li key={i}>{ins}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="border border-gray-300 rounded-lg p-3 space-y-2">
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-gray-900">Recomendaciones</h4>
+                          <ul className="text-xs space-y-1 text-gray-700 list-disc list-inside">
+                            {aiReportData?.recommendations?.map((rec: string, i: number) => (
+                              <li key={i}>{rec}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* PDF Verification Footer */}
+                      <div className="pt-6 border-t border-gray-300 flex items-center justify-between text-[10px] text-gray-500">
+                        <p>Certificado digital de informe financiero emitido por Hera Artificial Intelligence Studio.</p>
+                        <p className="font-mono">ID: HERA-REP-{Date.now().toString(36).toUpperCase()}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'goals' && (
+              /* --- GOALS, SAVINGS & SCORE TAB --- */
+              <div className="space-y-6">
+                <div className="bg-surface border border-border p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-serif font-semibold">Score Financiero & Control de Metas y Ahorros</h2>
+                    <p className="text-xs text-text-secondary">Diagnóstico propio 0-100, planes de ahorro y fondos de emergencia</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAddGoalModal(true)}
+                    className="px-4 py-2 bg-brand text-white rounded-2xl text-xs font-medium flex items-center gap-2 shadow-sm hover:bg-brand-hover transition-colors cursor-pointer self-start sm:self-auto shrink-0"
+                  >
+                    <Plus size={16} />
+                    <span>Nueva Meta / Fondo</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Score Card */}
+                  <div className="bg-surface border border-border p-6 rounded-3xl text-center space-y-4">
+                    <span className="text-xs uppercase font-medium tracking-wider text-text-secondary">Score Hera</span>
+                    <div className="w-28 h-28 mx-auto rounded-full border-4 border-brand/30 flex items-center justify-center text-3xl font-bold font-mono text-brand bg-brand/5 shadow-inner">
+                      {overview?.healthScore || 84}/100
+                    </div>
+                    <p className="text-xs text-text-secondary">Salud financiera excelente. Fondo de emergencia cubierto en un 61%.</p>
+                  </div>
+
+                  {/* Goals Cards */}
+                  <div className="md:col-span-2 space-y-3">
+                    {goals.map(g => (
+                      <div key={g.id} className="bg-surface border border-border p-4 rounded-2xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-sm">{g.name}</span>
+                          <span className="text-xs font-mono font-bold text-brand">{g.currentAmount}€ / {g.targetAmount}€</span>
+                        </div>
+                        <div className="w-full bg-bg h-2 rounded-full overflow-hidden">
+                          <div className="bg-brand h-full rounded-full transition-all" style={{ width: `${Math.min(100, (g.currentAmount / g.targetAmount) * 100)}%` }} />
+                        </div>
+                        <div className="flex justify-between text-[11px] text-text-dim font-mono">
+                          <span>Cuota semanal recomendada: {g.weeklyTarget}€/sem</span>
+                          <span>Límite: {g.deadline}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'settings' && (
+              /* --- CONFIGURATION & SETTINGS VIEW --- */
+              <div className="space-y-6 max-w-4xl mx-auto pb-12">
+                {/* Settings Header */}
+                <div className="bg-surface border border-border p-5 rounded-3xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-brand/10 text-brand flex items-center justify-center">
+                      <Settings size={22} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-serif font-semibold text-text-primary">Configuración de la Cuenta</h2>
+                      <p className="text-xs text-text-secondary">Preferencias de moneda, reglas para el Agente IA, plan y facturación</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 1. Default Currency Settings */}
+                <div className="bg-surface border border-border p-6 rounded-3xl space-y-4 relative z-30">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <DollarSign size={18} className="text-brand" />
+                      <h3 className="font-semibold text-sm text-text-primary">Moneda Predeterminada</h3>
+                    </div>
+                    <span className="text-xs font-mono font-bold bg-brand/10 text-brand px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                      <span>{ALL_CURRENCIES.find(c => c.code === defaultCurrency)?.flag}</span>
+                      <span>{defaultCurrency} ({ALL_CURRENCIES.find(c => c.code === defaultCurrency)?.symbol || '$'})</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Selecciona la divisa principal en la que se calcularán tus balances, informes y análisis financieros automáticos.
+                  </p>
+
+                  {/* Custom Searchable Currency Dropdown with Country Flags */}
+                  <div className="relative" ref={currencyMenuRef}>
+                    <label className="text-xs font-medium text-text-secondary block mb-1.5">Seleccionar Divisa Global:</label>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setIsCurrencyDropdownOpen(prev => !prev)}
+                      className="w-full bg-bg border border-border rounded-2xl px-4 py-3 text-xs text-text-primary flex items-center justify-between hover:border-brand/60 transition-colors cursor-pointer shadow-xs"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-lg">{ALL_CURRENCIES.find(c => c.code === defaultCurrency)?.flag}</span>
+                        <span className="font-mono font-bold">{defaultCurrency}</span>
+                        <span className="text-text-secondary">— {ALL_CURRENCIES.find(c => c.code === defaultCurrency)?.name}</span>
+                      </div>
+                      <ChevronDown size={16} className={cn("text-text-dim transition-transform duration-200", isCurrencyDropdownOpen && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {isCurrencyDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                          transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+                          className="absolute left-0 right-0 top-full mt-2 bg-surface border border-border rounded-2xl p-2 shadow-2xl z-50 space-y-2 max-h-64 flex flex-col"
+                        >
+                          {/* Live Search Bar */}
+                          <div className="relative flex items-center shrink-0">
+                            <Search size={14} className="absolute left-3 text-text-dim" />
+                            <input
+                              type="text"
+                              value={currencySearchQuery}
+                              onChange={e => setCurrencySearchQuery(e.target.value)}
+                              placeholder="Buscar por país o código (ej. EUR, Cuba, México...)..."
+                              className="w-full bg-bg border border-border/80 rounded-xl pl-8 pr-3 py-2 text-xs text-text-primary placeholder:text-text-dim focus:outline-none focus:border-brand/60"
+                              autoFocus
+                            />
+                          </div>
+
+                          {/* Currency List */}
+                          <div className="flex-1 overflow-y-auto space-y-1 pr-1 min-h-0">
+                            {ALL_CURRENCIES
+                              .filter(c => 
+                                c.code.toLowerCase().includes(currencySearchQuery.toLowerCase()) ||
+                                c.name.toLowerCase().includes(currencySearchQuery.toLowerCase())
+                              )
+                              .map(c => (
+                                <button
+                                  key={c.code}
+                                  type="button"
+                                  onClick={() => {
+                                    handleUpdateCurrency(c.code);
+                                    setIsCurrencyDropdownOpen(false);
+                                    setCurrencySearchQuery('');
+                                  }}
+                                  className={cn(
+                                    "w-full px-3 py-2.5 rounded-xl text-xs flex items-center justify-between transition-colors cursor-pointer text-left",
+                                    defaultCurrency === c.code 
+                                      ? "bg-brand/10 text-brand font-semibold" 
+                                      : "hover:bg-surface-hover text-text-primary"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="text-base">{c.flag}</span>
+                                    <span className="font-mono font-bold w-10">{c.code}</span>
+                                    <span className="text-text-secondary truncate">{c.name}</span>
+                                  </div>
+                                  <span className="font-semibold text-text-secondary font-mono">{c.symbol}</span>
+                                </button>
+                              ))}
+
+                            {ALL_CURRENCIES.filter(c => 
+                              c.code.toLowerCase().includes(currencySearchQuery.toLowerCase()) ||
+                              c.name.toLowerCase().includes(currencySearchQuery.toLowerCase())
+                            ).length === 0 && (
+                              <p className="p-3 text-center text-xs text-text-dim">No se encontraron monedas para "{currencySearchQuery}"</p>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+
+                {/* 2. Custom Agent Hera Rules */}
+                <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={18} className="text-brand" />
+                      <h3 className="font-semibold text-sm text-text-primary">Reglas Personalizadas para el Agente Hera</h3>
+                    </div>
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Escribe instrucciones o preferencias que Hera recordará en cada consulta (ej. "Recomiéndame presupuestos ajustados", "Alertar si gasto más de 50€ en una comida", "Trátame de usted").
+                  </p>
+
+                  <div className="space-y-2">
+                    <textarea
+                      value={customAgentRules}
+                      onChange={e => setCustomAgentRules(e.target.value)}
+                      placeholder="Escribe aquí tus reglas personalizadas..."
+                      rows={3}
+                      className="w-full bg-bg border border-border rounded-2xl p-3.5 text-xs text-text-primary focus:outline-none focus:border-brand/60 resize-none leading-relaxed"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSaveAgentRules}
+                        className="px-4 py-2 bg-brand hover:bg-brand-hover text-white font-medium rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all active:scale-[0.97] cursor-pointer"
+                      >
+                        <Check size={14} />
+                        <span>Guardar Reglas</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. AI Providers API Keys Configuration (DeepSeek & Gemini) */}
+                <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={18} className="text-brand" />
+                      <h3 className="font-semibold text-sm text-text-primary">Configuración de Modelos IA (DeepSeek & Gemini)</h3>
+                    </div>
+                    <span className="text-[11px] font-mono font-bold bg-brand/10 text-brand px-2.5 py-0.5 rounded-full">
+                      RESPUESTAS REALES LLM
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Ingresa tus claves API para activar el pensamiento y razonamiento directo de DeepSeek V3/R1 y Gemini Flash.
+                  </p>
+
+                  <div className="space-y-4 pt-1">
+                    {/* DeepSeek Key */}
+                    <div className="bg-bg border border-border p-4 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+                          <Sparkles size={14} className="text-brand" />
+                          <span>DeepSeek API Key (deepseek-chat / deepseek-reasoner)</span>
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={deepseekKeyInput}
+                          onChange={e => setDeepseekKeyInput(e.target.value)}
+                          placeholder="sk-..."
+                          className="flex-1 bg-surface border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:outline-none focus:border-brand/60 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveAiKey('DeepSeek', deepseekKeyInput)}
+                          className="px-4 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-medium transition-all shadow-xs active:scale-95 cursor-pointer shrink-0"
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Gemini Key */}
+                    <div className="bg-bg border border-border p-4 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+                          <Sparkles size={14} className="text-brand" />
+                          <span>Google Gemini API Key (gemini-1.5-flash / Vision)</span>
+                        </label>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={geminiKeyInput}
+                          onChange={e => setGeminiKeyInput(e.target.value)}
+                          placeholder="AIzaSy..."
+                          className="flex-1 bg-surface border border-border rounded-xl px-3.5 py-2.5 text-xs text-text-primary focus:outline-none focus:border-brand/60 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveAiKey('Gemini', geminiKeyInput)}
+                          className="px-4 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-medium transition-all shadow-xs active:scale-95 cursor-pointer shrink-0"
+                        >
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Subscription & Billing Plan (Pro / Premium) */}
+                <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <CreditCard size={18} className="text-brand" />
+                      <h3 className="font-semibold text-sm text-text-primary">Suscripción y Plan</h3>
+                    </div>
+                    <span className="text-xs font-mono font-bold bg-success/20 text-success px-2.5 py-1 rounded-full">
+                      PLAN PRO • ACTIVO
+                    </span>
+                  </div>
+
+                  <div className="p-4 bg-bg border border-border rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-semibold text-text-primary">HeraWallet Pro Ilimitado</h4>
+                      <p className="text-[11px] text-text-secondary">Acceso total a Whisper Local, OCR de Facturas y Modelos LLM sin límites.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => showToast('Gestionar suscripción y facturación en Stripe (Próximamente)', 'info')}
+                      className="px-4 py-2 bg-surface hover:bg-surface-hover border border-border text-text-primary rounded-xl text-xs font-medium transition-colors cursor-pointer shrink-0"
+                    >
+                      Gestionar Plan
+                    </button>
+                  </div>
+                </div>
+
+                {/* 4. Payment Methods */}
+                <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Wallet size={18} className="text-brand" />
+                      <h3 className="font-semibold text-sm text-text-primary">Métodos de Pago</h3>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-bg border border-border rounded-2xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-6 bg-brand/20 rounded border border-brand/30 flex items-center justify-center font-mono text-[10px] font-bold text-brand">
+                        VISA
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-text-primary">•••• •••• •••• 4242</p>
+                        <p className="text-[10px] text-text-secondary">Expira 12/28</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => showToast('Actualizar método de pago (Próximamente)', 'info')}
+                      className="text-xs text-brand font-medium hover:underline cursor-pointer"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </div>
+
+                {/* 5. Email Notifications */}
+                <div className="bg-surface border border-border p-6 rounded-3xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-border/80 pb-3">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={18} className="text-brand" />
+                      <h3 className="font-semibold text-sm text-text-primary">Notificaciones por Correo</h3>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {[
+                      { key: 'weeklySummary', title: 'Resumen semanal de finanzas', desc: 'Recibe un reporte digest cada lunes por email' },
+                      { key: 'budgetAlerts', title: 'Alertas de desvío de presupuesto', desc: 'Aviso inmediato si gastas más del 80% en una categoría' },
+                      { key: 'securityUpdates', title: 'Actualizaciones de seguridad y cuenta', desc: 'Notificaciones sobre nuevos inicios de sesión o cambios' }
+                    ].map(item => (
+                      <div key={item.key} className="flex items-center justify-between p-3 bg-bg border border-border/70 rounded-2xl">
+                        <div>
+                          <p className="text-xs font-medium text-text-primary">{item.title}</p>
+                          <p className="text-[11px] text-text-secondary">{item.desc}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmailNotifications(prev => {
+                              const next = { ...prev, [item.key]: !prev[item.key as keyof typeof prev] };
+                              localStorage.setItem('hera_email_notifications', JSON.stringify(next));
+                              showToast('Preferencia de notificación actualizada', 'success');
+                              return next;
+                            });
+                          }}
+                          className={cn(
+                            "w-11 h-6 rounded-full transition-colors p-1 flex items-center cursor-pointer",
+                            emailNotifications[item.key as keyof typeof emailNotifications] ? "bg-brand justify-end" : "bg-border/60 justify-start"
+                          )}
+                        >
+                          <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Floating Bottom Navigation Bar (Hidden when in active chat thread) */}
+      {!showAdmin && (activeTab !== 'chat' || chatMessages.length === 0) && (
+        <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-surface/80 backdrop-blur-xl border border-border rounded-2xl p-1.5 shadow-lg shadow-black/5 flex items-center gap-1.5">
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={cn(
+              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center justify-center transition-all cursor-pointer",
+              activeTab === 'chat' 
+                ? "bg-brand text-white shadow-md font-semibold" 
+                : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+            title="Inicio / Hera IA"
+          >
+            <Sparkles size={18} />
+          </button>
+
+          <button
+            onClick={() => setActiveTab('timeline')}
+            className={cn(
+              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              activeTab === 'timeline' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+          >
+            <Clock size={16} />
+            <span className="hidden sm:inline">Timeline</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('accounts')}
+            className={cn(
+              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              activeTab === 'accounts' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+          >
+            <Wallet size={16} />
+            <span className="hidden sm:inline">Cuentas</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reports')}
+            className={cn(
+              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              activeTab === 'reports' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+          >
+            <PieChart size={16} />
+            <span className="hidden sm:inline">Reportes</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('goals')}
+            className={cn(
+              "px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition-all cursor-pointer",
+              activeTab === 'goals' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+            title="Metas & Ahorros"
+          >
+            <Target size={16} />
+            <span className="hidden sm:inline">Metas & Ahorros</span>
+          </button>
+        </nav>
+      )}
+
+      {/* Quick Add 2-Step Voice & AI Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-5 shadow-2xl relative overflow-hidden text-center"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="font-serif font-semibold text-lg text-text-primary text-left">
+                  {addModalStep === 1 ? 'Dictar Registro por Voz' : 'Confirmar Registro con IA'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setAddModalStep(1);
+                    setAiParsedPreview(null);
+                  }}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* STEP 1: VOICE DICTATION & AI PROCESSING */}
+              {addModalStep === 1 && (
+                <div className="space-y-4">
+                  {/* Segmented Type Preference Toggle (Ingreso vs Gasto) */}
+                  <div className="bg-bg border border-border p-1 rounded-2xl flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setAddType('expense')}
+                      className={cn(
+                        "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        addType === 'expense' ? "bg-error text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                      )}
+                    >
+                      <TrendingDown size={14} />
+                      <span>Gasto</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAddType('income')}
+                      className={cn(
+                        "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        addType === 'income' ? "bg-success text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                      )}
+                    >
+                      <TrendingUp size={14} />
+                      <span>Ingreso</span>
+                    </button>
+                  </div>
+
+                  {/* Voice Soundwave & Mic Container */}
+                  <div className="p-8 bg-bg border border-border rounded-2xl flex flex-col items-center justify-center space-y-4 min-h-44">
+                    <AnimatePresence>
+                      {isRecording && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          className="flex items-center justify-center gap-1.5 h-10 py-1 w-full"
+                        >
+                          {audioLevels.map((lvl, i) => (
+                            <motion.div
+                              key={i}
+                              animate={{ height: `${lvl}%` }}
+                              transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                              className="w-1.5 bg-brand rounded-full shadow-xs shadow-brand/50"
+                              style={{ minHeight: '6px' }}
+                            />
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {isAiParsingAudio ? (
+                      <div className="flex flex-col items-center gap-2 py-2 text-brand">
+                        <Sparkles size={24} className="animate-spin" />
+                        <p className="text-xs font-medium">Analizando audio e interpretando intención con IA...</p>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs text-text-secondary">
+                          {isRecording ? "Escuchando... habla de forma natural" : "Toca el micrófono y dicta tu registro (ej. 'Créame un gasto de un pantalón')"}
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                          className={cn(
+                            "w-16 h-16 rounded-full flex items-center justify-center text-white shadow-lg transition-all active:scale-95 cursor-pointer mt-2",
+                            isRecording ? "bg-error animate-pulse" : "bg-brand hover:bg-brand-hover"
+                          )}
+                        >
+                          {isRecording ? <MicOff size={26} /> : <Mic size={26} />}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: AI CONFIRMATION & PRE-SELECTED DETAILS */}
+              {addModalStep === 2 && aiParsedPreview && (
+                <div className="space-y-4 text-left">
+                  {/* AI Result Card */}
+                  <div className="bg-bg border border-border p-4.5 rounded-2xl space-y-2.5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono font-bold bg-brand/10 text-brand px-2.5 py-0.5 rounded-full uppercase flex items-center gap-1">
+                        <Sparkles size={12} /> Registro a Crear por IA
+                      </span>
+                      <span className="text-xs font-bold text-brand bg-brand/10 px-2.5 py-0.5 rounded-md font-mono">{aiParsedPreview.category}</span>
+                    </div>
+
+                    <div className="pt-1">
+                      <h4 className="text-base font-semibold text-text-primary capitalize">{aiParsedPreview.description}</h4>
+                      <p className="text-2xl font-bold font-mono text-text-primary mt-1">{aiParsedPreview.amount} {defaultCurrency}</p>
+                    </div>
+                  </div>
+
+                  {/* Pre-selected Type Toggle */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-text-secondary">Tipo Preseleccionado:</label>
+                    <div className="bg-bg border border-border p-1 rounded-2xl flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setAiParsedPreview(prev => prev ? { ...prev, type: 'expense' } : null)}
+                        className={cn(
+                          "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                          aiParsedPreview.type === 'expense' ? "bg-error text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                        )}
+                      >
+                        <TrendingDown size={14} />
+                        <span>Gasto</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setAiParsedPreview(prev => prev ? { ...prev, type: 'income' } : null)}
+                        className={cn(
+                          "flex-1 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                          aiParsedPreview.type === 'income' ? "bg-success text-white shadow-sm" : "text-text-secondary hover:text-text-primary"
+                        )}
+                      >
+                        <TrendingUp size={14} />
+                        <span>Ingreso</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Pre-selected Account / Card Picker */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-text-secondary">Cuenta o Tarjeta Asignada:</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                      {accounts.map(acc => (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAccountId(acc.id);
+                            setAiParsedPreview(prev => prev ? { ...prev, accountId: acc.id } : null);
+                          }}
+                          className={cn(
+                            "p-2.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer",
+                            (selectedAccountId === acc.id || (!selectedAccountId && accounts[0]?.id === acc.id))
+                              ? "bg-brand/10 border-brand text-brand shadow-xs"
+                              : "bg-bg border-border text-text-primary hover:border-brand/40 hover:bg-surface-hover"
+                          )}
+                        >
+                          <div className="flex items-center gap-2.5 truncate">
+                            <div className="w-7 h-7 rounded-xl bg-brand/10 text-brand flex items-center justify-center font-bold shrink-0">
+                              {acc.type === 'bank' && <Building2 size={14} />}
+                              {acc.type === 'card' && <CreditCard size={14} />}
+                              {acc.type === 'cash' && <Wallet size={14} />}
+                              {acc.type === 'crypto' && <Coins size={14} />}
+                            </div>
+                            <div className="truncate">
+                              <p className="text-xs font-semibold truncate">{acc.name}</p>
+                              <p className="text-[10px] font-mono text-text-dim">{acc.balance} {acc.currency || 'EUR'}</p>
+                            </div>
+                          </div>
+                          {(selectedAccountId === acc.id || (!selectedAccountId && accounts[0]?.id === acc.id)) && (
+                            <Check size={14} className="text-brand shrink-0 ml-1" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="pt-2 space-y-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!aiParsedPreview) return;
+                        const targetAccId = selectedAccountId || aiParsedPreview.accountId || accounts[0]?.id;
+                        try {
+                          const res = await api('/finance/transactions', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              accountId: targetAccId,
+                              type: aiParsedPreview.type,
+                              amount: aiParsedPreview.amount,
+                              category: aiParsedPreview.category,
+                              description: aiParsedPreview.description,
+                              date: new Date().toISOString().split('T')[0]
+                            })
+                          });
+                          if (res.success) {
+                            showToast(`¡Registro creado! ${aiParsedPreview.category} - ${aiParsedPreview.amount}€`, 'success');
+                            setShowAddModal(false);
+                            setAddModalStep(1);
+                            setAiParsedPreview(null);
+                            loadUserData();
+                          }
+                        } catch {
+                          showToast('Error al crear registro', 'error');
+                        }
+                      }}
+                      className="w-full bg-brand hover:bg-brand-hover text-white font-medium py-3 rounded-2xl transition-all shadow-md active:scale-98 cursor-pointer text-xs flex items-center justify-center gap-2"
+                    >
+                      <Check size={16} />
+                      <span>Confirmar y Crear Registro</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddModalStep(1);
+                        setAiParsedPreview(null);
+                      }}
+                      className="w-full bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-2xl text-xs font-medium transition-colors cursor-pointer text-center"
+                    >
+                      Volver a Dictar por Voz
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Create New Account Modal */}
+      <AnimatePresence>
+        {showAddAccountModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-5 shadow-2xl relative text-left"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="font-serif font-semibold text-lg text-text-primary">Crear Cuenta o Tarjeta</h3>
+                <button
+                  onClick={() => setShowAddAccountModal(false)}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Nombre de la Cuenta o Tarjeta:</label>
+                  <input
+                    type="text"
+                    value={newAccName}
+                    onChange={e => setNewAccName(e.target.value)}
+                    placeholder="Ej. Tarjeta VISA Oro, Cuenta Santander..."
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-text-secondary">Tipo de Cuenta o Tarjeta:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'bank', label: 'Cuenta Bancaria', icon: Building2, desc: 'Nómina o ahorro' },
+                      { id: 'card', label: 'Tarjeta Crédito/Débito', icon: CreditCard, desc: 'Visa, Mastercard' },
+                      { id: 'cash', label: 'Efectivo', icon: Wallet, desc: 'Bolsillo físico' },
+                      { id: 'crypto', label: 'Cripto / Inversión', icon: Coins, desc: 'Wallet o Broker' }
+                    ].map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setNewAccType(t.id)}
+                        className={cn(
+                          "p-3 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer",
+                          newAccType === t.id
+                            ? "bg-brand/10 border-brand text-brand shadow-sm"
+                            : "bg-bg border-border text-text-primary hover:border-brand/40 hover:bg-surface-hover"
+                        )}
+                      >
+                        <t.icon size={18} className={newAccType === t.id ? "text-brand" : "text-text-secondary"} />
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold">{t.label}</p>
+                          <p className="text-[10px] text-text-dim">{t.desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Saldo Inicial:</label>
+                  <input
+                    type="number"
+                    value={newAccBalance}
+                    onChange={e => setNewAccBalance(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCreateAccount}
+                className="w-full bg-brand hover:bg-brand-hover text-white font-medium py-3 rounded-2xl transition-all shadow-md active:scale-98 cursor-pointer text-xs"
+              >
+                Crear Cuenta
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Create New Savings Goal Modal */}
+      <AnimatePresence>
+        {showAddGoalModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-5 shadow-2xl relative text-left"
+            >
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h3 className="font-serif font-semibold text-lg text-text-primary">Crear Meta o Fondo de Ahorro</h3>
+                <button
+                  onClick={() => setShowAddGoalModal(false)}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Nombre de la Meta o Fondo:</label>
+                  <input
+                    type="text"
+                    value={newGoalName}
+                    onChange={e => setNewGoalName(e.target.value)}
+                    placeholder="Ej. Fondo de Emergencia 6 meses, Vacaciones Japón..."
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-text-secondary">Monto Objetivo ({defaultCurrency}):</label>
+                    <input
+                      type="number"
+                      value={newGoalTarget}
+                      onChange={e => setNewGoalTarget(e.target.value)}
+                      placeholder="3000.00"
+                      className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-text-secondary">Ahorrado Actualmente:</label>
+                    <input
+                      type="number"
+                      value={newGoalCurrent}
+                      onChange={e => setNewGoalCurrent(e.target.value)}
+                      placeholder="500.00"
+                      className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Fecha Límite Deseada:</label>
+                  <input
+                    type="date"
+                    value={newGoalDeadline}
+                    onChange={e => setNewGoalDeadline(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCreateGoal}
+                className="w-full bg-brand hover:bg-brand-hover text-white font-medium py-3 rounded-2xl transition-all shadow-md active:scale-98 cursor-pointer text-xs"
+              >
+                Crear Meta de Ahorro
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Account Transactions History Modal */}
+      <AnimatePresence>
+        {selectedAccountDetail && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              transition={{ duration: 0.24, ease: [0.23, 1, 0.32, 1] }}
+              className="w-full sm:max-w-xl bg-surface border border-border rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl max-h-[85vh] flex flex-col relative"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-border pb-4 shrink-0">
+                <div>
+                  <h3 className="font-serif font-semibold text-lg text-text-primary">{selectedAccountDetail.name}</h3>
+                  <p className="text-xs text-text-secondary">Historial de movimientos de esta cuenta</p>
+                </div>
+                <button
+                  onClick={() => setSelectedAccountDetail(null)}
+                  className="w-8 h-8 rounded-full bg-bg hover:bg-surface-hover border border-border text-text-secondary flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Account Balance Banner */}
+              <div className="bg-bg border border-border p-4 rounded-2xl flex items-center justify-between shrink-0">
+                <div>
+                  <span className="text-[11px] text-text-secondary uppercase tracking-wider font-mono">Saldo Actual</span>
+                  <p className="text-2xl font-bold font-mono text-text-primary">{selectedAccountDetail.balance} {selectedAccountDetail.currency || 'EUR'}</p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-mono text-text-dim bg-surface px-2.5 py-1 rounded-full uppercase border border-border">
+                    {selectedAccountDetail.type}
+                  </span>
+                </div>
+              </div>
+
+              {/* Transactions List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                <h4 className="text-xs font-semibold text-text-secondary">Transacciones Registradas:</h4>
+                
+                {accountTxs.length > 0 ? (
+                  accountTxs.map(t => (
+                    <div key={t.id} className="p-3 bg-bg border border-border/60 rounded-2xl flex items-center justify-between hover:border-brand/40 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0",
+                          t.type === 'income' ? "bg-success/15 text-success" : "bg-error/15 text-error"
+                        )}>
+                          {t.type === 'income' ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+                        </div>
+                        <div>
+                          <p className="text-xs font-medium text-text-primary">{t.description || t.category}</p>
+                          <p className="text-[10px] text-text-secondary">{t.date} • {t.category}</p>
+                        </div>
+                      </div>
+                      <span className={cn(
+                        "font-mono font-bold text-xs shrink-0",
+                        t.type === 'income' ? "text-success" : "text-text-primary"
+                      )}>
+                        {t.type === 'income' ? '+' : '-'}{t.amount}€
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-8 text-center text-xs text-text-dim space-y-1">
+                    <History size={24} className="mx-auto text-text-dim/60 mb-2" />
+                    <p>No hay transacciones registradas aún para esta cuenta.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Onboarding Dialog */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-4"
+            >
+              <h3 className="text-xl font-serif font-semibold">
+                {onbStep === 0 ? 'Bienvenido a HeraWallet' : 'Casi listos'}
+              </h3>
+              <p className="text-xs text-text-secondary">
+                {onbStep === 0 
+                  ? 'Queremos conocerte un poco mejor para personalizar tu experiencia.' 
+                  : 'Solo necesitamos un par de datos de contacto para asegurar tu cuenta.'}
+              </p>
+              
+              <div className="space-y-3.5 text-xs text-left">
+                {onbStep === 0 ? (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-text-secondary">Nombre completo</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ej. Juan Pérez" 
+                        value={onbName} 
+                        onChange={e => setOnbName(e.target.value)} 
+                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60" 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-text-secondary">Fecha de nacimiento</label>
+                      <input 
+                        type="date" 
+                        value={onbBirthDate} 
+                        onChange={e => setOnbBirthDate(e.target.value)} 
+                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60" 
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-text-secondary">Correo electrónico</label>
+                      <input 
+                        type="email" 
+                        placeholder="ejemplo@correo.com" 
+                        value={onbEmail} 
+                        onChange={e => setOnbEmail(e.target.value)} 
+                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60" 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-text-secondary">Dirección</label>
+                      <input 
+                        type="text" 
+                        placeholder="Calle, número, ciudad" 
+                        value={onbAddress} 
+                        onChange={e => setOnbAddress(e.target.value)} 
+                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60" 
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                {onbStep === 0 ? (
+                  <>
+                    <button 
+                      onClick={() => setShowOnboarding(false)} 
+                      className="flex-1 bg-bg hover:bg-surface-hover text-text-secondary py-2.5 rounded-xl text-xs font-medium border border-border cursor-pointer"
+                    >
+                      Omitir
+                    </button>
+                    <button 
+                      onClick={() => setOnbStep(1)} 
+                      disabled={!onbName || !onbBirthDate}
+                      className="flex-1 bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer disabled:opacity-50 transition-colors"
+                    >
+                      Continuar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => setOnbStep(0)} 
+                      className="flex-1 bg-bg hover:bg-surface-hover text-text-secondary py-2.5 rounded-xl text-xs font-medium border border-border cursor-pointer"
+                    >
+                      Volver
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        setOnbSaving(true);
+                        try {
+                          await api('/me', {
+                            method: 'PUT',
+                            body: JSON.stringify({ displayName: onbName, birthDate: onbBirthDate, address: onbAddress, email: onbEmail, photoURL: onbPhoto })
+                          });
+                          setShowOnboarding(false);
+                          showToast('Perfil actualizado correctamente', 'success');
+                        } catch {
+                          showToast('Error al guardar', 'error');
+                        } finally {
+                          setOnbSaving(false);
+                        }
+                      }} 
+                      className="flex-1 bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors"
+                    >
+                      {onbSaving ? 'Guardando...' : 'Comenzar'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Logout Farewell Modal */}
+      <AnimatePresence>
+        {showLogoutModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 16 }}
+              transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-sm w-full bg-surface border border-border p-8 rounded-3xl text-center space-y-5 shadow-2xl relative overflow-hidden"
+            >
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-brand/10 border border-brand/25 flex items-center justify-center text-brand shadow-sm animate-bounce">
+                <Sparkles size={28} />
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-2xl font-serif font-semibold text-text-primary">¡Hasta pronto!</h3>
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  Tus finanzas están seguras. Gracias por confiar en HeraWallet hoy.
+                </p>
+              </div>
+
+              <div className="w-full bg-bg h-1 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: '0%' }}
+                  animate={{ width: '100%' }}
+                  transition={{ duration: 1.5, ease: 'linear' }}
+                  className="bg-brand h-full rounded-full"
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Query History Bottom Sheet Modal */}
+      <AnimatePresence>
+        {showHistoryModal && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-xs p-0 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0, y: '100%' }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: '100%' }}
+              transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+              className="w-full max-w-2xl bg-surface border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[65vh] sm:max-h-[520px] flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-border/80 shrink-0">
+                <div>
+                  <h3 className="font-semibold text-sm text-text-primary text-left">Historial de Consultas</h3>
+                  <p className="text-[11px] text-text-secondary text-left">Toca para abrir o eliminar tus conversaciones previas</p>
+                </div>
+                <button
+                  onClick={() => setShowHistoryModal(false)}
+                  className="p-2 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary cursor-pointer transition-colors"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              {/* Search Input Bar */}
+              <div className="relative flex items-center shrink-0">
+                <Search size={16} className="absolute left-3 text-text-dim" />
+                <input
+                  type="text"
+                  value={historySearchQuery}
+                  onChange={e => setHistorySearchQuery(e.target.value)}
+                  placeholder="Buscar en el historial..."
+                  className="w-full bg-bg border border-border rounded-2xl pl-9 pr-4 py-2.5 text-xs text-text-primary placeholder:text-text-dim focus:outline-none focus:border-brand/60"
+                />
+              </div>
+
+              {/* History Items List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0">
+                {chatHistory
+                  .filter(item => 
+                    item.title.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+                    item.messages.some(m => m.content.toLowerCase().includes(historySearchQuery.toLowerCase()))
+                  )
+                  .map(session => (
+                    <div
+                      key={session.id}
+                      onClick={() => handleLoadSession(session)}
+                      className="p-3 bg-bg hover:bg-surface-hover border border-border/70 rounded-2xl flex items-center justify-between gap-3 cursor-pointer transition-all group shadow-2xs"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-surface border border-border flex items-center justify-center text-brand shrink-0 group-hover:border-brand/40">
+                          <MessageSquare size={16} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-text-primary truncate">{session.title}</p>
+                          <div className="flex items-center gap-2 text-[11px] text-text-dim mt-0.5 font-mono">
+                            <span>{formatRelativeTime(session.updatedAt)}</span>
+                            <span>•</span>
+                            <span>{session.messages.length} mensajes</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={(e) => handleDeleteSession(session.id, e)}
+                        className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0 opacity-70 hover:opacity-100"
+                        title="Eliminar consulta"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+
+                {chatHistory.length === 0 && (
+                  <div className="py-8 text-center text-xs text-text-dim space-y-1">
+                    <p>No tienes consultas guardadas en el historial.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

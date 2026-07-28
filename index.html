@@ -1,13 +1,28 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>HeraWallet</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet">
+    <script>
+      // Apply saved theme CSS vars BEFORE first paint to avoid flash
+      (function() {
+        var t = localStorage.getItem('hera_theme') || 'dark';
+        var isDark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        var vars = isDark
+          ? {'--bg':'#20201F','--surface':'#2C2C2A','--surface-hover':'#353533','--border':'#3A3A38','--text-primary':'#ECE7E1','--text-secondary':'#B4AEA8','--text-dim':'#8B857E','--brand':'#D97757','--brand-hover':'#E08668','--success':'#5DAF84','--warning':'#E2B04C','--error':'#E06A6A'}
+          : {'--bg':'#F9F9F7','--surface':'#FFFFFF','--surface-hover':'#F3F2EF','--border':'#E7E3DD','--text-primary':'#2E2B28','--text-secondary':'#6F6B66','--text-dim':'#9A958E','--brand':'#D97757','--brand-hover':'#C96A4D','--success':'#3E8E68','--warning':'#D89A36','--error':'#C45454'};
+        var s = document.documentElement.style;
+        for (var k in vars) s.setProperty(k, vars[k]);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
