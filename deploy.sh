@@ -20,6 +20,6 @@ npm run build
 
 # 4. Reiniciar el servidor Backend con PM2
 echo "🔄 Reiniciando proceso backend en PM2..."
-pm2 restart hera-api || pm2 start "npx tsx server.ts" --name "hera-api"
+pm2 restart hera-api || pm2 start tsx --name "hera-api" -- server.ts
 
 echo "✅ ¡Despliegue completado con éxito! La aplicación ya está actualizada en producción."
