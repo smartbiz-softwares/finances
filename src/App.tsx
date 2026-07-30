@@ -3353,8 +3353,11 @@ export default function App() {
   }, [theme, updateThemeMode]);
 
   const handleSendOTP = async () => {
-    const fullPhone = phonePrefix + phone;
-    if (phone.length < 3) {
+    const rawPhone = phone.trim();
+    const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${phonePrefix}${rawPhone}`;
+    const cleanFullPhone = '+' + fullPhone.replace(/[^0-9]/g, '');
+
+    if (rawPhone.length < 3) {
       setOtpError('Por favor ingresa tu número de teléfono');
       return;
     }
@@ -3367,7 +3370,7 @@ export default function App() {
     try {
       const data = await api('/send-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: fullPhone })
+        body: JSON.stringify({ phone: cleanFullPhone })
       });
       if (data.code) {
         console.log(`🔑 [OTP CÓDIGO REAL ENVIADO]: ${data.code}`);
@@ -3388,11 +3391,13 @@ export default function App() {
 
     setOtpLoading(true);
     setOtpError('');
-    const fullPhone = phonePrefix + phone;
+    const rawPhone = phone.trim();
+    const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${phonePrefix}${rawPhone}`;
+    const cleanFullPhone = '+' + fullPhone.replace(/[^0-9]/g, '');
     try {
       const data = await api('/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: fullPhone, code })
+        body: JSON.stringify({ phone: cleanFullPhone, code })
       });
 
       setToken(data.token);
@@ -4000,7 +4005,7 @@ export default function App() {
             <p className="text-xs text-text-secondary max-w-[260px] mx-auto leading-relaxed">
               {!otpSent
                 ? 'Tus metas empiezan con un mejor control. Accede con tu teléfono.'
-                : `Ingresa el código enviado al +${phonePrefix} ${phone}`
+                : `Ingresa el código enviado al ${phonePrefix} ${phone}`
               }
             </p>
           </div>

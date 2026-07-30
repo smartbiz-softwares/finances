@@ -550,19 +550,37 @@ function calculateLostMoney(userId: string) {
 // --- Auth Routes ---
 
 app.post('/api/send-otp', async (req, res) => {
-  const { phone } = req.body;
-  if (!phone || !phone.match(/^\+?[0-9]{7,15}$/)) {
+  let { phone } = req.body;
+  if (!phone || typeof phone !== 'string') {
+    return res.status(400).json({ error: 'Número telefónico inválido' });
+  }
+
+  // Sanitizar número telefónico eliminando signos + duplicados
+  let cleanPhone = phone.replace(/^\++/, '+').trim().replace(/\s+/g, '');
+  if (!cleanPhone.startsWith('+')) {
+    cleanPhone = '+' + cleanPhone;
+  }
+
+  if (!cleanPhone.match(/^\+[0-9]{7,15}$/)) {
     return res.status(400).json({ error: 'Número telefónico inválido' });
   }
 
   // Generar código OTP real de 6 dígitos aleatorios
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(phone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+  otpStore.set(cleanPhone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
 
-  logAudit(null, 'send_otp', `OTP real (${code}) enviado a ${phone}`);
-  console.log(`🔑 [OTP REAL ENVIADO] Código: ${code} -> ${phone}`);
+  logAudit(null, 'send_otp', `OTP real (${code}) generado para ${cleanPhone}`);
+  console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${cleanPhone}`);
 
-  res.json({ success: true, code, message: 'Código de verificación enviado exitosamente' });
+  // Enviar el SMS real a través del proveedor ZDSMS
+  const recipientForSMS = cleanPhone.replace(/^\+/, ''); // e.g. 5359079144
+  const smsSent = await sendSMS(recipientForSMS, `Tu codigo de verificacion para HeraWallet es: ${code}`);
+
+  if (!smsSent) {
+    console.warn(`⚠️ [SMS WARN] No se pudo entregar por ZDSMS a ${recipientForSMS}. El código sigue activo para verificación.`);
+  }
+
+  res.json({ success: true, code, phone: cleanPhone, message: 'Código de verificación enviado exitosamente' });
 });
 
 function getCurrencyFromPhone(phone: string): string {
