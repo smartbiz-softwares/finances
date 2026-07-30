@@ -8,6 +8,11 @@ import fs from 'fs';
 import path from 'path';
 import { AgentOrchestrator } from './src/agent/brain/orchestrator.ts';
 import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine.ts';
+import { initMySQLSchema } from './src/db/mysql.ts';
+
+if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
+  initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
+}
 
 const app = express();
 app.use(cors());
