@@ -1210,41 +1210,126 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
   }
 });
 
-// --- Voice Dictation Endpoint (Whisper.cpp Local Server http://127.0.0.1:8080/inference) ---
+// --- Voice Dictation Endpoint (Whisper.cpp Local Server http://127.0.0.1:8080/inference + Intelligent Fallbacks) ---
 
 app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
   try {
     const audioData = req.body.audio; // base64 string or file buffer
     if (!audioData) return res.status(400).json({ error: 'Sin datos de audio' });
 
-    // Prepare multipart form to Whisper.cpp local server
     const base64Clean = audioData.replace(/^data:audio\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Clean, 'base64');
+    let mimeType = 'audio/wav';
+    const mimeMatch = audioData.match(/^data:(audio\/\w+);base64,/);
+    if (mimeMatch) mimeType = mimeMatch[1];
 
-    const formData = new FormData();
-    const blob = new Blob([buffer], { type: 'audio/wav' });
-    formData.append('file', blob, 'recording.wav');
-    formData.append('language', 'es');
-    formData.append('response_format', 'json');
-    formData.append('temperature', '0.0');
+    let transcribedText = '';
 
-    const whisperRes = await fetch(WHISPER_URL, {
-      method: 'POST',
-      body: formData
-    });
+    // 1. Intentar servidor Whisper.cpp local (http://127.0.0.1:8080/inference) con timeout de 3.5 segundos
+    try {
+      const formData = new FormData();
+      const blob = new Blob([buffer], { type: mimeType });
+      formData.append('file', blob, 'recording.wav');
+      formData.append('language', 'es');
+      formData.append('response_format', 'json');
+      formData.append('temperature', '0.0');
 
-    if (!whisperRes.ok) {
-      throw new Error(`Whisper server HTTP ${whisperRes.status}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const whisperRes = await fetch(WHISPER_URL, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeoutId));
+
+      if (whisperRes.ok) {
+        const json = await whisperRes.json() as any;
+        transcribedText = json.text || json.transcription || '';
+        console.log('[transcribe] Transcribed via Local Whisper.cpp:', transcribedText);
+      }
+    } catch (localErr: any) {
+      console.log('[transcribe] Local Whisper.cpp offline or timed out, trying cloud fallbacks:', localErr.message);
     }
 
-    const json = await whisperRes.json() as any;
-    const text = json.text || json.transcription || '';
+    // 2. Si falla Whisper local, usar Google Gemini Audio (gemini-2.5-flash) como respaldo principal
+    if (!transcribedText) {
+      const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
 
-    logAudit(req.userId, 'transcribe_audio', `Dictado por voz procesado con Whisper: ${text.slice(0, 50)}`);
-    res.json({ success: true, text: text.trim() });
+      if (geminiKey) {
+        try {
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+          const promptText = `Transcribe exactamente el siguiente audio dictado por el usuario en español. Devuelve ÚNICAMENTE la transcripción limpia en texto plano sin explicaciones ni marcas de formato markdown.`;
+
+          const geminiRes = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: promptText },
+                  { inline_data: { mime_type: mimeType, data: base64Clean } }
+                ]
+              }]
+            })
+          });
+
+          if (geminiRes.ok) {
+            const json = await geminiRes.json() as any;
+            transcribedText = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+            console.log('[transcribe] Transcribed via Gemini Audio fallback:', transcribedText);
+          }
+        } catch (geminiErr: any) {
+          console.error('[transcribe] Gemini audio fallback error:', geminiErr.message);
+        }
+      }
+    }
+
+    // 3. Si tampoco está disponible Gemini, probar Groq o OpenAI Whisper Cloud
+    if (!transcribedText) {
+      const openaiKey = process.env.OPENAI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%OpenAI%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+      const groqKey = process.env.GROQ_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE (name LIKE '%Groq%' OR name LIKE '%Whisper%') AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+
+      const cloudKey = groqKey || openaiKey;
+      const cloudUrl = groqKey ? 'https://api.groq.com/openai/v1/audio/transcriptions' : 'https://api.openai.com/v1/audio/transcriptions';
+      const modelName = groqKey ? 'whisper-large-v3-turbo' : 'whisper-1';
+
+      if (cloudKey) {
+        try {
+          const formData = new FormData();
+          const blob = new Blob([buffer], { type: mimeType });
+          formData.append('file', blob, 'recording.wav');
+          formData.append('model', modelName);
+          formData.append('language', 'es');
+
+          const cloudRes = await fetch(cloudUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${cloudKey}` },
+            body: formData
+          });
+
+          if (cloudRes.ok) {
+            const json = await cloudRes.json() as any;
+            transcribedText = json.text || '';
+            console.log('[transcribe] Transcribed via Cloud Whisper fallback:', transcribedText);
+          }
+        } catch (cloudErr: any) {
+          console.error('[transcribe] Cloud Whisper fallback error:', cloudErr.message);
+        }
+      }
+    }
+
+    if (!transcribedText) {
+      return res.status(503).json({
+        error: 'Servicio de voz no disponible. Puedes ejecutar "sudo bash setup-whisper.sh" en la consola de tu VPS para compilar e iniciar Whisper local, o ingresar una API Key activa en Administración > Modelos IA.'
+      });
+    }
+
+    logAudit(req.userId, 'transcribe_audio', `Dictado por voz procesado: ${transcribedText.slice(0, 50)}`);
+    res.json({ success: true, text: transcribedText.trim() });
   } catch (err: any) {
     console.error('Whisper transcription error:', err.message);
-    res.status(500).json({ error: 'Error al transcribir audio con Whisper local. Intenta dictar nuevamente.' });
+    res.status(500).json({ error: 'Error al transcribir audio. Por favor intenta dictar nuevamente.' });
   }
 });
 
