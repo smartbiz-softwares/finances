@@ -44,7 +44,7 @@ db.exec(`
     createdAt TEXT
   );
 `);
-try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'standard'"); } catch {}
+try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'standard'"); } catch { }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS accounts (
@@ -221,12 +221,12 @@ db.exec(`
 `);
 
 // Try adding missing columns if tables already existed
-try { db.exec(`ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'EUR';`); } catch {}
-try { db.exec(`ALTER TABLE accounts ADD COLUMN icon TEXT;`); } catch {}
-try { db.exec(`ALTER TABLE accounts ADD COLUMN color TEXT;`); } catch {}
-try { db.exec(`ALTER TABLE transactions ADD COLUMN receiptUrl TEXT;`); } catch {}
-try { db.exec(`ALTER TABLE goals ADD COLUMN status TEXT DEFAULT 'active';`); } catch {}
-try { db.exec(`UPDATE ai_providers SET isActive = 1 WHERE apiKey IS NOT NULL AND apiKey != '';`); } catch {}
+try { db.exec(`ALTER TABLE accounts ADD COLUMN currency TEXT DEFAULT 'EUR';`); } catch { }
+try { db.exec(`ALTER TABLE accounts ADD COLUMN icon TEXT;`); } catch { }
+try { db.exec(`ALTER TABLE accounts ADD COLUMN color TEXT;`); } catch { }
+try { db.exec(`ALTER TABLE transactions ADD COLUMN receiptUrl TEXT;`); } catch { }
+try { db.exec(`ALTER TABLE goals ADD COLUMN status TEXT DEFAULT 'active';`); } catch { }
+try { db.exec(`UPDATE ai_providers SET isActive = 1 WHERE apiKey IS NOT NULL AND apiKey != '';`); } catch { }
 
 // Try adding default AI provider if empty
 const providerCount = (db.prepare('SELECT COUNT(*) as count FROM ai_providers').get() as any).count;
@@ -304,7 +304,7 @@ function logAudit(userId: string | null, action: string, details?: string) {
     db.prepare('INSERT INTO audit_logs (id, userId, action, details, createdAt) VALUES (?, ?, ?, ?, ?)').run(
       randomUUID(), userId, action, details || '', new Date().toISOString()
     );
-  } catch {}
+  } catch { }
 }
 
 // Seed default financial portfolio for user if no accounts exist
@@ -318,10 +318,10 @@ function seedUserDataIfEmpty(userId: string) {
   const cryptoId = randomUUID();
 
   // Initial accounts (safely inserted within valid CHECK constraints)
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(bankId, userId, 'bank', 'Cuenta Principal (BBVA)', 3450.00, 'EUR', 'Building2', '#3B82F6'); } catch {}
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cashId, userId, 'cash', 'Efectivo', 180.50, 'EUR', 'Wallet', '#10B981'); } catch {}
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cardId, userId, 'card', 'Tarjeta Crédito Hera', -420.00, 'EUR', 'CreditCard', '#F59E0B'); } catch {}
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cryptoId, userId, 'bank', 'Wallet Cripto (BTC/ETH)', 890.00, 'EUR', 'Coins', '#8B5CF6'); } catch {}
+  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(bankId, userId, 'bank', 'Cuenta Principal (BBVA)', 3450.00, 'EUR', 'Building2', '#3B82F6'); } catch { }
+  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cashId, userId, 'cash', 'Efectivo', 180.50, 'EUR', 'Wallet', '#10B981'); } catch { }
+  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cardId, userId, 'card', 'Tarjeta Crédito Hera', -420.00, 'EUR', 'CreditCard', '#F59E0B'); } catch { }
+  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cryptoId, userId, 'bank', 'Wallet Cripto (BTC/ETH)', 890.00, 'EUR', 'Coins', '#8B5CF6'); } catch { }
 
   // Initial transactions
   const now = new Date();
@@ -378,7 +378,7 @@ function seedUserDataIfEmpty(userId: string) {
       INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(randomUUID(), userId, 'top_up', 55000, 5.00, 'Recarga Top Up de Tokens', formatDate(5), new Date(now.getTime() - 5 * 86400000).toISOString());
-  } catch {}
+  } catch { }
 }
 
 // Seed user Christian specifically (jcksparrow0209@gmail.com / +5359079144)
@@ -487,7 +487,7 @@ app.post('/api/settings/ai-keys', authMiddleware, (req: any, res) => {
 function getDBUserSummary(userId: string) {
   const accounts = db.prepare('SELECT type, SUM(balance) as total FROM accounts WHERE userId = ? GROUP BY type').all(userId) as any[];
   const txs = db.prepare('SELECT type, SUM(amount) as total FROM transactions WHERE userId = ? GROUP BY type').all(userId) as any[];
-  
+
   let totalBalance = 0;
   accounts.forEach(a => { totalBalance += a.total; });
 
@@ -619,21 +619,21 @@ app.post('/api/verify-otp', (req, res) => {
 
   const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
 
-  res.json({ 
-    success: true, 
-    token, 
-    isNewUser, 
-    user: { 
-      id: user.id, 
-      email: user.email, 
-      displayName: user.displayName, 
-      phone: user.phone, 
+  res.json({
+    success: true,
+    token,
+    isNewUser,
+    user: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      phone: user.phone,
       photoURL: user.photoURL,
-      birthDate: user.birthDate, 
-      address: user.address, 
-      theme: user.theme, 
-      currency: user.currency 
-    } 
+      birthDate: user.birthDate,
+      address: user.address,
+      theme: user.theme,
+      currency: user.currency
+    }
   });
 });
 
@@ -786,7 +786,7 @@ app.put('/api/finance/debts/:id', (req: any, res) => {
   let userId = req.userId;
   const header = req.headers.authorization;
   if (!userId && header && header.startsWith('Bearer ')) {
-    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch {}
+    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch { }
   }
   if (!userId) userId = 'demo_user';
 
@@ -850,7 +850,7 @@ app.get('/api/finance/debts/:id/payments', (req: any, res) => {
   let userId = req.userId;
   const header = req.headers.authorization;
   if (!userId && header && header.startsWith('Bearer ')) {
-    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch {}
+    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch { }
   }
   const payments = db.prepare('SELECT * FROM debt_payments WHERE debtId = ? ORDER BY date DESC, createdAt DESC').all(id);
   res.json(payments);
@@ -865,7 +865,7 @@ app.post('/api/finance/debts/:id/payments', (req: any, res) => {
   let userId = req.userId;
   const header = req.headers.authorization;
   if (!userId && header && header.startsWith('Bearer ')) {
-    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch {}
+    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch { }
   }
   if (!userId) userId = 'demo_user';
 
@@ -918,7 +918,7 @@ app.get('/api/finance/transactions', authMiddleware, (req: any, res) => {
 app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
   const { accountId, type, amount, category, description, date, receiptUrl } = req.body;
   if (!type || !amount || !category) return res.status(400).json({ error: 'Tipo, monto y categoría requeridos' });
-  
+
   let targetAccountId = accountId;
   if (!targetAccountId) {
     const acc = db.prepare('SELECT id FROM accounts WHERE userId = ? LIMIT 1').get(req.userId) as any;
@@ -1240,7 +1240,7 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
       const lower = text.toLowerCase();
       const matches = Array.from(text.matchAll(/(\d+(?:[.,]\d+)?)/g));
       const rawNumbers = matches.map(m => parseFloat(m[0].replace(',', '.')));
-      
+
       if (rawNumbers.length > 0) {
         const costNumbers: number[] = [];
         for (let i = 0; i < matches.length; i++) {
@@ -1264,7 +1264,7 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
       if (lower.includes('bonito')) itemsFound.push('Bonito');
       if (lower.includes('pantal')) itemsFound.push('Pantalón de mezclilla');
 
-      description = itemsFound.length > 0 
+      description = itemsFound.length > 0
         ? `Compra de ${itemsFound.join(' y ')}`
         : `Gasto registrado por voz`;
     }
@@ -1343,7 +1343,7 @@ app.post('/api/scan-receipt', authMiddleware, async (req: any, res) => {
       mimeType = mimeMatch[1];
     }
     const base64Clean = image.replace(/^data:image\/\w+;base64,/, '');
-    
+
     // Model updated to gemini-2.5-flash (Google Gemini Vision 2026)
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
     const promptText = `Examina minuciosamente la imagen adjunta y extrae los datos del comprobante financiero, recibo, ticket o factura.
@@ -1439,7 +1439,7 @@ app.post('/api/export-document', (req: any, res) => {
     try {
       const decoded = jwt.verify(header.slice(7), JWT_SECRET) as any;
       userId = decoded.userId;
-    } catch {}
+    } catch { }
   }
   const userSummary = summary || getDBUserSummary(userId);
   const userTxs = rows || (getDBTransactions(userId, 10) as any[]).map(t => [
@@ -1686,19 +1686,19 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
   const history = db.prepare('SELECT role, content FROM chat_messages WHERE userId = ? ORDER BY createdAt DESC LIMIT 10').all(userId).reverse() as any[];
 
   let aiReplyText = '';
-        let widgetType: string | null = null;
-        let widgetData: any = null;
+  let widgetType: string | null = null;
+  let widgetData: any = null;
 
-        // Retrieve API Keys (Auto-detecting saved keys in DB)
-        const deepseekKey = process.env.DEEPSEEK_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%DeepSeek%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
-        const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+  // Retrieve API Keys (Auto-detecting saved keys in DB)
+  const deepseekKey = process.env.DEEPSEEK_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%DeepSeek%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+  const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
 
-        const toneProfile = MirrorToneEngine.analyzeTone(message);
-        const toneInstruction = MirrorToneEngine.buildToneInstruction(toneProfile);
+  const toneProfile = MirrorToneEngine.analyzeTone(message);
+  const toneInstruction = MirrorToneEngine.buildToneInstruction(toneProfile);
 
-        let reasoningContent = '';
+  let reasoningContent = '';
 
-        const systemPrompt = `Eres Hera, un Coach Financiero Inteligente en tiempo real. 
+  const systemPrompt = `Eres Hera, un Coach Financiero Inteligente en tiempo real. 
 Estás conversando directamente con el usuario: ${userName}. Dirígete a él/ella por su nombre (${userName}) de manera cercana, personalizada, empática y verdaderamente afable.
 
 ${toneInstruction}
@@ -1834,45 +1834,45 @@ Incluye al final:
       widgetType = 'pending_action';
       widgetData = JSON.parse(actionMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<ACTION_START>>>[\s\S]*?<<<ACTION_END>>>/, '').trim();
-    } catch (e) {}
+    } catch (e) { }
   } else if (progressMatch) {
     try {
       widgetType = 'progress';
       widgetData = JSON.parse(progressMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<PROGRESS_START>>>[\s\S]*?<<<PROGRESS_END>>>/, '').trim();
-    } catch (e) {}
+    } catch (e) { }
   } else if (projectionMatch) {
     try {
       widgetType = 'projection_chart';
       widgetData = JSON.parse(projectionMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<PROJECTION_START>>>[\s\S]*?<<<PROJECTION_END>>>/, '').trim();
-    } catch (e) {}
+    } catch (e) { }
   } else if (chartMatch) {
     try {
       widgetType = 'chart';
       widgetData = JSON.parse(chartMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<CHART_START>>>[\s\S]*?<<<CHART_END>>>/, '').trim();
-    } catch (e) {}
+    } catch (e) { }
   } else if (tableMatch) {
     try {
       widgetType = 'table';
       widgetData = JSON.parse(tableMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<TABLE_START>>>[\s\S]*?<<<TABLE_END>>>/, '').trim();
-    } catch (e) {}
+    } catch (e) { }
   } else if (docMatch) {
     try {
       widgetType = 'document';
       widgetData = JSON.parse(docMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<DOC_START>>>[\s\S]*?<<<DOC_END>>>/, '').trim();
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Fallback Automatic Document Widget Detection
   if (!widgetType && (
-    aiReplyText.toLowerCase().includes('excel') || 
-    aiReplyText.toLowerCase().includes('word') || 
-    aiReplyText.toLowerCase().includes('pdf') || 
-    aiReplyText.toLowerCase().includes('descargar') || 
+    aiReplyText.toLowerCase().includes('excel') ||
+    aiReplyText.toLowerCase().includes('word') ||
+    aiReplyText.toLowerCase().includes('pdf') ||
+    aiReplyText.toLowerCase().includes('descargar') ||
     aiReplyText.toLowerCase().includes('generar archivo') ||
     aiReplyText.toLowerCase().includes('cree el excel') ||
     aiReplyText.toLowerCase().includes('widget inferior') ||
@@ -2374,7 +2374,7 @@ app.get('/api/admin/stats', adminAuthMiddleware, (req, res) => {
 app.get('/api/admin/providers', adminAuthMiddleware, (req, res) => {
   try {
     db.prepare("UPDATE ai_providers SET isActive = 1 WHERE apiKey IS NOT NULL AND TRIM(apiKey) != '' AND apiKey NOT LIKE '%invalid%'").run();
-  } catch {}
+  } catch { }
   const providers = db.prepare('SELECT * FROM ai_providers ORDER BY createdAt ASC').all();
   res.json(providers);
 });
@@ -2386,7 +2386,7 @@ app.post('/api/admin/providers', adminAuthMiddleware, (req, res) => {
   const id = randomUUID();
   const keyTrimmed = (apiKey || '').trim();
   const isActive = keyTrimmed.length > 0 && !keyTrimmed.toLowerCase().includes('invalid') ? 1 : 0;
-  
+
   db.prepare('INSERT INTO ai_providers (id, name, model, apiKey, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?)').run(
     id, name, model, apiKey || '', isActive, new Date().toISOString()
   );
@@ -2703,7 +2703,7 @@ app.get('/api/plans', (req, res) => {
 app.get('/api/user/subscription', authMiddleware, (req: any, res) => {
   const userId = req.userId;
   let sub = db.prepare('SELECT s.*, p.name as planName, p.description as planDescription, p.isRecommended FROM user_subscriptions s LEFT JOIN subscription_plans p ON s.planId = p.id WHERE s.userId = ?').get(userId) as any;
-  
+
   // Daily usage grouped by date (up to 365 days for timeframe selector)
   const usageGrouped = db.prepare(`
     SELECT date, ABS(SUM(tokens)) as tokensUsed 
@@ -2752,7 +2752,7 @@ app.post('/api/stripe/create-checkout-session', authMiddleware, (req: any, res) 
         INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
       `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
-    } catch {}
+    } catch { }
   }
 
   let amountUSD = plan.priceMonthly;
@@ -2786,7 +2786,7 @@ app.post('/api/stripe/confirm-payment', authMiddleware, (req: any, res) => {
         INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
       `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
-    } catch {}
+    } catch { }
   }
 
   const now = new Date();
@@ -2991,7 +2991,7 @@ app.get('/api/user/cuba-config', (req, res) => {
         INSERT OR IGNORE INTO cuba_payment_config (id, cardNumber, cardHolder, phoneNumber, cupExchangeRate, updatedAt)
         VALUES (1, ?, ?, ?, ?, ?)
       `).run(config.cardNumber, config.cardHolder, config.phoneNumber, config.cupExchangeRate, new Date().toISOString());
-    } catch {}
+    } catch { }
   }
   res.json(config);
 });
