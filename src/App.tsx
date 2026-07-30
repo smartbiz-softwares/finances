@@ -169,7 +169,7 @@ function AnimatedProgressBar({ progress, colorClass = "bg-brand", heightClass = 
   );
 }
 
-function HeraProjectionChartCard({ data }: { data: any }) {
+function HeraProjectionChartCard({ data, currencySymbol = '$' }: { data: any; currencySymbol?: string }) {
   const chartTitle = data?.title || "Próximos cuatro meses";
   const categoryLabel = data?.category || "PROYECCIÓN DE SALDO";
   const limitValue = data?.limit || 200;
@@ -252,7 +252,7 @@ function HeraProjectionChartCard({ data }: { data: any }) {
 
             <Tooltip
               formatter={(value: any, name: any) => [
-                `${formatCompactNumber(Number(value))} €`,
+                `${formatCompactNumber(Number(value))} ${currencySymbol}`,
                 name === 'real' ? 'Saldo Real' : 'Saldo Proyectado'
               ]}
               contentStyle={{
@@ -331,7 +331,7 @@ function HeraProjectionChartCard({ data }: { data: any }) {
 
 const HERA_PALETTE = ['#D97757', '#8B857E', '#B4AEA8', '#E5A48B', '#65605B', '#ECE7E1'];
 
-function HeraPieChartCard({ data }: { data: any }) {
+function HeraPieChartCard({ data, currencySymbol = '$' }: { data: any; currencySymbol?: string }) {
   const chartTitle = data?.title || "Distribución de Gastos";
   const categoryLabel = data?.category || "ANÁLISIS POR CATEGORÍA";
   const items = data?.data || [
@@ -375,7 +375,7 @@ function HeraPieChartCard({ data }: { data: any }) {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: any) => [`${formatCompactNumber(Number(value))} €`, 'Importe']}
+                formatter={(value: any) => [`${formatCompactNumber(Number(value))} ${currencySymbol}`, 'Importe']}
                 contentStyle={{
                   backgroundColor: 'var(--surface)',
                   borderRadius: '14px',
@@ -389,7 +389,7 @@ function HeraPieChartCard({ data }: { data: any }) {
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
             <span className="text-[10px] font-mono text-text-dim uppercase">Total</span>
-            <span className="font-mono font-bold text-sm text-text-primary">{formatCompactNumber(totalSum)} €</span>
+            <span className="font-mono font-bold text-sm text-text-primary">{formatCompactNumber(totalSum)} {currencySymbol}</span>
           </div>
         </div>
 
@@ -407,7 +407,7 @@ function HeraPieChartCard({ data }: { data: any }) {
                 </div>
                 <div className="flex items-center gap-2 font-mono text-[11px]">
                   <span className="text-text-secondary">{pct}%</span>
-                  <span className="font-semibold text-text-primary">{formatCompactNumber(val)} €</span>
+                  <span className="font-semibold text-text-primary">{formatCompactNumber(val)} {currencySymbol}</span>
                 </div>
               </div>
             );
@@ -418,7 +418,7 @@ function HeraPieChartCard({ data }: { data: any }) {
   );
 }
 
-function HeraBarChartCard({ data }: { data: any }) {
+function HeraBarChartCard({ data, currencySymbol = '$' }: { data: any; currencySymbol?: string }) {
   const chartTitle = data?.title || "Desglose de Gastos";
   const categoryLabel = data?.category || "COMPARATIVA POR CATEGORÍAS";
   const items = data?.data || [
@@ -446,7 +446,7 @@ function HeraBarChartCard({ data }: { data: any }) {
             <XAxis dataKey="label" stroke="var(--text-dim)" fontSize={10} tickLine={false} axisLine={false} />
             <YAxis stroke="var(--text-dim)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={v => `${formatCompactNumber(v)}`} />
             <Tooltip
-              formatter={(value: any) => [`${formatCompactNumber(Number(value))} €`, 'Importe']}
+              formatter={(value: any) => [`${formatCompactNumber(Number(value))} ${currencySymbol}`, 'Importe']}
               contentStyle={{
                 backgroundColor: 'var(--surface)',
                 borderRadius: '14px',
@@ -1239,6 +1239,15 @@ export default function App() {
   const [defaultCurrency, setDefaultCurrency] = useState<string>(() => {
     return localStorage.getItem('hera_currency') || 'USD';
   });
+
+  const CURRENCY_SYMBOLS_MAP: Record<string, string> = {
+    USD: '$', EUR: '€', CUP: '$', MXN: '$', ARS: '$', COP: '$', CLP: '$', BRL: 'R$',
+    GBP: '£', JPY: '¥', CAD: 'C$', AUD: 'A$', CHF: 'CHF', CNY: '¥', INR: '₹',
+    KRW: '₩', PEN: 'S/', UYU: '$U', DOP: 'RD$', CRC: '₡', GTQ: 'Q', HNL: 'L',
+    NIO: 'C$', PAB: 'B/.', PYG: '₲', VES: 'Bs.', SEK: 'kr', NOK: 'kr', DKK: 'kr', PLN: 'zł'
+  };
+
+  const currencySymbol = CURRENCY_SYMBOLS_MAP[defaultCurrency] || (defaultCurrency === 'EUR' ? '€' : '$');
   const [customAgentRules, setCustomAgentRules] = useState<string>(() => {
     return localStorage.getItem('hera_custom_rules') || '';
   });
@@ -6267,15 +6276,15 @@ export default function App() {
 
                                   {/* 3. Dynamic Executive Chart Widgets (Lineal / Proyección, Pie / Pizza, Barras) */}
                                   {(msg.type === 'projection_chart' || (msg.type === 'chart' && (msg.data?.chartType === 'projection' || msg.data?.chartType === 'line' || msg.data?.points))) && msg.data && (
-                                    <HeraProjectionChartCard data={msg.data} />
+                                    <HeraProjectionChartCard data={msg.data} currencySymbol={currencySymbol} />
                                   )}
 
                                   {msg.type === 'chart' && msg.data && (msg.data.chartType === 'pie' || msg.data.chartType === 'pizza' || msg.data.chartType === 'donut') && (
-                                    <HeraPieChartCard data={msg.data} />
+                                    <HeraPieChartCard data={msg.data} currencySymbol={currencySymbol} />
                                   )}
 
                                   {msg.type === 'chart' && msg.data && msg.data.data && msg.data.chartType !== 'projection' && msg.data.chartType !== 'line' && msg.data.chartType !== 'pie' && msg.data.chartType !== 'pizza' && msg.data.chartType !== 'donut' && !msg.data.points && (
-                                    <HeraBarChartCard data={msg.data} />
+                                    <HeraBarChartCard data={msg.data} currencySymbol={currencySymbol} />
                                   )}
 
                                   {/* 4. Interactive Table Widget */}
@@ -6853,17 +6862,17 @@ export default function App() {
                         <div className="space-y-2 pt-1">
                           <div className="flex items-center justify-between">
                             <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
-                              Rango de Montos (€)
+                              Rango de Montos ({currencySymbol})
                             </label>
                             <span className="text-xs font-mono font-semibold text-brand">
-                              {timelineMinAmount}€ — {timelineMaxAmount >= 1000 ? '1000€+' : `${timelineMaxAmount}€`}
+                              {timelineMinAmount}{currencySymbol} — {timelineMaxAmount >= 1000 ? `1000${currencySymbol}+` : `${timelineMaxAmount}${currencySymbol}`}
                             </span>
                           </div>
 
                           <div className="space-y-3 bg-bg border border-border p-3.5 rounded-2xl">
                             <div className="space-y-1">
                               <div className="flex justify-between text-[10px] text-text-dim font-mono">
-                                <span>Mínimo: {timelineMinAmount}€</span>
+                                <span>Mínimo: {timelineMinAmount}{currencySymbol}</span>
                               </div>
                               <input
                                 type="range"
@@ -6882,7 +6891,7 @@ export default function App() {
 
                             <div className="space-y-1">
                               <div className="flex justify-between text-[10px] text-text-dim font-mono">
-                                <span>Máximo: {timelineMaxAmount >= 1000 ? 'Sin Límite (1000€+)' : `${timelineMaxAmount}€`}</span>
+                                <span>Máximo: {timelineMaxAmount >= 1000 ? `Sin Límite (1000${currencySymbol}+)` : `${timelineMaxAmount}${currencySymbol}`}</span>
                               </div>
                               <input
                                 type="range"
@@ -6939,8 +6948,8 @@ export default function App() {
                       {
                         id: 'inc',
                         label: 'Ingresos Totales',
-                        value: `+${formatCompactNumber(totalInc)}€`,
-                        fullValue: `+${totalInc.toLocaleString()} €`,
+                        value: `+${formatCompactNumber(totalInc)}${currencySymbol}`,
+                        fullValue: `+${totalInc.toLocaleString()} ${currencySymbol}`,
                         icon: <TrendingUp size={15} />,
                         colorClass: 'text-success bg-success/10 border-success/20',
                         textClass: 'text-success'
@@ -6948,8 +6957,8 @@ export default function App() {
                       {
                         id: 'exp',
                         label: 'Gastos Totales',
-                        value: `-${formatCompactNumber(totalExp)}€`,
-                        fullValue: `-${totalExp.toLocaleString()} €`,
+                        value: `-${formatCompactNumber(totalExp)}${currencySymbol}`,
+                        fullValue: `-${totalExp.toLocaleString()} ${currencySymbol}`,
                         icon: <TrendingDown size={15} />,
                         colorClass: 'text-error bg-error/10 border-error/20',
                         textClass: 'text-error'
@@ -7014,10 +7023,10 @@ export default function App() {
 
                           <div className="text-right font-mono">
                             <span className="text-base sm:text-lg font-bold text-text-primary tracking-tight">
-                              {formatCompactNumber(netBal)}€
+                              {formatCompactNumber(netBal)}{currencySymbol}
                             </span>
                             <p className="text-[10px] text-text-dim">
-                              ({netBal >= 0 ? '+' : ''}{netBal.toLocaleString()} €)
+                              ({netBal >= 0 ? '+' : ''}{netBal.toLocaleString()} {currencySymbol})
                             </p>
                           </div>
                         </div>
@@ -7112,7 +7121,7 @@ export default function App() {
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-right space-y-1">
                                       <p className={cn("font-mono font-bold text-xs sm:text-sm", isIncome ? "text-success" : "text-text-primary")}>
-                                        {isIncome ? '+' : '-'}{Number(item.amount).toFixed(2)}€
+                                        {isIncome ? '+' : '-'}{Number(item.amount).toFixed(2)}{currencySymbol}
                                       </p>
                                       <span className={cn(
                                         "inline-block px-2 py-0.5 text-[9px] font-mono font-bold rounded-md uppercase",
@@ -7256,26 +7265,26 @@ export default function App() {
                         <AnimatedCard delay={0.05} className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-brand/40 transition-colors shadow-xs">
                           <span className="text-[11px] text-text-secondary font-medium">Patrimonio Neto</span>
                           <p className="text-2xl font-bold font-mono text-brand">
-                            <AnimatedCountUp value={Number(overview?.summary?.totalBalance) || 0} suffix="€" />
+                            <AnimatedCountUp value={Number(overview?.summary?.totalBalance) || 0} suffix={` ${currencySymbol}`} />
                           </p>
                         </AnimatedCard>
                         <AnimatedCard delay={0.1} className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-success/40 transition-colors shadow-xs">
                           <span className="text-[11px] text-text-secondary font-medium">Ingresos Totales</span>
                           <p className="text-2xl font-bold font-mono text-success">
-                            <AnimatedCountUp value={Number(overview?.summary?.totalIncome) || 0} prefix="+" suffix="€" />
+                            <AnimatedCountUp value={Number(overview?.summary?.totalIncome) || 0} prefix="+" suffix={` ${currencySymbol}`} />
                           </p>
                         </AnimatedCard>
                         <AnimatedCard delay={0.15} className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-error/40 transition-colors shadow-xs">
                           <span className="text-[11px] text-text-secondary font-medium">Gastos Totales</span>
                           <p className="text-2xl font-bold font-mono text-text-primary">
-                            <AnimatedCountUp value={Number(overview?.summary?.totalExpense) || 0} prefix="-" suffix="€" />
+                            <AnimatedCountUp value={Number(overview?.summary?.totalExpense) || 0} prefix="-" suffix={` ${currencySymbol}`} />
                           </p>
                         </AnimatedCard>
                         <AnimatedCard delay={0.2} className="bg-surface border border-border p-4 rounded-2xl space-y-1 hover:border-brand/40 transition-colors shadow-xs">
                           <span className="text-[11px] text-text-secondary font-medium">Ahorro Proyectado (30d)</span>
                           <p className="text-2xl font-bold font-mono text-brand flex items-center gap-1">
                             <TrendingUp size={18} />
-                            <AnimatedCountUp value={aiReportData?.projectedSavings30d ?? 0} prefix="+" suffix="€" />
+                            <AnimatedCountUp value={aiReportData?.projectedSavings30d ?? 0} prefix="+" suffix={` ${currencySymbol}`} />
                           </p>
                         </AnimatedCard>
                       </div>
@@ -7321,7 +7330,7 @@ export default function App() {
                                         <div key={idx} className="flex-1 flex flex-col items-center h-full justify-end group min-w-[64px]">
                                           {/* Amount Label above Bar */}
                                           <span className="text-[10px] font-mono font-bold text-text-primary mb-1 group-hover:scale-110 transition-transform">
-                                            {formatCompactNumber(cat.value)} €
+                                            {formatCompactNumber(cat.value)} {currencySymbol}
                                           </span>
 
                                           {/* Vertical Bar */}
@@ -7422,11 +7431,11 @@ export default function App() {
                                 { name: 'Ahorro Neto', amount: Math.max(0, (Number(overview?.summary?.totalIncome) || 0) - (Number(overview?.summary?.totalExpense) || 0)), fill: '#F59E0B' }
                               ]} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                                 <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val: any) => `${formatCompactNumber(val)}€`} />
+                                <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val: any) => `${formatCompactNumber(val)}${currencySymbol}`} />
                                 <Tooltip
                                   cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                                   contentStyle={{ backgroundColor: '#18181B', borderColor: '#27272A', borderRadius: '12px', fontSize: '12px', color: '#FFF' }}
-                                  formatter={(val: any) => [`${formatCompactNumber(val)}€ (${val}€)`, 'Importe']}
+                                  formatter={(val: any) => [`${formatCompactNumber(val)}${currencySymbol} (${val} ${currencySymbol})`, 'Importe']}
                                 />
                                 <Bar dataKey="amount" radius={[8, 8, 0, 0]} barSize={40}>
                                   {[
@@ -7458,7 +7467,7 @@ export default function App() {
                                   <p className="text-xs font-medium text-text-primary">{acc.name}</p>
                                   <p className="text-[10px] text-text-secondary uppercase font-mono">{acc.type}</p>
                                 </div>
-                                <span className="font-mono font-semibold text-xs text-text-primary">{formatCompactNumber(acc.balance)}€</span>
+                                <span className="font-mono font-semibold text-xs text-text-primary">{formatCompactNumber(acc.balance)}{currencySymbol}</span>
                               </div>
                             ))}
                           </div>
@@ -7494,7 +7503,7 @@ export default function App() {
                                 "font-mono font-semibold",
                                 item.type === 'income' ? "text-success" : "text-text-primary"
                               )}>
-                                {item.type === 'income' ? '+' : '-'}{formatCompactNumber(item.amount)}€
+                                {item.type === 'income' ? '+' : '-'}{formatCompactNumber(item.amount)}{currencySymbol}
                               </span>
                             </div>
                           ))}
@@ -7520,15 +7529,15 @@ export default function App() {
                         <div className="grid grid-cols-4 gap-3 text-center">
                           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
                             <span className="text-[10px] uppercase text-gray-500 block font-semibold">Patrimonio Neto</span>
-                            <span className="text-base font-bold font-mono text-gray-900">{formatCompactNumber(overview?.summary?.totalBalance)}€</span>
+                            <span className="text-base font-bold font-mono text-gray-900">{formatCompactNumber(overview?.summary?.totalBalance)}{currencySymbol}</span>
                           </div>
                           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
                             <span className="text-[10px] uppercase text-gray-500 block font-semibold">Ingresos Totales</span>
-                            <span className="text-base font-bold font-mono text-green-700">+{formatCompactNumber(overview?.summary?.totalIncome)}€</span>
+                            <span className="text-base font-bold font-mono text-green-700">+{formatCompactNumber(overview?.summary?.totalIncome)}{currencySymbol}</span>
                           </div>
                           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
                             <span className="text-[10px] uppercase text-gray-500 block font-semibold">Gastos Totales</span>
-                            <span className="text-base font-bold font-mono text-red-700">-{formatCompactNumber(overview?.summary?.totalExpense)}€</span>
+                            <span className="text-base font-bold font-mono text-red-700">-{formatCompactNumber(overview?.summary?.totalExpense)}{currencySymbol}</span>
                           </div>
                           <div className="p-3 border border-gray-300 rounded-lg bg-gray-50">
                             <span className="text-[10px] uppercase text-gray-500 block font-semibold">Proyección 30d</span>
@@ -7619,7 +7628,7 @@ export default function App() {
                               </div>
                             </div>
                             <div className="text-right font-mono font-bold text-xs text-brand">
-                              {g.currentAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} € / {g.targetAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                              {g.currentAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol} / {g.targetAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}
                             </div>
                           </div>
 
@@ -7632,7 +7641,7 @@ export default function App() {
                           </div>
 
                           <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs">
-                            <span className="text-text-secondary text-[11px]">Cuota sugerida: <strong className="text-text-primary font-mono">{g.weeklyTarget} €/semana</strong></span>
+                            <span className="text-text-secondary text-[11px]">Cuota sugerida: <strong className="text-text-primary font-mono">{g.weeklyTarget} {currencySymbol}/semana</strong></span>
 
                             <div className="flex items-center gap-2">
                               <button
@@ -7946,7 +7955,7 @@ export default function App() {
                         </div>
                         <div>
                           <div className="text-2xl font-bold font-mono text-error tracking-tight">
-                            <AnimatedCountUp value={totalIOwe} suffix=" €" />
+                            <AnimatedCountUp value={totalIOwe} suffix={` ${currencySymbol}`} />
                           </div>
                           <p className="text-[11px] text-text-dim mt-1">Por saldar con terceros</p>
                         </div>
@@ -7962,7 +7971,7 @@ export default function App() {
                         </div>
                         <div>
                           <div className="text-2xl font-bold font-mono text-success tracking-tight">
-                            <AnimatedCountUp value={totalTheyOweMe} suffix=" €" />
+                            <AnimatedCountUp value={totalTheyOweMe} suffix={` ${currencySymbol}`} />
                           </div>
                           <p className="text-[11px] text-text-dim mt-1">Pendientes por recibir</p>
                         </div>
@@ -8076,11 +8085,11 @@ export default function App() {
 
                                 <div className="text-right shrink-0">
                                   <div className="font-mono font-bold text-sm text-text-primary tracking-tight">
-                                    {totalAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                                    {totalAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}
                                   </div>
                                   {!isPaid && !isCancelled && paidAmt > 0 && (
                                     <span className="text-[10px] font-mono text-text-dim block">
-                                      Resta: {remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                                      Resta: {remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}
                                     </span>
                                   )}
                                 </div>
@@ -8089,8 +8098,8 @@ export default function App() {
                               {/* Progress Bar Component */}
                               <div className="space-y-1 bg-bg/60 p-2.5 rounded-2xl border border-border/50">
                                 <div className="flex justify-between items-center text-[10px] font-mono text-text-secondary">
-                                  <span>Abonado: {paidAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
-                                  <span>{pctPaid}% {isPaid ? '— Completo' : isCancelled ? '— Cancelado' : `(Pte: ${remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €)`}</span>
+                                  <span>Abonado: {paidAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}</span>
+                                  <span>{pctPaid}% {isPaid ? '— Completo' : isCancelled ? '— Cancelado' : `(Pte: ${remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol})`}</span>
                                 </div>
                                 <div className="w-full bg-bg h-2 rounded-full overflow-hidden border border-border/40">
                                   <div
@@ -10140,7 +10149,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="text-right shrink-0 font-mono font-bold text-xs text-text-primary">
-                      {newDebtAmount ? `${parseFloat(newDebtAmount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €` : '0.00 €'}
+                      {newDebtAmount ? `${parseFloat(newDebtAmount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol}` : `0.00 ${currencySymbol}`}
                     </div>
                   </div>
                 </div>
@@ -10186,11 +10195,11 @@ export default function App() {
               <div className="space-y-3.5">
                 <div className="p-3 bg-bg/80 border border-border/80 rounded-2xl flex justify-between items-center text-xs font-mono">
                   <span className="text-text-secondary">Monto Total de Deuda:</span>
-                  <span className="font-bold text-text-primary">{Number(selectedDebtForPayment.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</span>
+                  <span className="font-bold text-text-primary">{Number(selectedDebtForPayment.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol}</span>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-text-secondary">Monto a Abonar (€):</label>
+                  <label className="text-xs font-medium text-text-secondary">Monto a Abonar (${currencySymbol}):</label>
                   <input
                     type="number"
                     value={paymentAmount}
@@ -10271,7 +10280,7 @@ export default function App() {
                   paymentHistoryList.map((p, idx) => (
                     <div key={p.id || idx} className="p-3.5 bg-bg border border-border/80 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
                       <div>
-                        <div className="font-mono font-bold text-xs text-success">+ {Number(p.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €</div>
+                        <div className="font-mono font-bold text-xs text-success">+ {Number(p.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol}</div>
                         {p.note && <p className="text-[11px] text-text-secondary mt-0.5">{p.note}</p>}
                       </div>
                       <span className="text-[10px] font-mono text-text-dim">{p.date}</span>
@@ -10345,7 +10354,7 @@ export default function App() {
                         "font-mono font-bold text-xs shrink-0",
                         t.type === 'income' ? "text-success" : "text-text-primary"
                       )}>
-                        {t.type === 'income' ? '+' : '-'}{t.amount}€
+                        {t.type === 'income' ? '+' : '-'}{t.amount}{currencySymbol}
                       </span>
                     </div>
                   ))
@@ -11834,7 +11843,7 @@ export default function App() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-text-secondary font-medium">Acumulado del Fondo</span>
                   <span className="font-mono font-bold text-brand text-sm">
-                    {selectedGoalForModal.currentAmount.toLocaleString('es-ES')} € / {selectedGoalForModal.targetAmount.toLocaleString('es-ES')} €
+                    {selectedGoalForModal.currentAmount.toLocaleString('es-ES')} ${currencySymbol} / {selectedGoalForModal.targetAmount.toLocaleString('es-ES')} ${currencySymbol}
                   </span>
                 </div>
                 <AnimatedProgressBar
@@ -11842,7 +11851,7 @@ export default function App() {
                   heightClass="h-2.5"
                 />
                 <div className="flex justify-between items-center text-[11px] text-text-dim font-mono pt-1">
-                  <span>Cuota sugerida: {selectedGoalForModal.weeklyTarget || 0} €/semana</span>
+                  <span>Cuota sugerida: {selectedGoalForModal.weeklyTarget || 0} {currencySymbol}/semana</span>
                   <span className="font-semibold text-brand">{Math.min(100, Math.round((selectedGoalForModal.currentAmount / Math.max(1, selectedGoalForModal.targetAmount)) * 100))}% alcanzado</span>
                 </div>
               </div>
