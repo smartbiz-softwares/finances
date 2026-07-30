@@ -2433,13 +2433,21 @@ export default function App() {
     { code: 'EGP', name: 'Libra Egipcia', symbol: 'E£' }
   ];
 
-  const handleUpdateCurrency = (code: string) => {
+  const handleUpdateCurrency = async (code: string) => {
     setDefaultCurrency(code);
     localStorage.setItem('hera_currency', code);
     if (profile) {
-      setProfile(prev => prev ? { ...prev, defaultCurrency: code } : null);
+      setProfile(prev => prev ? { ...prev, defaultCurrency: code, currency: code } : null);
     }
-    showToast(`Moneda predeterminada cambiada a ${code}`, 'success');
+    try {
+      await api('/me', {
+        method: 'PUT',
+        body: JSON.stringify({ currency: code })
+      });
+      showToast(`Moneda predeterminada cambiada a ${code}`, 'success');
+    } catch {
+      showToast(`Moneda cambiada a ${code}`, 'success');
+    }
   };
 
   const handleSaveAgentRules = () => {

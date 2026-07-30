@@ -958,15 +958,17 @@ app.get('/api/finance/reports/ai-analysis', authMiddleware, async (req: any, res
     const accounts = getDBAccounts(req.userId);
     const goals = getDBGoals(req.userId);
     const debts = getDBDebts(req.userId);
+    const userObj = db.prepare('SELECT currency FROM users WHERE id = ?').get(req.userId) as any;
+    const userCurrency = userObj?.currency || 'USD';
 
     const deepseekKey = process.env.DEEPSEEK_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%DeepSeek%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
     const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
 
     const prompt = `Actúa como Hera, un analista financiero ejecutivo de alto nivel.
-Genera un informe financiero ejecutivo detallado basándote en estos datos reales del usuario:
-- Patrimonio Neto Disponible: ${summary.totalBalance} EUR
-- Ingresos Totales: ${summary.totalIncome} EUR
-- Gastos Totales: ${summary.totalExpense} EUR
+Genera un informe financiero ejecutivo detallado basándote en estos datos reales del usuario (expresados en la divisa ${userCurrency}):
+- Patrimonio Neto Disponible: ${summary.totalBalance} ${userCurrency}
+- Ingresos Totales: ${summary.totalIncome} ${userCurrency}
+- Gastos Totales: ${summary.totalExpense} ${userCurrency}
 - Cuentas: ${JSON.stringify(accounts)}
 - Metas de ahorro: ${JSON.stringify(goals)}
 - Deudas: ${JSON.stringify(debts)}
@@ -1600,8 +1602,9 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
     randomUUID(), userId, 'user', message, new Date().toISOString()
   );
 
-  const userObj = db.prepare('SELECT displayName, email FROM users WHERE id = ?').get(userId) as any;
+  const userObj = db.prepare('SELECT displayName, email, currency FROM users WHERE id = ?').get(userId) as any;
   const userName = userObj?.displayName || (userObj?.email ? userObj.email.split('@')[0] : '') || 'Usuario';
+  const userCurrency = userObj?.currency || 'USD';
 
   const summary = getDBUserSummary(userId);
   const txs = getDBTransactions(userId, 15);
@@ -1629,7 +1632,13 @@ Estás conversando directamente con el usuario: ${userName}. Dirígete a él/ell
 
 ${toneInstruction}
 
-Patrimonio Neto: ${summary.totalBalance} EUR. Ingresos: ${summary.totalIncome} EUR. Gastos: ${summary.totalExpense} EUR.
+DIVISA Y MONEDA DE OPERACIÓN DEL USUARIO (OBLIGATORIO):
+- La moneda predeterminada configurada por ${userName} es: ${userCurrency}.
+- DEBES responder, calcular, sugerir montos y expresarte SIEMPRE utilizando la moneda predeterminada del usuario (${userCurrency}).
+- Si el usuario menciona montos sin especificar moneda (ej. "Gasté 50 en comida" o "Ingresé 200"), asume OBLIGATORIAMENTE que se refiere a ${userCurrency}.
+- En cualquier widget visual (progreso, acciones, tablas o gráficos), asigna "${userCurrency}" como la divisa/unidad.
+
+Patrimonio Neto: ${summary.totalBalance} ${userCurrency}. Ingresos: ${summary.totalIncome} ${userCurrency}. Gastos: ${summary.totalExpense} ${userCurrency}.
 Cuentas Usuario: ${JSON.stringify(accounts)}.
 Metas de Ahorro: ${JSON.stringify(goals)}.
 Deudas Registradas: ${JSON.stringify(debts)}.
@@ -1663,7 +1672,7 @@ Incluye al final:
   "title": "Avance de Meta de Ahorro",
   "current": ${(goals[0] as any)?.currentAmount || 450},
   "target": ${(goals[0] as any)?.targetAmount || 1000},
-  "unit": "EUR",
+  "unit": "${userCurrency}",
   "subtitle": "${(goals[0] as any)?.name || 'Fondo de Reserva'}"
 }
 <<<PROGRESS_END>>>
