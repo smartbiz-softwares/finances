@@ -8653,12 +8653,23 @@ export default function App() {
                                 </span>
                               </div>
 
-                              {/* Progress bar: fills up as tokens are used */}
+                              {/* Progress bar: fills up as tokens are used.
+                                  El denominador es el total acreditado, que incluye
+                                  las recargas; usar solo la cuota del plan dejaba la
+                                  barra a cero en cuanto el usuario recargaba. */}
                               <div className="w-full h-3 bg-surface border border-border rounded-full overflow-hidden p-0.5">
                                 <div
                                   className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full transition-all duration-500"
                                   style={{
-                                    width: `${Math.min(100, Math.max(0, Math.round(((Math.max(1, userSubscriptionData.subscription.tokensTotalPlan || 1) - (userSubscriptionData.subscription.tokenBalance || 0)) / Math.max(1, userSubscriptionData.subscription.tokensTotalPlan || 1)) * 100)))}%`
+                                    width: `${(() => {
+                                      const balance = userSubscriptionData.subscription.tokenBalance || 0;
+                                      const total = Math.max(
+                                        userSubscriptionData.subscription.tokensTotalPlan || 0,
+                                        balance
+                                      );
+                                      if (total <= 0) return 0;
+                                      return Math.min(100, Math.max(0, Math.round(((total - balance) / total) * 100)));
+                                    })()}%`
                                   }}
                                 />
                               </div>

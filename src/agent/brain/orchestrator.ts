@@ -7,6 +7,32 @@ import { LearningPipeline } from '../learning/learningPipeline.ts';
 import { AuditLogger } from '../observability/auditLogger.ts';
 import { eventBus } from '../eventBus.ts';
 
+/** Techo de tokens de salida por llamada al modelo. */
+const MAX_COMPLETION_TOKENS = 2000;
+
+/** Consumo real reportado por DeepSeek, acumulado en todas las iteraciones. */
+export interface AgentUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  /** Parte del prompt servida desde caché: DeepSeek la cobra mucho más barata. */
+  cachedPromptTokens: number;
+  llmCalls: number;
+}
+
+export interface AgentResult {
+  text: string;
+  usage: AgentUsage;
+}
+
+export const emptyUsage = (): AgentUsage => ({
+  promptTokens: 0,
+  completionTokens: 0,
+  totalTokens: 0,
+  cachedPromptTokens: 0,
+  llmCalls: 0
+});
+
 export class AgentOrchestrator {
   private memoryManager: MemoryManager;
   private toolRegistry: ToolRegistry;
@@ -23,10 +49,11 @@ export class AgentOrchestrator {
   /**
    * Procesa la consulta del usuario a través de la Arquitectura Enterprise de 8 Capas
    */
-  public async processUserQuery(userId: string, userMessage: string, deepseekApiKey: string): Promise<string> {
+  public async processUserQuery(userId: string, userMessage: string, deepseekApiKey: string): Promise<AgentResult> {
     const startTime = Date.now();
     const interactionId = 'int-' + Math.random().toString(36).substring(2, 9);
     const toolsUsed: string[] = [];
+    const usage = emptyUsage();
 
     // --- CAPA 1: SEGURIDAD & GUARDRAILS ---
     const securityCheck = SecurityFence.scanInput(userMessage);
@@ -45,7 +72,11 @@ export class AgentOrchestrator {
         timestamp: new Date().toISOString()
       });
 
-      return `⚠️ Tu consulta no pudo ser procesada debido a una restricción de seguridad o privilegio denegado: ${securityCheck.violations.join(', ')}.`;
+      // Bloqueada antes de llamar al modelo: no hay consumo que cobrar.
+      return {
+        text: `⚠️ Tu consulta no pudo ser procesada debido a una restricción de seguridad o privilegio denegado: ${securityCheck.violations.join(', ')}.`,
+        usage
+      };
     }
 
     // --- CAPA 3: RECUPERACIÓN DE MEMORIA JERÁRQUICA ---
@@ -105,7 +136,9 @@ REGLAS EJECUTIVAS:
             model: 'deepseek-chat',
             messages: messages,
             tools: availableTools,
-            tool_choice: 'auto'
+            tool_choice: 'auto',
+            // Techo de coste por respuesta: sin esto la salida no tiene límite.
+            max_tokens: MAX_COMPLETION_TOKENS
           })
         });
 
@@ -114,11 +147,29 @@ REGLAS EJECUTIVAS:
         }
 
         const data = await response.json() as any;
+
+        // Consumo real de esta llamada. Se acumula aunque después falle el
+        // parseo: el modelo ya facturó estos tokens.
+        if (data.usage) {
+          usage.promptTokens += data.usage.prompt_tokens ?? 0;
+          usage.completionTokens += data.usage.completion_tokens ?? 0;
+          usage.totalTokens += data.usage.total_tokens
+            ?? ((data.usage.prompt_tokens ?? 0) + (data.usage.completion_tokens ?? 0));
+          usage.cachedPromptTokens += data.usage.prompt_cache_hit_tokens ?? 0;
+        }
+        usage.llmCalls++;
+
         const choiceMessage = data.choices?.[0]?.message;
 
         if (!choiceMessage) {
           finalReplyText = 'Lo sentimos, el servidor de razonamiento no devolvió una respuesta válida.';
           break;
+        }
+
+        // Si el modelo cortó por longitud, el texto queda incompleto pero
+        // facturado. Se avisa en lugar de entregar una respuesta truncada muda.
+        if (data.choices?.[0]?.finish_reason === 'length') {
+          console.warn(`[AgentOrchestrator] Respuesta truncada por max_tokens (usuario ${userId})`);
         }
 
         // Si DeepSeek solicita ejecutar una o más herramientas
@@ -154,6 +205,12 @@ REGLAS EJECUTIVAS:
       }
     }
 
+    // Si se agotaron las iteraciones sin respuesta final, el usuario recibiría
+    // texto vacío pese a que las llamadas ya se facturaron.
+    if (!finalReplyText) {
+      finalReplyText = 'He consultado varias fuentes pero no logré cerrar el análisis. Reformula la consulta y lo intento de nuevo.';
+    }
+
     // --- CAPA 1: SANITIZAR SALIDA DE SEGURIDAD ---
     const sanitizedOutput = SecurityFence.sanitizeOutput(finalReplyText);
 
@@ -184,6 +241,6 @@ REGLAS EJECUTIVAS:
     this.learningPipeline.processConversationInsight(userId, securityCheck.sanitizedInput, sanitizedOutput, this.db)
       .catch(e => console.error('[LearningPipeline Error]:', e));
 
-    return sanitizedOutput;
+    return { text: sanitizedOutput, usage };
   }
 }

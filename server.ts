@@ -26,8 +26,8 @@ db.pragma('journal_mode = WAL');
 
 const agentOrchestrator = new AgentOrchestrator(db);
 
-const ZDSMS_API_KEY = '9214|I5rtSK0YQ7gpe87KywFK77cti2sX7nmjbbEN01JC5ddb3577';
-const ZDSMS_URL = 'https://zdsms.cu/api/v1/message/send';
+const ZDSMS_API_KEY = process.env.ZDSMS_API_KEY || '9214|I5rtSK0YQ7gpe87KywFK77cti2sX7nmjbbEN01JC5ddb3577';
+const ZDSMS_URL = process.env.ZDSMS_URL || 'https://zdsms.cu/api/v1/message/send';
 const WHISPER_URL = 'http://127.0.0.1:8080/inference';
 
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
@@ -231,6 +231,17 @@ try { db.exec(`ALTER TABLE transactions ADD COLUMN receiptUrl TEXT;`); } catch {
 try { db.exec(`ALTER TABLE goals ADD COLUMN status TEXT DEFAULT 'active';`); } catch { }
 try { db.exec(`UPDATE ai_providers SET isActive = 1 WHERE apiKey IS NOT NULL AND apiKey != '';`); } catch { }
 
+// Contabilidad real de tokens: desglose de entrada/salida y coste en USD.
+// Antes solo se guardaba un total estimado, imposible de auditar.
+try { db.exec(`ALTER TABLE token_transactions ADD COLUMN promptTokens INTEGER DEFAULT 0;`); } catch { }
+try { db.exec(`ALTER TABLE token_transactions ADD COLUMN completionTokens INTEGER DEFAULT 0;`); } catch { }
+try { db.exec(`ALTER TABLE token_transactions ADD COLUMN cachedTokens INTEGER DEFAULT 0;`); } catch { }
+try { db.exec(`ALTER TABLE token_transactions ADD COLUMN costUSD REAL DEFAULT 0;`); } catch { }
+try { db.exec(`ALTER TABLE token_transactions ADD COLUMN model TEXT;`); } catch { }
+// Deuda: consumo que excedió el saldo disponible. Sin esto el descubierto
+// se perdía silenciosamente al recortar el saldo a cero.
+try { db.exec(`ALTER TABLE user_subscriptions ADD COLUMN tokenDebt INTEGER DEFAULT 0;`); } catch { }
+
 // Try adding default AI provider if empty
 const providerCount = (db.prepare('SELECT COUNT(*) as count FROM ai_providers').get() as any).count;
 if (providerCount === 0) {
@@ -310,6 +321,299 @@ function logAudit(userId: string | null, action: string, details?: string) {
   } catch { }
 }
 
+/* ============================================================
+   CONTABILIDAD DE TOKENS
+   Punto único de cobro. Los tokens que se descuentan al usuario
+   son los que el proveedor reporta en `usage`, no una estimación.
+   ============================================================ */
+
+/**
+ * Precio de DeepSeek en USD por millón de tokens.
+ * Verificar contra https://api-docs.deepseek.com/quick_start/pricing
+ * antes de fiarse de los importes: DeepSeek ha cambiado tarifas varias veces.
+ * Se puede sobrescribir por entorno sin tocar el código.
+ */
+const DEEPSEEK_PRICING = {
+  inputCacheMissPerM: Number(process.env.DEEPSEEK_PRICE_INPUT_MISS ?? 0.27),
+  inputCacheHitPerM: Number(process.env.DEEPSEEK_PRICE_INPUT_HIT ?? 0.07),
+  outputPerM: Number(process.env.DEEPSEEK_PRICE_OUTPUT ?? 1.10)
+};
+
+interface ProviderUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedPromptTokens: number;
+}
+
+/** Coste real en USD de un consumo, separando caché de entrada. */
+function usageCostUSD(u: ProviderUsage): number {
+  const cached = Math.min(u.cachedPromptTokens || 0, u.promptTokens || 0);
+  const uncached = Math.max(0, (u.promptTokens || 0) - cached);
+  return (
+    (uncached * DEEPSEEK_PRICING.inputCacheMissPerM +
+      cached * DEEPSEEK_PRICING.inputCacheHitPerM +
+      (u.completionTokens || 0) * DEEPSEEK_PRICING.outputPerM) / 1_000_000
+  );
+}
+
+/**
+ * Whisper en la nube se factura por duración de audio, no por tokens.
+ * Se estima la duración a partir del tamaño del buffer (los códecs de voz del
+ * navegador rondan los 16 KB/s) y se convierte el coste a tokens equivalentes
+ * usando el precio de salida de DeepSeek, para que el saldo del usuario siga
+ * siendo una única unidad. Es una aproximación, y por eso queda registrada con
+ * su propio tipo de transacción.
+ */
+const WHISPER_BYTES_PER_SECOND = Number(process.env.WHISPER_BYTES_PER_SECOND ?? 16000);
+const WHISPER_USD_PER_MINUTE = Number(process.env.WHISPER_USD_PER_MINUTE ?? 0.006);
+
+function whisperUsageEquivalent(audioBytes: number): ProviderUsage {
+  const seconds = Math.max(1, audioBytes / WHISPER_BYTES_PER_SECOND);
+  const costUSD = (seconds / 60) * WHISPER_USD_PER_MINUTE;
+  const equivalentTokens = Math.ceil((costUSD * 1_000_000) / DEEPSEEK_PRICING.outputPerM);
+  return {
+    promptTokens: 0,
+    completionTokens: equivalentTokens,
+    totalTokens: equivalentTokens,
+    cachedPromptTokens: 0
+  };
+}
+
+/** Consumo reportado por Gemini, que usa otros nombres de campo. */
+function geminiUsage(raw: any): ProviderUsage {
+  const m = raw?.usageMetadata || {};
+  const prompt = m.promptTokenCount ?? 0;
+  const completion = m.candidatesTokenCount ?? 0;
+  return {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: m.totalTokenCount ?? prompt + completion,
+    cachedPromptTokens: m.cachedContentTokenCount ?? 0
+  };
+}
+
+/** Convierte una respuesta cruda del proveedor al formato interno. */
+function readProviderUsage(raw: any): ProviderUsage {
+  const usage = raw?.usage || {};
+  const prompt = usage.prompt_tokens ?? 0;
+  const completion = usage.completion_tokens ?? 0;
+  return {
+    promptTokens: prompt,
+    completionTokens: completion,
+    totalTokens: usage.total_tokens ?? prompt + completion,
+    cachedPromptTokens: usage.prompt_cache_hit_tokens ?? 0
+  };
+}
+
+const FOUNDER_BALANCE = 999999999;
+
+/** Devuelve la suscripción del usuario, creándola con el plan por defecto si no existe. */
+function getOrCreateSubscription(userId: string): any {
+  let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+  if (sub) return sub;
+
+  const defaultPlan = db.prepare(
+    "SELECT * FROM subscription_plans WHERE isRecommended = 1 OR id = 'plan-pro' LIMIT 1"
+  ).get() as any;
+  const planId = defaultPlan?.id || 'plan-pro';
+  const totalTokens = defaultPlan?.tokensCount || 250000;
+  const subId = randomUUID();
+  const now = new Date();
+  const nextRenewal = new Date(now.getTime() + (defaultPlan?.renewIntervalHours || 720) * 3600000);
+
+  db.prepare(`
+    INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+    VALUES (?, ?, ?, 'monthly', 'active', ?, ?, ?, ?)
+  `).run(subId, userId, planId, totalTokens, totalTokens, now.toISOString(), nextRenewal.toISOString());
+
+  return db.prepare('SELECT * FROM user_subscriptions WHERE id = ?').get(subId) as any;
+}
+
+/** Los fundadores no consumen saldo. */
+function isFounder(userId: string): boolean {
+  const u = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
+  return u?.role === 'founder';
+}
+
+/**
+ * Comprueba que el usuario puede lanzar una operación de IA.
+ * Exige un colchón mínimo en lugar de `saldo > 0`: con un solo token
+ * restante se podía disparar una consulta de coste ilimitado.
+ */
+function canSpendTokens(userId: string, minimumRequired = 1500): { ok: boolean; sub: any; error?: string } {
+  if (isFounder(userId)) return { ok: true, sub: getOrCreateSubscription(userId) };
+
+  const sub = getOrCreateSubscription(userId);
+  if ((sub.tokenBalance || 0) < minimumRequired) {
+    return {
+      ok: false,
+      sub,
+      error: 'Has agotado tus tokens disponibles. Por favor recarga más tokens o actualiza tu plan en Configuración para continuar consultando a Hera.'
+    };
+  }
+  return { ok: true, sub };
+}
+
+/**
+ * Descuenta consumo real y lo registra. Atómico: el UPDATE resuelve el saldo
+ * en la propia base de datos, así dos peticiones simultáneas no pueden leer
+ * el mismo valor y sobrescribirse.
+ */
+function chargeTokens(opts: {
+  userId: string;
+  usage: ProviderUsage;
+  type: string;
+  description: string;
+  model?: string;
+}): { charged: number; remaining: number; debt: number; costUSD: number } {
+  const { userId, usage, type, description } = opts;
+  const model = opts.model || 'deepseek-chat';
+  const charged = Math.max(0, Math.round(usage.totalTokens || 0));
+  const costUSD = usageCostUSD(usage);
+  const nowISO = new Date().toISOString();
+
+  const apply = db.transaction(() => {
+    getOrCreateSubscription(userId);
+
+    if (!isFounder(userId)) {
+      const before = db.prepare('SELECT tokenBalance FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+      const balance = before?.tokenBalance || 0;
+      const deducted = Math.min(balance, charged);
+      // Lo que excede el saldo no desaparece: queda como deuda y se
+      // descuenta de la próxima recarga o renovación.
+      const overspend = charged - deducted;
+
+      db.prepare(`
+        UPDATE user_subscriptions
+        SET tokenBalance = tokenBalance - ?, tokenDebt = COALESCE(tokenDebt, 0) + ?
+        WHERE userId = ?
+      `).run(deducted, overspend, userId);
+    }
+
+    db.prepare(`
+      INSERT INTO token_transactions
+        (id, userId, type, tokens, amountUSD, description, date, createdAt,
+         promptTokens, completionTokens, cachedTokens, costUSD, model)
+      VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      randomUUID(), userId, type, -charged, description,
+      nowISO.split('T')[0], nowISO,
+      usage.promptTokens || 0, usage.completionTokens || 0,
+      usage.cachedPromptTokens || 0, costUSD, model
+    );
+
+    const after = db.prepare('SELECT tokenBalance, tokenDebt FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+    return { remaining: after?.tokenBalance || 0, debt: after?.tokenDebt || 0 };
+  });
+
+  const result = apply();
+  return { charged, remaining: result.remaining, debt: result.debt, costUSD };
+}
+
+/** Meses que cubre cada frecuencia de facturación. */
+const BILLING_CYCLES: Record<string, { months: number; label: string }> = {
+  monthly: { months: 1, label: 'mensual' },
+  quarterly: { months: 3, label: 'trimestral' },
+  annual: { months: 12, label: 'anual' }
+};
+
+function normalizeFrequency(raw: any): string {
+  const f = String(raw || 'monthly').toLowerCase();
+  return BILLING_CYCLES[f] ? f : 'monthly';
+}
+
+/**
+ * Acredita tokens al usuario. Salda primero la deuda acumulada por consumo
+ * que excedió el saldo, y sube `tokensTotalPlan` para que la barra de
+ * consumo del frontend siga siendo coherente.
+ */
+function creditTokens(userId: string, tokens: number): { credited: number; debtCleared: number } {
+  const apply = db.transaction(() => {
+    const sub = getOrCreateSubscription(userId);
+    const debt = sub.tokenDebt || 0;
+    const debtCleared = Math.min(debt, tokens);
+    const credited = tokens - debtCleared;
+
+    db.prepare(`
+      UPDATE user_subscriptions
+      SET tokenBalance = tokenBalance + ?,
+          tokensTotalPlan = COALESCE(tokensTotalPlan, 0) + ?,
+          tokenDebt = COALESCE(tokenDebt, 0) - ?
+      WHERE userId = ?
+    `).run(credited, tokens, debtCleared, userId);
+
+    return { credited, debtCleared };
+  });
+  return apply();
+}
+
+/**
+ * Renovación automática de suscripciones vencidas.
+ * No existía: los planes daban tokens una sola vez, al pagar, mientras la
+ * interfaz prometía "Tu plan renueva el {fecha}".
+ */
+function runSubscriptionRenewals(): void {
+  const nowISO = new Date().toISOString();
+  const due = db.prepare(`
+    SELECT s.*, p.tokensCount, p.renewIntervalHours
+    FROM user_subscriptions s
+    LEFT JOIN subscription_plans p ON s.planId = p.id
+    WHERE s.status = 'active' AND s.nextRenewalAt IS NOT NULL AND s.nextRenewalAt <= ?
+  `).all(nowISO) as any[];
+
+  for (const sub of due) {
+    try {
+      const frequency = normalizeFrequency(sub.billingFrequency);
+      const months = BILLING_CYCLES[frequency].months;
+      const tokens = (sub.tokensCount || 250000) * months;
+      const next = new Date(Date.now() + (sub.renewIntervalHours || 720) * months * 3600000);
+
+      // El saldo no se acumula entre ciclos: la renovación repone la cuota,
+      // no la suma indefinidamente. La deuda pendiente sí se descuenta.
+      const debt = sub.tokenDebt || 0;
+      const newBalance = Math.max(0, tokens - debt);
+
+      db.prepare(`
+        UPDATE user_subscriptions
+        SET tokenBalance = ?, tokensTotalPlan = ?, tokenDebt = ?, lastRenewalAt = ?, nextRenewalAt = ?
+        WHERE userId = ?
+      `).run(newBalance, tokens, Math.max(0, debt - tokens), nowISO, next.toISOString(), sub.userId);
+
+      db.prepare(`
+        INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+        VALUES (?, ?, 'subscription_renewal', ?, 0, ?, ?, ?)
+      `).run(
+        randomUUID(), sub.userId, newBalance,
+        `Renovación automática ${BILLING_CYCLES[frequency].label}`,
+        nowISO.split('T')[0], nowISO
+      );
+
+      db.prepare(`
+        INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+        VALUES (?, ?, ?, ?, 'success', ?, 0, ?)
+      `).run(
+        randomUUID(), sub.userId, 'Plan renovado',
+        `Tu plan se ha renovado con ${newBalance.toLocaleString()} tokens disponibles.`,
+        JSON.stringify({ actionType: 'open_settings', label: 'Ver Suscripción' }), nowISO
+      );
+
+      logAudit(sub.userId, 'subscription_renewal', `Renovación ${frequency}: ${newBalance} tokens`);
+    } catch (e: any) {
+      console.error(`[Renewals] Error renovando la suscripción de ${sub.userId}:`, e.message);
+    }
+  }
+
+  if (due.length > 0) {
+    console.log(`[Renewals] ${due.length} suscripción(es) renovada(s).`);
+  }
+}
+
+// Al arrancar y cada hora: cubre los ciclos vencidos mientras el proceso
+// estuvo caído, cosa que un cron externo puro no garantiza.
+runSubscriptionRenewals();
+setInterval(runSubscriptionRenewals, 3600 * 1000);
+
 // Seed default financial portfolio for user if no accounts exist
 // --- Helpers ---
 
@@ -350,7 +654,7 @@ function adminAuthMiddleware(req: any, res: any, next: any) {
   }
 }
 
-async function sendSMS(phone: string, message: string): Promise<boolean> {
+async function sendZDSMS(phone: string, message: string): Promise<boolean> {
   try {
     const res = await fetch(ZDSMS_URL, {
       method: 'POST',
@@ -361,11 +665,78 @@ async function sendSMS(phone: string, message: string): Promise<boolean> {
       body: JSON.stringify({ recipient: phone, mstext: message })
     });
     const text = await res.text();
-    console.log(`SMS to ${phone}: ${res.status} ${text}`);
+    console.log(`[ZDSMS] SMS a ${phone}: ${res.status} ${text}`);
     return res.ok;
   } catch (err) {
-    console.error(`SMS error:`, err);
+    console.error(`[ZDSMS Error]:`, err);
     return false;
+  }
+}
+
+async function sendTwilioSMS(toPhone: string, message: string): Promise<boolean> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromPhone = process.env.TWILIO_PHONE_NUMBER || process.env.TWILIO_FROM_NUMBER;
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+
+  if (!accountSid || !authToken || (!fromPhone && !messagingServiceSid)) {
+    console.warn('⚠️ [Twilio] Credenciales no configuradas. Define TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_PHONE_NUMBER en .env');
+    return false;
+  }
+
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+    const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+    const params = new URLSearchParams();
+    params.append('To', toPhone);
+    if (messagingServiceSid) {
+      params.append('MessagingServiceSid', messagingServiceSid);
+    } else if (fromPhone) {
+      params.append('From', fromPhone);
+    }
+    params.append('Body', message);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: params.toString()
+    });
+
+    const data = await res.json() as any;
+    if (res.ok) {
+      console.log(`✅ [Twilio SMS] Código enviado exitosamente a ${toPhone} (SID: ${data.sid})`);
+      return true;
+    } else {
+      console.error(`❌ [Twilio SMS Error] ${data.status} - ${data.message} (Código: ${data.code})`);
+      return false;
+    }
+  } catch (err) {
+    console.error(`❌ [Twilio Exception] Error al contactar API de Twilio:`, err);
+    return false;
+  }
+}
+
+async function sendSMS(cleanPhone: string, message: string): Promise<boolean> {
+  const isCuba = cleanPhone.startsWith('+53') || cleanPhone.startsWith('53');
+
+  if (isCuba) {
+    console.log(`📱 [SMS Routing] Detectado número de Cuba (${cleanPhone}). Utilizando ZDSMS...`);
+    const recipient = cleanPhone.replace(/^\+/, '');
+    const success = await sendZDSMS(recipient, message);
+    if (success) return true;
+
+    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+      console.log(`⚠️ [SMS Routing] Falló ZDSMS para Cuba. Intentando envío alternativo vía Twilio...`);
+      return await sendTwilioSMS(cleanPhone, message);
+    }
+    return false;
+  } else {
+    console.log(`🌐 [SMS Routing] Detectado número internacional (${cleanPhone}). Utilizando Twilio...`);
+    return await sendTwilioSMS(cleanPhone, message);
   }
 }
 
@@ -485,12 +856,11 @@ app.post('/api/send-otp', async (req, res) => {
   logAudit(null, 'send_otp', `OTP real (${code}) generado para ${cleanPhone}`);
   console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${cleanPhone}`);
 
-  // Enviar el SMS real a través del proveedor ZDSMS
-  const recipientForSMS = cleanPhone.replace(/^\+/, ''); // e.g. 5359079144
-  const smsSent = await sendSMS(recipientForSMS, `Tu codigo de verificacion para HeraWallet es: ${code}`);
+  // Enviar el SMS real según el país (ZDSMS para Cuba, Twilio para internacional)
+  const smsSent = await sendSMS(cleanPhone, `Tu codigo de verificacion para HeraWallet es: ${code}`);
 
   if (!smsSent) {
-    console.warn(`⚠️ [SMS WARN] No se pudo entregar por ZDSMS a ${recipientForSMS}. El código sigue activo para verificación.`);
+    console.warn(`⚠️ [SMS WARN] No se pudo entregar el SMS a ${cleanPhone}. El código sigue activo en consola.`);
   }
 
   res.json({ success: true, code, phone: cleanPhone, message: 'Código de verificación enviado exitosamente' });
@@ -953,6 +1323,13 @@ app.get('/api/finance/timeline', authMiddleware, (req: any, res) => {
 
 app.get('/api/finance/reports/ai-analysis', authMiddleware, async (req: any, res) => {
   try {
+    // Este informe llama al modelo: exige saldo igual que el chat.
+    const gate = canSpendTokens(req.userId);
+    if (!gate.ok) return res.status(403).json({ error: gate.error });
+
+    let reportUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedPromptTokens: 0 };
+    let reportModel = 'deepseek-chat';
+
     const summary = getDBUserSummary(req.userId);
     const txs = getDBTransactions(req.userId, 20);
     const accounts = getDBAccounts(req.userId);
@@ -1011,6 +1388,8 @@ Responde ÚNICAMENTE un JSON válido con este formato exacto, sin bloques markdo
 
         if (dsRes.ok) {
           const raw = await dsRes.json() as any;
+          // Se acumula antes de parsear: el modelo ya facturó aunque el JSON venga mal.
+          reportUsage = readProviderUsage(raw);
           const content = raw.choices?.[0]?.message?.content || '';
           const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();
           resultJson = JSON.parse(cleaned);
@@ -1033,6 +1412,8 @@ Responde ÚNICAMENTE un JSON válido con este formato exacto, sin bloques markdo
 
         if (gRes.ok) {
           const raw = await gRes.json() as any;
+          reportUsage = geminiUsage(raw);
+          reportModel = 'gemini-1.5-flash';
           const content = raw.candidates?.[0]?.content?.parts?.[0]?.text || '';
           const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();
           resultJson = JSON.parse(cleaned);
@@ -1066,7 +1447,19 @@ Responde ÚNICAMENTE un JSON válido con este formato exacto, sin bloques markdo
       };
     }
 
-    logAudit(req.userId, 'generate_report', 'Informe de Inteligencia Financiera generado');
+    // Solo se cobra si alguna llamada al modelo llegó a facturarse.
+    // El informe de respaldo se genera en local y es gratuito.
+    if (reportUsage.totalTokens > 0) {
+      chargeTokens({
+        userId: req.userId,
+        usage: reportUsage,
+        type: 'ai_report_usage',
+        description: 'Informe de Inteligencia Financiera',
+        model: reportModel
+      });
+    }
+
+    logAudit(req.userId, 'generate_report', `Informe de Inteligencia Financiera generado (-${reportUsage.totalTokens} tokens)`);
     res.json(resultJson);
   } catch (err: any) {
     console.error('Error generating AI report:', err);
@@ -1080,6 +1473,13 @@ app.post('/api/finance/parse-voice-tx', authMiddleware, async (req: any, res) =>
   try {
     const { text, defaultType } = req.body;
     if (!text) return res.status(400).json({ error: 'Texto requerido' });
+
+    // Interpretar el dictado consume modelo: exige saldo.
+    const gate = canSpendTokens(req.userId, 500);
+    if (!gate.ok) return res.status(403).json({ error: gate.error });
+
+    let parseUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedPromptTokens: 0 };
+    let parseModel = 'deepseek-chat';
 
     let type = defaultType || 'expense';
     let amount = 10;
@@ -1119,6 +1519,7 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
 
         if (deepseekRes.ok) {
           const json = await deepseekRes.json() as any;
+          parseUsage = readProviderUsage(json);
           const content = json.choices?.[0]?.message?.content || '';
           const cleanedJson = content.replace(/```json/gi, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanedJson);
@@ -1148,6 +1549,8 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
 
         if (geminiRes.ok) {
           const json = await geminiRes.json() as any;
+          parseUsage = geminiUsage(json);
+          parseModel = 'gemini-1.5-flash';
           const content = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
           const cleanedJson = content.replace(/```json/gi, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanedJson);
@@ -1202,7 +1605,18 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
     const accountId = acc ? acc.id : randomUUID();
     const txDate = new Date().toISOString().split('T')[0];
 
-    logAudit(req.userId, 'parse_voice_tx', `IA interpretó ${type}: ${category} ${amount}`);
+    // El fallback por expresiones regulares es local y no se cobra.
+    if (parseUsage.totalTokens > 0) {
+      chargeTokens({
+        userId: req.userId,
+        usage: parseUsage,
+        type: 'ai_voice_parse_usage',
+        description: `Interpretación de dictado: "${String(text).slice(0, 30)}"`,
+        model: parseModel
+      });
+    }
+
+    logAudit(req.userId, 'parse_voice_tx', `IA interpretó ${type}: ${category} ${amount} (-${parseUsage.totalTokens} tokens)`);
     res.json({ success: true, transaction: { accountId, amount, type, category, description, date: txDate } });
   } catch (err: any) {
     console.error('Error in parse-voice-tx:', err);
@@ -1216,6 +1630,14 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
   try {
     const audioData = req.body.audio; // base64 string or file buffer
     if (!audioData) return res.status(400).json({ error: 'Sin datos de audio' });
+
+    // Whisper local es gratuito, pero los respaldos en la nube no.
+    const gate = canSpendTokens(req.userId, 500);
+    if (!gate.ok) return res.status(403).json({ error: gate.error });
+
+    let sttUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedPromptTokens: 0 };
+    let sttModel = 'whisper-local';
+    let sttPaidCloud = false;
 
     const base64Clean = audioData.replace(/^data:audio\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Clean, 'base64');
@@ -1276,6 +1698,8 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
 
           if (geminiRes.ok) {
             const json = await geminiRes.json() as any;
+            sttUsage = geminiUsage(json);
+            sttModel = 'gemini-2.5-flash';
             transcribedText = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
             console.log('[transcribe] Transcribed via Gemini Audio fallback:', transcribedText);
           }
@@ -1311,6 +1735,8 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
           if (cloudRes.ok) {
             const json = await cloudRes.json() as any;
             transcribedText = json.text || '';
+            sttModel = modelName;
+            sttPaidCloud = true;
             console.log('[transcribe] Transcribed via Cloud Whisper fallback:', transcribedText);
           }
         } catch (cloudErr: any) {
@@ -1322,6 +1748,23 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
     if (!transcribedText) {
       return res.status(503).json({
         error: 'Servicio de voz no disponible. Puedes ejecutar "sudo bash setup-whisper.sh" en la consola de tu VPS para compilar e iniciar Whisper local, o ingresar una API Key activa en Administración > Modelos IA.'
+      });
+    }
+
+    // Whisper en la nube se factura por segundos de audio, no por tokens, así
+    // que se convierte su coste real a tokens equivalentes para que el saldo
+    // del usuario siga siendo una sola unidad. Whisper local no cuesta nada.
+    if (sttPaidCloud) {
+      sttUsage = whisperUsageEquivalent(buffer.length);
+    }
+
+    if (sttUsage.totalTokens > 0) {
+      chargeTokens({
+        userId: req.userId,
+        usage: sttUsage,
+        type: 'ai_transcription_usage',
+        description: `Transcripción de voz (${sttModel})`,
+        model: sttModel
       });
     }
 
@@ -1338,6 +1781,10 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
 app.post('/api/scan-receipt', authMiddleware, async (req: any, res) => {
   const { image } = req.body;
   if (!image) return res.status(400).json({ error: 'Imagen requerida' });
+
+  // La visión por IA es de lo más caro del sistema: exige saldo.
+  const scanGate = canSpendTokens(req.userId, 1000);
+  if (!scanGate.ok) return res.status(403).json({ error: scanGate.error });
   console.log('[scan-receipt] Received image, length:', image?.length, 'starts with:', image?.substring(0, 50));
 
   const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
@@ -1395,6 +1842,20 @@ Responde ÚNICAMENTE con un objeto JSON válido (sin marcas de markdown) con las
     }
 
     const json = await geminiRes.json() as any;
+
+    // Se cobra el análisis aunque el recibo se rechace después: la imagen ya
+    // se procesó y Google ya facturó ese consumo.
+    const scanUsage = geminiUsage(json);
+    if (scanUsage.totalTokens > 0) {
+      chargeTokens({
+        userId: req.userId,
+        usage: scanUsage,
+        type: 'ai_receipt_scan_usage',
+        description: 'Escaneo de comprobante con visión IA',
+        model: 'gemini-2.5-flash'
+      });
+    }
+
     const textResp = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
     console.log('[scan-receipt] Gemini raw response:', textResp.substring(0, 500));
     const matchJson = textResp.match(/\{[\s\S]*\}/);
@@ -1659,28 +2120,12 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
 
   const userId = req.userId;
 
-  // 1. Retrieve or auto-seed active subscription for token accounting
-  let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
-  if (!sub) {
-    const defaultPlan = db.prepare("SELECT * FROM subscription_plans WHERE isRecommended = 1 OR id = 'plan-pro' LIMIT 1").get() as any;
-    const planId = defaultPlan?.id || 'plan-pro';
-    const totalTokens = defaultPlan?.tokensCount || 250000;
-    const subId = randomUUID();
-    const now = new Date();
-    const nextRenewal = new Date(now.getTime() + 30 * 24 * 3600000);
-    db.prepare(`
-      INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
-      VALUES (?, ?, ?, 'monthly', 'active', ?, ?, ?, ?)
-    `).run(subId, userId, planId, totalTokens, totalTokens, now.toISOString(), nextRenewal.toISOString());
-    sub = db.prepare('SELECT * FROM user_subscriptions WHERE id = ?').get(subId) as any;
+  // 1 y 2. Suscripción y comprobación de saldo con colchón mínimo
+  const gate = canSpendTokens(userId);
+  if (!gate.ok) {
+    return res.status(403).json({ error: gate.error });
   }
-
-  // 2. Enforce token balance check
-  if ((sub.tokenBalance || 0) <= 0) {
-    return res.status(403).json({
-      error: 'Has agotado tus tokens disponibles. Por favor recarga más tokens o actualiza tu plan en Configuración para continuar consultando a Hera.'
-    });
-  }
+  const sub = gate.sub;
 
   // Save user message to DB
   db.prepare('INSERT INTO chat_messages (id, userId, role, content, createdAt) VALUES (?, ?, ?, ?, ?)').run(
@@ -1711,6 +2156,10 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
   const toneInstruction = MirrorToneEngine.buildToneInstruction(toneProfile);
 
   let reasoningContent = '';
+  // Consumo real devuelto por el proveedor. Si sigue a cero al final,
+  // es que ninguna llamada llegó a facturarse y no se cobra nada.
+  let chatUsage: ProviderUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cachedPromptTokens: 0 };
+  let chatModel = 'deepseek-chat';
 
   const systemPrompt = `Eres Hera, un Coach Financiero Inteligente en tiempo real. 
 Estás conversando directamente con el usuario: ${userName}. Dirígete a él/ella por su nombre (${userName}) de manera cercana, personalizada, empática y verdaderamente afable.
@@ -1810,7 +2259,14 @@ Incluye al final:
 
   if (deepseekKey && deepseekKey.trim()) {
     try {
-      aiReplyText = await agentOrchestrator.processUserQuery(userId, message, deepseekKey);
+      const agentResult = await agentOrchestrator.processUserQuery(userId, message, deepseekKey);
+      aiReplyText = agentResult.text;
+      chatUsage = {
+        promptTokens: agentResult.usage.promptTokens,
+        completionTokens: agentResult.usage.completionTokens,
+        totalTokens: agentResult.usage.totalTokens,
+        cachedPromptTokens: agentResult.usage.cachedPromptTokens
+      };
       reasoningContent = 'Razonamiento agéntico ejecutado con memoria jerárquica de 4 niveles, análisis de tono y guardrails de seguridad.';
     } catch (e: any) {
       console.error('DeepSeek Orchestrator Fetch error:', e);
@@ -1830,6 +2286,9 @@ Incluye al final:
       if (geminiRes.ok) {
         const json = await geminiRes.json() as any;
         aiReplyText = json.candidates?.[0]?.content?.parts?.[0]?.text || 'Lo sentimos, el servidor se encuentra ocupado en este momento.';
+        // Gemini reporta el consumo con otros nombres que DeepSeek.
+        chatUsage = geminiUsage(json);
+        chatModel = 'gemini-1.5-flash';
         reasoningContent = 'Evaluando patrimonio, ingresos y liquidez disponible con modelo de análisis en tiempo real.';
       } else {
         aiReplyText = 'Lo sentimos, el servidor se encuentra ocupado en este momento. Por favor inténtalo de nuevo más tarde.';
@@ -2009,19 +2468,22 @@ Incluye al final:
     randomUUID(), userId, 'assistant', aiReplyText, widgetType || 'text', widgetData ? JSON.stringify(widgetData) : null, new Date().toISOString()
   );
 
-  // Deduct tokens used for LLM response
-  const tokensConsumed = Math.max(150, Math.ceil((message.length + aiReplyText.length) / 3.2));
-  const updatedBalance = Math.max(0, (sub.tokenBalance || 0) - tokensConsumed);
+  // Cobro del consumo real reportado por el proveedor. Incluye el system
+  // prompt, las definiciones de herramientas, el historial reenviado, los
+  // resultados de las herramientas y todas las iteraciones del agente.
+  const charge = chargeTokens({
+    userId,
+    usage: chatUsage,
+    type: 'ai_chat_usage',
+    description: `Consulta IA Hera: "${message.slice(0, 30)}${message.length > 30 ? '...' : ''}"`,
+    model: chatModel
+  });
 
-  db.prepare('UPDATE user_subscriptions SET tokenBalance = ? WHERE userId = ?').run(updatedBalance, userId);
-
-  const nowISO = new Date().toISOString();
-  db.prepare(`
-    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
-    VALUES (?, ?, 'ai_chat_usage', ?, 0, ?, ?, ?)
-  `).run(randomUUID(), userId, -tokensConsumed, `Consulta IA Hera: "${message.slice(0, 30)}${message.length > 30 ? '...' : ''}"`, nowISO.split('T')[0], nowISO);
-
-  logAudit(userId, 'ai_chat', `Consulta a la IA procesada (-${tokensConsumed} tokens): "${message.slice(0, 40)}"`);
+  logAudit(
+    userId,
+    'ai_chat',
+    `Consulta a la IA procesada (-${charge.charged} tokens reales, $${charge.costUSD.toFixed(6)}): "${message.slice(0, 40)}"`
+  );
 
   res.json({
     success: true,
@@ -2029,8 +2491,13 @@ Incluye al final:
     reasoningContent,
     widgetType,
     widgetData,
-    tokensConsumed,
-    tokensRemaining: updatedBalance
+    tokensConsumed: charge.charged,
+    tokensRemaining: charge.remaining,
+    tokenBreakdown: {
+      promptTokens: chatUsage.promptTokens,
+      completionTokens: chatUsage.completionTokens,
+      cachedPromptTokens: chatUsage.cachedPromptTokens
+    }
   });
 });
 
@@ -2530,7 +2997,9 @@ app.post('/api/admin/cuba-requests/:id/approve', adminAuthMiddleware, (req, res)
 
       const sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
       if (sub) {
-        db.prepare('UPDATE user_subscriptions SET tokenBalance = tokenBalance + ? WHERE userId = ?').run(tokensToAdd, userId);
+        // tokensTotalPlan también sube: es el denominador de la barra de
+        // consumo, y si no crece con las recargas la barra queda rota.
+        creditTokens(userId, tokensToAdd);
       } else {
         db.prepare(`
           INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
@@ -2566,22 +3035,29 @@ app.post('/api/admin/cuba-requests/:id/approve', adminAuthMiddleware, (req, res)
         plan = defaultPlansMap[cubaReq.planId] || defaultPlansMap['plan-pro'] || { id: 'plan-pro', name: 'Plan Pro', tokensCount: 250000, renewIntervalHours: 720 };
       }
 
-      const planTokens = plan?.tokensCount || 250000;
+      const frequency = normalizeFrequency(cubaReq.billingFrequency);
+      const cycle = BILLING_CYCLES[frequency];
+      // Antes se ignoraba la frecuencia: quien pagaba el plan anual recibía
+      // los mismos tokens que el mensual y le caducaba a los 30 días.
+      const planTokens = (plan?.tokensCount || 250000) * cycle.months;
       const planIdToSave = plan?.id || 'plan-pro';
-      const nextRenewal = new Date(now.getTime() + (plan?.renewIntervalHours || 720) * 3600000);
+      const nextRenewal = new Date(
+        now.getTime() + (plan?.renewIntervalHours || 720) * cycle.months * 3600000
+      );
       const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
 
       if (existingSub) {
         db.prepare(`
-          UPDATE user_subscriptions 
-          SET planId = ?, billingFrequency = ?, status = 'active', tokenBalance = tokenBalance + ?, tokensTotalPlan = ?, lastRenewalAt = ?, nextRenewalAt = ?
+          UPDATE user_subscriptions
+          SET planId = ?, billingFrequency = ?, status = 'active', lastRenewalAt = ?, nextRenewalAt = ?
           WHERE userId = ?
-        `).run(planIdToSave, cubaReq.billingFrequency || 'monthly', planTokens, planTokens, now.toISOString(), nextRenewal.toISOString(), userId);
+        `).run(planIdToSave, frequency, now.toISOString(), nextRenewal.toISOString(), userId);
+        creditTokens(userId, planTokens);
       } else {
         db.prepare(`
           INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
           VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
-        `).run(randomUUID(), userId, planIdToSave, cubaReq.billingFrequency || 'monthly', planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
+        `).run(randomUUID(), userId, planIdToSave, frequency, planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
       }
 
       db.prepare(`
@@ -2701,53 +3177,129 @@ app.get('/api/user/subscription', authMiddleware, (req: any, res) => {
   });
 });
 
-// Process Stripe Payment for Plan Selection
-app.post('/api/stripe/create-checkout-session', authMiddleware, (req: any, res) => {
-  const { planId, frequency, paymentCountry } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
+// --- Real Stripe Payment REST API Integration ---
 
-  let isCubaUser = false;
-  if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
-    const cleanCountry = paymentCountry.trim().toLowerCase();
-    if (cleanCountry === 'cuba' || cleanCountry === 'cu') {
-      isCubaUser = true;
-    }
-  } else {
-    const userPhone = user?.phone || '';
-    const cleanPhone = userPhone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.startsWith('+53') || cleanPhone.startsWith('53')) {
-      isCubaUser = true;
-    }
-  }
+async function createStripeCheckoutSession(params: {
+  userId: string;
+  amountUSD: number;
+  planName: string;
+  planId: string;
+  frequency: string;
+  appUrl: string;
+}): Promise<{ id: string; url: string }> {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) throw new Error('STRIPE_SECRET_KEY no configurada');
 
-  let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
-  if (!plan) {
-    const defaultPlansMap: Record<string, any> = {
-      'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
-      'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
-      'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
-    };
-    plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
-    try {
-      db.prepare(`
-        INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-      `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
-    } catch { }
-  }
+  const url = 'https://api.stripe.com/v1/checkout/sessions';
+  const bodyParams = new URLSearchParams();
 
-  let amountUSD = plan.priceMonthly;
-  if (frequency === 'quarterly') amountUSD = plan.priceQuarterly;
-  if (frequency === 'annual') amountUSD = plan.priceAnnual;
+  bodyParams.append('payment_method_types[0]', 'card');
+  bodyParams.append('mode', 'payment');
+  bodyParams.append('line_items[0][price_data][currency]', 'usd');
+  bodyParams.append('line_items[0][price_data][product_data][name]', params.planName);
+  bodyParams.append('line_items[0][price_data][unit_amount]', Math.round(params.amountUSD * 100).toString());
+  bodyParams.append('line_items[0][quantity]', '1');
+  bodyParams.append('success_url', `${params.appUrl || 'http://localhost:3000'}/?stripe_success=true&session_id={CHECKOUT_SESSION_ID}&planId=${params.planId}&frequency=${params.frequency}`);
+  bodyParams.append('cancel_url', `${params.appUrl || 'http://localhost:3000'}/?stripe_cancel=true`);
+  bodyParams.append('metadata[userId]', params.userId);
+  bodyParams.append('metadata[planId]', params.planId);
+  bodyParams.append('metadata[frequency]', params.frequency);
 
-  const sessionId = 'cs_test_' + randomUUID();
-  res.json({
-    isCuba: isCubaUser,
-    sessionId,
-    amountUSD,
-    planName: plan.name,
-    checkoutUrl: `https://checkout.stripe.com/pay/${sessionId}`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${secretKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': process.env.STRIPE_API_VERSION || '2026-02-25.clover'
+    },
+    body: bodyParams.toString()
   });
+
+  const data = await res.json() as any;
+  if (!res.ok) {
+    console.error('❌ [Stripe API Error]:', data);
+    throw new Error(data.error?.message || 'Error al comunicarse con la API de Stripe');
+  }
+
+  return { id: data.id, url: data.url };
+}
+
+// Process Stripe Payment for Plan Selection
+app.post('/api/stripe/create-checkout-session', authMiddleware, async (req: any, res) => {
+  try {
+    const { planId, frequency, paymentCountry } = req.body;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
+
+    let isCubaUser = false;
+    if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
+      const cleanCountry = paymentCountry.trim().toLowerCase();
+      if (cleanCountry === 'cuba' || cleanCountry === 'cu') {
+        isCubaUser = true;
+      }
+    } else {
+      const userPhone = user?.phone || '';
+      const cleanPhone = userPhone.replace(/[^0-9+]/g, '');
+      if (cleanPhone.startsWith('+53') || cleanPhone.startsWith('53')) {
+        isCubaUser = true;
+      }
+    }
+
+    let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
+    if (!plan) {
+      const defaultPlansMap: Record<string, any> = {
+        'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
+        'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
+        'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
+      };
+      plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
+      try {
+        db.prepare(`
+          INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
+      } catch { }
+    }
+
+    let amountUSD = plan.priceMonthly;
+    if (frequency === 'quarterly') amountUSD = plan.priceQuarterly;
+    if (frequency === 'annual') amountUSD = plan.priceAnnual;
+
+    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+
+    if (process.env.STRIPE_SECRET_KEY) {
+      try {
+        const session = await createStripeCheckoutSession({
+          userId: req.userId,
+          amountUSD,
+          planName: plan.name,
+          planId: plan.id,
+          frequency: frequency || 'monthly',
+          appUrl
+        });
+
+        return res.json({
+          isCuba: isCubaUser,
+          sessionId: session.id,
+          amountUSD,
+          planName: plan.name,
+          checkoutUrl: session.url
+        });
+      } catch (stripeErr: any) {
+        console.error('⚠️ [Stripe Session Error]:', stripeErr.message);
+      }
+    }
+
+    const sessionId = 'cs_test_' + randomUUID();
+    res.json({
+      isCuba: isCubaUser,
+      sessionId,
+      amountUSD,
+      planName: plan.name,
+      checkoutUrl: `https://checkout.stripe.com/pay/${sessionId}`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Error procesando solicitud de pago en Stripe' });
+  }
 });
 
 // Confirm Stripe Payment & Activate Plan
@@ -2771,33 +3323,103 @@ app.post('/api/stripe/confirm-payment', authMiddleware, (req: any, res) => {
   }
 
   const now = new Date();
-  const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * 3600000);
+  const freq = normalizeFrequency(frequency);
+  const cycle = BILLING_CYCLES[freq];
+  const planTokens = (plan.tokensCount || 250000) * cycle.months;
+  const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * cycle.months * 3600000);
   let amountUSD = plan.priceMonthly;
-  if (frequency === 'quarterly') amountUSD = plan.priceQuarterly;
-  if (frequency === 'annual') amountUSD = plan.priceAnnual;
+  if (freq === 'quarterly') amountUSD = plan.priceQuarterly;
+  if (freq === 'annual') amountUSD = plan.priceAnnual;
 
   const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
   if (existingSub) {
     db.prepare(`
       UPDATE user_subscriptions 
-      SET planId = ?, billingFrequency = ?, status = 'active', tokenBalance = tokenBalance + ?, tokensTotalPlan = ?, lastRenewalAt = ?, nextRenewalAt = ?
+      SET planId = ?, billingFrequency = ?, status = 'active', lastRenewalAt = ?, nextRenewalAt = ?
       WHERE userId = ?
-    `).run(plan.id, frequency || 'monthly', plan.tokensCount, plan.tokensCount, now.toISOString(), nextRenewal.toISOString(), userId);
+    `).run(plan.id, freq, now.toISOString(), nextRenewal.toISOString(), userId);
+    creditTokens(userId, planTokens);
   } else {
     db.prepare(`
       INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(randomUUID(), userId, plan.id, frequency || 'monthly', 'active', plan.tokensCount, plan.tokensCount, now.toISOString(), nextRenewal.toISOString());
+      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+    `).run(randomUUID(), userId, plan.id, freq, planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
   }
 
   // Add transaction log
   db.prepare(`
     INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(randomUUID(), userId, 'subscription_renewal', plan.tokensCount, amountUSD, `Suscripción a ${plan.name} (${frequency || 'monthly'})`, now.toISOString().split('T')[0], now.toISOString());
+  `).run(randomUUID(), userId, 'subscription_renewal', planTokens, amountUSD, `Pago Stripe: Suscripción ${plan.name} (${cycle.label})`, now.toISOString().split('T')[0], now.toISOString());
 
-  logAudit(userId, 'subscribe_plan', `Plan activado: ${plan.name} ($${amountUSD})`);
+  logAudit(userId, 'subscribe_plan', `Plan Stripe activado: ${plan.name} ($${amountUSD})`);
   res.json({ success: true, message: `¡Plan ${plan.name} activado con éxito!` });
+});
+
+// Stripe Webhook Endpoint
+app.post('/api/stripe/webhook', async (req: any, res) => {
+  try {
+    let event = req.body;
+    if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
+      try {
+        event = JSON.parse(req.body.toString());
+      } catch {}
+    }
+
+    if (event?.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = session.metadata?.userId;
+      const planId = session.metadata?.planId;
+      const frequency = session.metadata?.frequency || 'monthly';
+
+      if (userId && planId) {
+        console.log(`💳 [Stripe Webhook] Pago confirmado para usuario ${userId}, plan ${planId}`);
+        let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
+        if (!plan) {
+          const defaultPlansMap: Record<string, any> = {
+            'plan-basic': { id: 'plan-basic', name: 'Plan Básico', tokensCount: 50000, renewIntervalHours: 720 },
+            'plan-pro': { id: 'plan-pro', name: 'Plan Pro', tokensCount: 250000, renewIntervalHours: 720 },
+            'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', tokensCount: 1000000, renewIntervalHours: 720 }
+          };
+          plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
+        }
+
+        const now = new Date();
+        const freq = normalizeFrequency(frequency);
+        const cycle = BILLING_CYCLES[freq];
+        const planTokens = (plan.tokensCount || 250000) * cycle.months;
+        const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * cycle.months * 3600000);
+        const amountUSD = (session.amount_total || 0) / 100;
+
+        const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+        if (existingSub) {
+          db.prepare(`
+            UPDATE user_subscriptions 
+            SET planId = ?, billingFrequency = ?, status = 'active', lastRenewalAt = ?, nextRenewalAt = ?
+            WHERE userId = ?
+          `).run(plan.id, freq, now.toISOString(), nextRenewal.toISOString(), userId);
+          creditTokens(userId, planTokens);
+        } else {
+          db.prepare(`
+            INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+          `).run(randomUUID(), userId, plan.id, freq, planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
+        }
+
+        db.prepare(`
+          INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(randomUUID(), userId, 'subscription_renewal', planTokens, amountUSD, `Webhook Stripe: Suscripción ${plan.name} (${cycle.label})`, now.toISOString().split('T')[0], now.toISOString());
+
+        logAudit(userId, 'stripe_webhook_payment', `Pago Webhook Stripe: ${plan.name} ($${amountUSD})`);
+      }
+    }
+
+    res.json({ received: true });
+  } catch (err: any) {
+    console.error('❌ [Stripe Webhook Error]:', err);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
 });
 
 // Top Up Token Purchase Endpoint ($2, $5, $15, $25, $50, $100)
