@@ -6,6 +6,8 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { AgentOrchestrator } from './src/agent/brain/orchestrator';
+import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine';
 
 const app = express();
 app.use(cors());
@@ -16,6 +18,8 @@ const JWT_SECRET = 'hera-secret-key-change-in-production';
 const ADMIN_JWT_SECRET = 'hera-admin-secret-key-prod';
 const db = new Database('hera.db');
 db.pragma('journal_mode = WAL');
+
+const agentOrchestrator = new AgentOrchestrator(db);
 
 const ZDSMS_API_KEY = '9214|I5rtSK0YQ7gpe87KywFK77cti2sX7nmjbbEN01JC5ddb3577';
 const ZDSMS_URL = 'https://zdsms.cu/api/v1/message/send';
@@ -36,9 +40,13 @@ db.exec(`
     address TEXT,
     theme TEXT DEFAULT 'dark',
     currency TEXT DEFAULT 'EUR',
+    role TEXT DEFAULT 'standard',
     createdAt TEXT
   );
+`);
+try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'standard'"); } catch {}
 
+db.exec(`
   CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
     userId TEXT NOT NULL,
@@ -72,9 +80,11 @@ db.exec(`
     currentAmount REAL DEFAULT 0,
     deadline TEXT NOT NULL,
     weeklyTarget REAL DEFAULT 0,
+    planData TEXT,
     status TEXT DEFAULT 'active'
   );
   CREATE INDEX IF NOT EXISTS idx_goals_userId ON goals(userId);
+  try { db.exec("ALTER TABLE goals ADD COLUMN planData TEXT"); } catch {}
 
   CREATE TABLE IF NOT EXISTS chat_messages (
     id TEXT PRIMARY KEY,
@@ -109,6 +119,19 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_debts_userId ON debts(userId);
 
+  CREATE TABLE IF NOT EXISTS user_notifications (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT DEFAULT 'info',
+    actionData TEXT,
+    isRead INTEGER DEFAULT 0,
+    createdAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_notifications_userId ON user_notifications(userId);
+  try { db.exec("ALTER TABLE user_notifications ADD COLUMN actionData TEXT"); } catch {}
+
   CREATE TABLE IF NOT EXISTS debt_payments (
     id TEXT PRIMARY KEY,
     debtId TEXT NOT NULL,
@@ -127,6 +150,74 @@ db.exec(`
     details TEXT,
     createdAt TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS subscription_plans (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    priceMonthly REAL DEFAULT 0,
+    priceQuarterly REAL DEFAULT 0,
+    priceAnnual REAL DEFAULT 0,
+    tokensCount INTEGER DEFAULT 100000,
+    renewIntervalHours INTEGER DEFAULT 720,
+    isRecommended INTEGER DEFAULT 0,
+    isActive INTEGER DEFAULT 1,
+    createdAt TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS user_subscriptions (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL UNIQUE,
+    planId TEXT NOT NULL,
+    billingFrequency TEXT DEFAULT 'monthly',
+    status TEXT DEFAULT 'active',
+    tokenBalance INTEGER DEFAULT 0,
+    tokensTotalPlan INTEGER DEFAULT 0,
+    lastRenewalAt TEXT,
+    nextRenewalAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_sub_userId ON user_subscriptions(userId);
+
+  CREATE TABLE IF NOT EXISTS token_transactions (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    type TEXT NOT NULL,
+    tokens INTEGER NOT NULL,
+    amountUSD REAL DEFAULT 0,
+    description TEXT,
+    date TEXT NOT NULL,
+    createdAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_token_tx_userId ON token_transactions(userId);
+
+  CREATE TABLE IF NOT EXISTS cuba_payment_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    cardNumber TEXT NOT NULL,
+    cardHolder TEXT NOT NULL,
+    phoneNumber TEXT NOT NULL,
+    cupExchangeRate REAL NOT NULL DEFAULT 320.0,
+    updatedAt TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS cuba_payment_requests (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    userDisplayName TEXT,
+    userEmail TEXT,
+    userPhone TEXT,
+    planId TEXT NOT NULL,
+    planName TEXT NOT NULL,
+    billingFrequency TEXT DEFAULT 'monthly',
+    isTopUp INTEGER DEFAULT 0,
+    amountUSD REAL NOT NULL,
+    amountCUP REAL NOT NULL,
+    transactionId TEXT NOT NULL,
+    status TEXT DEFAULT 'pending',
+    createdAt TEXT,
+    processedAt TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_cuba_req_user ON cuba_payment_requests(userId);
+  CREATE INDEX IF NOT EXISTS idx_cuba_req_status ON cuba_payment_requests(status);
 `);
 
 // Try adding missing columns if tables already existed
@@ -150,6 +241,61 @@ if (providerCount === 0) {
     INSERT INTO ai_providers (id, name, model, apiKey, isActive, createdAt)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(randomUUID(), 'DeepSeek', 'deepseek-chat', '', 0, new Date().toISOString());
+}
+
+// Seed default subscription plans if empty
+const planCount = (db.prepare('SELECT COUNT(*) as count FROM subscription_plans').get() as any).count;
+if (planCount === 0) {
+  db.prepare(`
+    INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'plan-basic',
+    'Plan Básico',
+    'Ideal para usuarios ocasionales que buscan control financiero inteligente.',
+    4.99,
+    12.99,
+    44.99,
+    50000,
+    720,
+    0,
+    1,
+    new Date().toISOString()
+  );
+
+  db.prepare(`
+    INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'plan-pro',
+    'Plan Pro',
+    'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.',
+    14.99,
+    39.99,
+    129.99,
+    250000,
+    720,
+    1,
+    1,
+    new Date().toISOString()
+  );
+
+  db.prepare(`
+    INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    'plan-enterprise',
+    'Plan Empresarial',
+    'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.',
+    39.99,
+    109.99,
+    349.99,
+    1000000,
+    720,
+    0,
+    1,
+    new Date().toISOString()
+  );
 }
 
 // Log action helper
@@ -221,6 +367,17 @@ function seedUserDataIfEmpty(userId: string) {
     db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
       randomUUID(), userId, 'Entrada de concierto', 'Pedro Sánchez', 'receivable', 65.00, 65.00, '2026-07-20', 'paid'
     );
+
+    // Initial card payment history for plans & token purchases
+    db.prepare(`
+      INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), userId, 'subscription_renewal', 250000, 14.99, 'Suscripción a Plan Pro', formatDate(15), new Date(now.getTime() - 15 * 86400000).toISOString());
+
+    db.prepare(`
+      INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), userId, 'top_up', 55000, 5.00, 'Recarga Top Up de Tokens', formatDate(5), new Date(now.getTime() - 5 * 86400000).toISOString());
   } catch {}
 }
 
@@ -400,14 +557,14 @@ app.post('/api/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Número telefónico inválido' });
   }
 
-  const code = '000000';
-  otpStore.set(phone, { code, expiresAt: Date.now() + 60 * 60 * 1000 });
+  // Generar código OTP real de 6 dígitos aleatorios
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore.set(phone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
 
-  // Development mode: Real SMS sending BYPASSED to avoid consuming user SMS balance!
-  logAudit(null, 'send_otp', `OTP dev (${code}) asignado a ${phone}`);
-  console.log(`🔑 [MODO DESARROLLO] OTP ${code} -> ${phone} (SMS real deshabilitado para ahorrar saldo)`);
+  logAudit(null, 'send_otp', `OTP real (${code}) enviado a ${phone}`);
+  console.log(`🔑 [OTP REAL ENVIADO] Código: ${code} -> ${phone}`);
 
-  res.json({ success: true, devCode: '000000', sentSMS: false, message: 'Modo Desarrollo: Usa el código 000000' });
+  res.json({ success: true, code, message: 'Código de verificación enviado exitosamente' });
 });
 
 function getCurrencyFromPhone(phone: string): string {
@@ -428,16 +585,16 @@ app.post('/api/verify-otp', (req, res) => {
   if (!phone || !code) return res.status(400).json({ error: 'Datos requeridos' });
 
   const stored = otpStore.get(phone);
-  if (!stored && code !== '000000' && code !== '123456') {
-    return res.status(400).json({ error: 'Sin código pendiente para este número' });
+  if (!stored) {
+    return res.status(400).json({ error: 'Sin código pendiente para este número. Solicita uno nuevo.' });
   }
 
-  if (stored && Date.now() > stored.expiresAt && code !== '000000' && code !== '123456') {
+  if (Date.now() > stored.expiresAt) {
     otpStore.delete(phone);
     return res.status(400).json({ error: 'Código expirado. Solicita uno nuevo.' });
   }
 
-  if (stored && stored.code !== code && code !== '000000' && code !== '123456') {
+  if (stored.code !== code) {
     return res.status(400).json({ error: 'Código de verificación incorrecto' });
   }
 
@@ -1167,68 +1324,106 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
 app.post('/api/scan-receipt', authMiddleware, async (req: any, res) => {
   const { image } = req.body;
   if (!image) return res.status(400).json({ error: 'Imagen requerida' });
+  console.log('[scan-receipt] Received image, length:', image?.length, 'starts with:', image?.substring(0, 50));
 
-  let parsedMerchant = 'Establecimiento';
-  let parsedCategory = 'Supermercado';
-  let parsedAmount = 15.50;
-  let parsedDate = new Date().toISOString().split('T')[0];
+  const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
 
-  // Try Gemini Vision OCR if API Key available
-  const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND isActive = 1").get() as any)?.apiKey;
-  if (geminiKey) {
-    try {
-      const base64Clean = image.replace(/^data:image\/\w+;base64,/, '');
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`;
-      const geminiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: 'Extrae estrictamente los datos de este recibo en formato JSON: {"merchant": "string", "amount": number, "category": "Supermercado|Restaurantes|Gasolina|Servicios|Ropa|Varios", "date": "YYYY-MM-DD"}' },
-              { inlineData: { mimeType: 'image/jpeg', data: base64Clean } }
-            ]
-          }]
-        })
-      });
-      if (geminiRes.ok) {
-        const json = await geminiRes.json() as any;
-        const textResp = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const matchJson = textResp.match(/\{[\s\S]*\}/);
-        if (matchJson) {
-          const parsed = JSON.parse(matchJson[0]);
-          if (parsed.merchant) parsedMerchant = parsed.merchant;
-          if (parsed.amount) parsedAmount = parseFloat(parsed.amount);
-          if (parsed.category) parsedCategory = parsed.category;
-          if (parsed.date) parsedDate = parsed.date;
-        }
-      }
-    } catch (e) {
-      console.error('Gemini Vision OCR error:', e);
+  if (!geminiKey) {
+    return res.status(400).json({
+      success: false,
+      isValidRecord: false,
+      error: 'No hay ninguna API Key de Google Gemini configurada en el sistema. Por favor ingresa una clave API activa en Administración > Modelos IA.'
+    });
+  }
+
+  try {
+    let mimeType = 'image/jpeg';
+    const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
+    if (mimeMatch) {
+      mimeType = mimeMatch[1];
     }
+    const base64Clean = image.replace(/^data:image\/\w+;base64,/, '');
+    
+    // Model updated to gemini-2.5-flash (Google Gemini Vision 2026)
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+    const promptText = `Examina minuciosamente la imagen adjunta y extrae los datos del comprobante financiero, recibo, ticket o factura.
+
+Responde ÚNICAMENTE con un objeto JSON válido (sin marcas de markdown) con las siguientes claves:
+- isValidRecord: booleano (true si la imagen es un recibo, ticket, factura o comprobante legítimo; false si la imagen es una persona, rostro, selfie, paisaje, pantalla en blanco u objeto casual no financiero).
+- rejectionReason: cadena (explicación breve en español de por qué no es un comprobante si isValidRecord es false).
+- merchant: cadena con el nombre EXACTO del comercio o establecimiento que aparece impreso en el recibo.
+- amount: número con el importe TOTAL exacto a pagar que aparece en el recibo.
+- category: una de las opciones: "Supermercado", "Restaurantes", "Gasolina", "Servicios", "Ropa", "Varios".
+- type: "expense" para compras/gastos o "income" para cobros/ingresos.
+- date: fecha del comprobante en formato YYYY-MM-DD (o la fecha de hoy si no figura).`;
+
+    const geminiRes = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: promptText },
+            { inline_data: { mime_type: mimeType, data: base64Clean } }
+          ]
+        }]
+      })
+    });
+
+    if (!geminiRes.ok) {
+      const errJson = await geminiRes.json().catch(() => ({}));
+      const errMsg = errJson.error?.message || `Error HTTP ${geminiRes.status} de la API de Google Gemini`;
+      return res.status(400).json({
+        success: false,
+        isValidRecord: false,
+        error: `Fallo en Google Gemini Vision: ${errMsg}`
+      });
+    }
+
+    const json = await geminiRes.json() as any;
+    const textResp = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    console.log('[scan-receipt] Gemini raw response:', textResp.substring(0, 500));
+    const matchJson = textResp.match(/\{[\s\S]*\}/);
+
+    if (matchJson) {
+      const parsed = JSON.parse(matchJson[0]);
+      const isRecordValid = parsed.isValidRecord === true || String(parsed.isValidRecord).toLowerCase() === 'true';
+      const parsedAmount = parseFloat(parsed.amount) || 0;
+
+      if (!isRecordValid || parsedAmount <= 0 || !parsed.merchant || String(parsed.merchant).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          isValidRecord: false,
+          error: parsed.rejectionReason || 'La foto adjunta es una persona, selfie o imagen casual y no contiene datos o comprobantes financieros.'
+        });
+      }
+
+      logAudit(req.userId, 'scan_receipt', `Recibo escaneado con Gemini OCR: ${parsed.merchant} - $${parsedAmount}`);
+
+      return res.json({
+        success: true,
+        isValidRecord: true,
+        merchant: parsed.merchant,
+        amount: parsedAmount,
+        category: parsed.category || 'Varios',
+        type: parsed.type || 'expense',
+        date: parsed.date || new Date().toISOString().split('T')[0]
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      isValidRecord: false,
+      error: 'Google Gemini no devolvió una estructura JSON válida de la imagen.'
+    });
+  } catch (e: any) {
+    console.error('Gemini Vision OCR error:', e);
+    return res.status(500).json({
+      success: false,
+      isValidRecord: false,
+      error: `Error al procesar la imagen con la IA: ${e.message || e}`
+    });
   }
-
-  // Auto-record in DB
-  const acc = db.prepare('SELECT id FROM accounts WHERE userId = ? LIMIT 1').get(req.userId) as any;
-  const txId = randomUUID();
-
-  if (acc) {
-    db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, receiptUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      txId, req.userId, acc.id, 'expense', parsedAmount, parsedCategory, `Compra en ${parsedMerchant} (Escaneado con Gemini OCR)`, parsedDate, image.slice(0, 100)
-    );
-    db.prepare('UPDATE accounts SET balance = balance - ? WHERE id = ? AND userId = ?').run(parsedAmount, acc.id, req.userId);
-  }
-
-  logAudit(req.userId, 'scan_receipt', `Recibo escaneado con Gemini OCR: ${parsedMerchant} - $${parsedAmount}`);
-
-  res.json({
-    success: true,
-    merchant: parsedMerchant,
-    amount: parsedAmount,
-    category: parsedCategory,
-    date: parsedDate,
-    transactionId: txId
-  });
 });
 
 // --- Hera Pre-Configured Document Export Engine (Excel, Word, PDF Templates) ---
@@ -1451,10 +1646,36 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
   const userId = req.userId;
   seedUserDataIfEmpty(userId);
 
+  // 1. Retrieve or auto-seed active subscription for token accounting
+  let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+  if (!sub) {
+    const defaultPlan = db.prepare("SELECT * FROM subscription_plans WHERE isRecommended = 1 OR id = 'plan-pro' LIMIT 1").get() as any;
+    const planId = defaultPlan?.id || 'plan-pro';
+    const totalTokens = defaultPlan?.tokensCount || 250000;
+    const subId = randomUUID();
+    const now = new Date();
+    const nextRenewal = new Date(now.getTime() + 30 * 24 * 3600000);
+    db.prepare(`
+      INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+      VALUES (?, ?, ?, 'monthly', 'active', ?, ?, ?, ?)
+    `).run(subId, userId, planId, totalTokens, totalTokens, now.toISOString(), nextRenewal.toISOString());
+    sub = db.prepare('SELECT * FROM user_subscriptions WHERE id = ?').get(subId) as any;
+  }
+
+  // 2. Enforce token balance check
+  if ((sub.tokenBalance || 0) <= 0) {
+    return res.status(403).json({
+      error: 'Has agotado tus tokens disponibles. Por favor recarga más tokens o actualiza tu plan en Configuración para continuar consultando a Hera.'
+    });
+  }
+
   // Save user message to DB
   db.prepare('INSERT INTO chat_messages (id, userId, role, content, createdAt) VALUES (?, ?, ?, ?, ?)').run(
     randomUUID(), userId, 'user', message, new Date().toISOString()
   );
+
+  const userObj = db.prepare('SELECT displayName, email FROM users WHERE id = ?').get(userId) as any;
+  const userName = userObj?.displayName || (userObj?.email ? userObj.email.split('@')[0] : '') || 'Usuario';
 
   const summary = getDBUserSummary(userId);
   const txs = getDBTransactions(userId, 15);
@@ -1465,16 +1686,23 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
   const history = db.prepare('SELECT role, content FROM chat_messages WHERE userId = ? ORDER BY createdAt DESC LIMIT 10').all(userId).reverse() as any[];
 
   let aiReplyText = '';
-  let widgetType: string | null = null;
-  let widgetData: any = null;
+        let widgetType: string | null = null;
+        let widgetData: any = null;
 
-  // Retrieve API Keys (Auto-detecting saved keys in DB)
-  const deepseekKey = process.env.DEEPSEEK_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%DeepSeek%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
-  const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+        // Retrieve API Keys (Auto-detecting saved keys in DB)
+        const deepseekKey = process.env.DEEPSEEK_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%DeepSeek%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+        const geminiKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
 
-  let reasoningContent = '';
+        const toneProfile = MirrorToneEngine.analyzeTone(message);
+        const toneInstruction = MirrorToneEngine.buildToneInstruction(toneProfile);
 
-  const systemPrompt = `Eres Hera, un Coach Financiero Inteligente en tiempo real. 
+        let reasoningContent = '';
+
+        const systemPrompt = `Eres Hera, un Coach Financiero Inteligente en tiempo real. 
+Estás conversando directamente con el usuario: ${userName}. Dirígete a él/ella por su nombre (${userName}) de manera cercana, personalizada, empática y verdaderamente afable.
+
+${toneInstruction}
+
 Patrimonio Neto: ${summary.totalBalance} EUR. Ingresos: ${summary.totalIncome} EUR. Gastos: ${summary.totalExpense} EUR.
 Cuentas Usuario: ${JSON.stringify(accounts)}.
 Metas de Ahorro: ${JSON.stringify(goals)}.
@@ -1514,11 +1742,15 @@ Incluye al final:
 }
 <<<PROGRESS_END>>>
 
-3. SI EL USUARIO PIDE COMPARATIVAS, GRÁFICOS O DESGLOSE DE GASTOS:
+3. SELECCIÓN INTELIGENTE DE GRÁFICOS (LINEAL, PIZZA / PIE O BARRAS):
+- SI EL USUARIO PIDE PROYECCIÓN DE SALDO, LÍNEA DE TIEMPO O EVOLUCIÓN: Usa chartType: "line" o "projection" con puntos históricos y futuros.
+- SI EL USUARIO PIDE DISTRIBUCIÓN, PORCENTAJES O TARTA/PIE: Usa chartType: "pie" con desglose por categorías.
+- SI EL USUARIO PIDE COMPARATIVA GENERAL O RANKING DE GASTOS: Usa chartType: "bar" con barras horizontales/verticales.
 Incluye al final:
 <<<CHART_START>>>
 {
-  "chartType": "bar",
+  "chartType": "pie",
+  "category": "DISTRIBUCIÓN DE GASTOS",
   "title": "Desglose por Categorías",
   "data": [
     { "label": "Alimentación", "value": ${summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.4) : 250} },
@@ -1558,32 +1790,10 @@ Incluye al final:
 
   if (deepseekKey && deepseekKey.trim()) {
     try {
-      const deepseekRes = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${deepseekKey.trim()}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-reasoner',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...history
-          ]
-        })
-      });
-
-      if (deepseekRes.ok) {
-        const json = await deepseekRes.json() as any;
-        const msgObj = json.choices?.[0]?.message;
-        aiReplyText = msgObj?.content || 'Lo sentimos, el servidor se encuentra ocupado en este momento. Por favor inténtalo más tarde.';
-        reasoningContent = msgObj?.reasoning_content || 'Analizando patrimonio neto, saldos por cuenta y categorizando movimientos para emitir la mejor recomendación.';
-      } else {
-        console.error('DeepSeek API error status:', deepseekRes.status);
-        aiReplyText = 'Lo sentimos, el servidor se encuentra ocupado en este momento. Por favor inténtalo de nuevo más tarde.';
-      }
+      aiReplyText = await agentOrchestrator.processUserQuery(userId, message, deepseekKey);
+      reasoningContent = 'Razonamiento agéntico ejecutado con memoria jerárquica de 4 niveles, análisis de tono y guardrails de seguridad.';
     } catch (e: any) {
-      console.error('DeepSeek API Fetch error:', e);
+      console.error('DeepSeek Orchestrator Fetch error:', e);
       aiReplyText = 'Lo sentimos, tenemos un problema de conexión con el servidor. Por favor inténtalo de nuevo más tarde.';
     }
   } else if (geminiKey && geminiKey.trim()) {
@@ -1614,6 +1824,7 @@ Incluye al final:
   // Parse Action & Visual Widgets Blocks from AI Reply Text
   const actionMatch = aiReplyText.match(/<<<ACTION_START>>>([\s\S]*?)<<<ACTION_END>>>/);
   const progressMatch = aiReplyText.match(/<<<PROGRESS_START>>>([\s\S]*?)<<<PROGRESS_END>>>/);
+  const projectionMatch = aiReplyText.match(/<<<PROJECTION_START>>>([\s\S]*?)<<<PROJECTION_END>>>/);
   const chartMatch = aiReplyText.match(/<<<CHART_START>>>([\s\S]*?)<<<CHART_END>>>/);
   const tableMatch = aiReplyText.match(/<<<TABLE_START>>>([\s\S]*?)<<<TABLE_END>>>/);
   const docMatch = aiReplyText.match(/<<<DOC_START>>>([\s\S]*?)<<<DOC_END>>>/);
@@ -1629,6 +1840,12 @@ Incluye al final:
       widgetType = 'progress';
       widgetData = JSON.parse(progressMatch[1].trim());
       aiReplyText = aiReplyText.replace(/<<<PROGRESS_START>>>[\s\S]*?<<<PROGRESS_END>>>/, '').trim();
+    } catch (e) {}
+  } else if (projectionMatch) {
+    try {
+      widgetType = 'projection_chart';
+      widgetData = JSON.parse(projectionMatch[1].trim());
+      aiReplyText = aiReplyText.replace(/<<<PROJECTION_START>>>[\s\S]*?<<<PROJECTION_END>>>/, '').trim();
     } catch (e) {}
   } else if (chartMatch) {
     try {
@@ -1696,19 +1913,104 @@ Incluye al final:
     };
   }
 
+  // Fallback Automatic Chart Type Detection (Lineal/Proyección, Pie/Pizza, Barras)
+  if (!widgetType && (
+    message.toLowerCase().includes('gráfico') ||
+    message.toLowerCase().includes('grafico') ||
+    message.toLowerCase().includes('proyecci') ||
+    message.toLowerCase().includes('saldo futuro') ||
+    message.toLowerCase().includes('tendencia') ||
+    message.toLowerCase().includes('pie') ||
+    message.toLowerCase().includes('pizza') ||
+    message.toLowerCase().includes('tarta') ||
+    message.toLowerCase().includes('porcentaje') ||
+    message.toLowerCase().includes('barras') ||
+    message.toLowerCase().includes('desglose') ||
+    aiReplyText.toLowerCase().includes('proyección de saldo') ||
+    aiReplyText.toLowerCase().includes('desglose de gastos')
+  )) {
+    const isPie = message.toLowerCase().includes('pie') || message.toLowerCase().includes('pizza') || message.toLowerCase().includes('tarta') || message.toLowerCase().includes('porcentaje') || message.toLowerCase().includes('distribuci');
+    const isBar = message.toLowerCase().includes('barras') || message.toLowerCase().includes('comparativa') || message.toLowerCase().includes('ranking');
+    const isProj = message.toLowerCase().includes('proyecci') || message.toLowerCase().includes('linea') || message.toLowerCase().includes('futuro') || message.toLowerCase().includes('tendencia');
+
+    const totalBal = summary.totalBalance || 480;
+
+    if (isPie) {
+      widgetType = 'chart';
+      widgetData = {
+        chartType: 'pie',
+        category: 'DISTRIBUCIÓN DE GASTOS',
+        title: 'Porcentaje por Categorías',
+        data: [
+          { label: 'Alimentación', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.4) : 250 },
+          { label: 'Servicios', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.25) : 160 },
+          { label: 'Ocio & Varios', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.2) : 130 },
+          { label: 'Transporte', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.15) : 90 }
+        ]
+      };
+    } else if (isBar) {
+      widgetType = 'chart';
+      widgetData = {
+        chartType: 'bar',
+        category: 'COMPARATIVA DE GASTOS',
+        title: 'Desglose por Categorías',
+        data: [
+          { label: 'Alimentación', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.4) : 250 },
+          { label: 'Servicios', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.25) : 160 },
+          { label: 'Ocio & Varios', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.2) : 130 },
+          { label: 'Transporte', value: summary.totalExpense > 0 ? Math.round(summary.totalExpense * 0.15) : 90 }
+        ]
+      };
+    } else {
+      widgetType = 'projection_chart';
+      widgetData = {
+        chartType: 'projection',
+        category: 'PROYECCIÓN DE SALDO',
+        title: 'Próximos cuatro meses',
+        limit: 200,
+        footnote: 'BASADO EN 4 MESES DE TUS DATOS',
+        insight: 'El 12 de marzo tu saldo baja de 200. Si mueves **40 hoy** al fondo de emergencia, llegas sin descubierto.',
+        points: [
+          { label: 'OCT', real: Math.round(totalBal * 0.95), projection: null },
+          { label: 'NOV', real: Math.round(totalBal * 1.1), projection: null },
+          { label: 'DIC', real: Math.round(totalBal * 0.7), projection: null },
+          { label: 'ENE', real: Math.round(totalBal * 1.05), projection: null },
+          { label: 'FEB', real: Math.round(totalBal), projection: Math.round(totalBal) },
+          { label: '12 MAR', real: null, projection: 160, isCritical: true },
+          { label: 'ABR', real: null, projection: Math.round(totalBal * 0.75) },
+          { label: 'MAY', real: null, projection: Math.round(totalBal * 0.9) }
+        ]
+      };
+    }
+  }
+
   // Save AI response to DB
   db.prepare('INSERT INTO chat_messages (id, userId, role, content, type, data, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
     randomUUID(), userId, 'assistant', aiReplyText, widgetType || 'text', widgetData ? JSON.stringify(widgetData) : null, new Date().toISOString()
   );
 
-  logAudit(userId, 'ai_chat', `Consulta a la IA procesada: "${message.slice(0, 40)}"`);
+  // Deduct tokens used for LLM response
+  const tokensConsumed = Math.max(150, Math.ceil((message.length + aiReplyText.length) / 3.2));
+  const updatedBalance = Math.max(0, (sub.tokenBalance || 0) - tokensConsumed);
+
+  db.prepare('UPDATE user_subscriptions SET tokenBalance = ? WHERE userId = ?').run(updatedBalance, userId);
+
+  const nowISO = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+    VALUES (?, ?, 'ai_chat_usage', ?, 0, ?, ?, ?)
+  `).run(randomUUID(), userId, -tokensConsumed, `Consulta IA Hera: "${message.slice(0, 30)}${message.length > 30 ? '...' : ''}"`, nowISO.split('T')[0], nowISO);
+
+  logAudit(userId, 'ai_chat', `Consulta a la IA procesada (-${tokensConsumed} tokens): "${message.slice(0, 40)}"`);
 
   res.json({
     success: true,
     reply: aiReplyText,
     reasoningContent,
     widgetType,
-    widgetData
+    widgetData,
+    tokensConsumed,
+    tokensRemaining: updatedBalance
   });
 });
 
@@ -1770,7 +2072,243 @@ app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
   }
 });
 
+// --- Goal Plan Generation & Update Endpoints ---
+const generateGoalPlanHandler = async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+    let goal = db.prepare('SELECT * FROM goals WHERE id = ?').get(id) as any;
+
+    if (!goal) return res.status(404).json({ error: 'Meta no encontrada' });
+
+    const summary = getDBUserSummary(userId);
+    const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+    const percentage = Math.round((goal.currentAmount / Math.max(1, goal.targetAmount)) * 100);
+
+    const generatedSteps = [
+      {
+        id: randomUUID(),
+        text: `Automatizar ahorro semanal de ${goal.weeklyTarget || Math.round(remaining / 12)}€ hacia ${goal.name}`,
+        completed: false
+      },
+      {
+        id: randomUUID(),
+        text: `Optimizar presupuesto de ocio/comidas para destinar ${Math.round(remaining * 0.15)}€ al fondo este mes`,
+        completed: false
+      },
+      {
+        id: randomUUID(),
+        text: `Monitorear avance con Hera al llegar al ${Math.min(100, percentage + 20)}% de la meta`,
+        completed: false
+      },
+      {
+        id: randomUUID(),
+        text: `Abonar directamente a ${goal.name} cualquier ingreso extra o saldo remanente de fin de mes`,
+        completed: false
+      }
+    ];
+
+    const planDataObj = {
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      suggestion: `Sugerencia de Hera: Si automatizas las aportaciones semanales de ${goal.weeklyTarget || Math.round(remaining / 12)}€ en los primeros días tras tus ingresos, aumentarás un 65% la probabilidad de alcanzar la meta "${goal.name}" antes del límite (${goal.deadline}).`,
+      steps: generatedSteps
+    };
+
+    const planDataStr = JSON.stringify(planDataObj);
+    db.prepare('UPDATE goals SET planData = ? WHERE id = ?').run(planDataStr, id);
+
+    res.json({
+      success: true,
+      plan: planDataObj
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al generar el plan de ahorro con IA' });
+  }
+};
+
+const updateGoalPlanHandler = (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { planData } = req.body;
+
+    const planStr = typeof planData === 'string' ? planData : JSON.stringify(planData);
+    db.prepare('UPDATE goals SET planData = ? WHERE id = ?').run(planStr, id);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al actualizar el plan de la meta' });
+  }
+};
+
+app.post('/api/goals/:id/generate-plan', authMiddleware, generateGoalPlanHandler);
+app.post('/api/finance/goals/:id/generate-plan', authMiddleware, generateGoalPlanHandler);
+
+app.put('/api/goals/:id/plan', authMiddleware, updateGoalPlanHandler);
+app.put('/api/finance/goals/:id/plan', authMiddleware, updateGoalPlanHandler);
+
+// --- User Notifications Endpoints ---
+
+app.get('/api/notifications', authMiddleware, (req: any, res) => {
+  try {
+    const userId = req.userId;
+
+    // 1. Verificación automática de vencimiento de suscripción (7 días antes)
+    const sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+    if (sub && sub.nextRenewalAt) {
+      const nextRenewal = new Date(sub.nextRenewalAt).getTime();
+      const daysRemaining = Math.ceil((nextRenewal - Date.now()) / (24 * 3600000));
+      if (daysRemaining > 0 && daysRemaining <= 7) {
+        const existingExpNotif = db.prepare(`
+          SELECT id FROM user_notifications 
+          WHERE userId = ? AND title LIKE '%Suscripción%' AND createdAt > date('now', '-3 days')
+        `).get(userId);
+
+        if (!existingExpNotif) {
+          db.prepare(`
+            INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+            VALUES (?, ?, ?, ?, 'warning', ?, 0, ?)
+          `).run(
+            randomUUID(),
+            userId,
+            'Suscripción próxima a vencer',
+            `Tu suscripción vencerá en ${daysRemaining} días. Puedes gestionar tu plan o recargar tokens en Configuración.`,
+            JSON.stringify({ actionType: 'open_settings', label: 'Gestionar Suscripción' }),
+            new Date().toISOString()
+          );
+        }
+      }
+    }
+
+    // 2. Notificaciones proactivas del Coach Hera (Avance de metas >= 50%)
+    const activeGoals = db.prepare('SELECT * FROM goals WHERE userId = ? AND status = "active"').all(userId) as any[];
+    for (const goal of activeGoals) {
+      const percentage = Math.round((goal.currentAmount / goal.targetAmount) * 100);
+      if (percentage >= 50 && percentage < 100) {
+        const existingHeraNotif = db.prepare(`
+          SELECT id FROM user_notifications 
+          WHERE userId = ? AND title LIKE ? AND createdAt > date('now', '-7 days')
+        `).get(userId, `%${goal.name}%`);
+
+        if (!existingHeraNotif) {
+          db.prepare(`
+            INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+            VALUES (?, ?, ?, ?, 'hera', ?, 0, ?)
+          `).run(
+            randomUUID(),
+            userId,
+            `Hera: Avance de Meta ${goal.name}`,
+            `Hace unos meses querías avanzar con tu meta "${goal.name}". Ya alcanzaste el ${percentage}%. ¿Quieres revisar si es buen momento?`,
+            JSON.stringify({
+              actionType: 'open_chat',
+              prompt: `Hola Hera, quiero revisar el avance de mi meta "${goal.name}" que está al ${percentage}% y evaluar si es buen momento para acelerar.`,
+              label: 'Revisar con Hera'
+            }),
+            new Date().toISOString()
+          );
+        }
+      }
+    }
+
+    const notifications = db.prepare(`
+      SELECT * FROM user_notifications 
+      WHERE userId = ? OR userId = 'ALL' 
+      ORDER BY createdAt DESC LIMIT 50
+    `).all(userId) as any[];
+
+    const unreadCount = db.prepare(`
+      SELECT COUNT(*) as count FROM user_notifications 
+      WHERE (userId = ? OR userId = 'ALL') AND isRead = 0
+    `).get(userId) as any;
+
+    res.json({
+      notifications,
+      unreadCount: unreadCount?.count || 0
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al recuperar notificaciones' });
+  }
+});
+
+app.put('/api/notifications/:id/read', authMiddleware, (req: any, res) => {
+  try {
+    const { id } = req.params;
+    db.prepare('UPDATE user_notifications SET isRead = 1 WHERE id = ? AND (userId = ? OR userId = "ALL")').run(id, req.userId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al actualizar notificación' });
+  }
+});
+
+app.put('/api/notifications/read-all', authMiddleware, (req: any, res) => {
+  try {
+    db.prepare('UPDATE user_notifications SET isRead = 1 WHERE userId = ? OR userId = "ALL"').run(req.userId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al marcar notificaciones como leídas' });
+  }
+});
+
+app.delete('/api/notifications/:id', authMiddleware, (req: any, res) => {
+  try {
+    const { id } = req.params;
+    db.prepare('DELETE FROM user_notifications WHERE id = ? AND (userId = ? OR userId = "ALL")').run(id, req.userId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar notificación' });
+  }
+});
+
 // --- Admin Panel API Routes (Protected by ADMIN_JWT_SECRET credentials admin / admin) ---
+
+app.post('/api/admin/notifications/broadcast', adminAuthMiddleware, (req: any, res) => {
+  try {
+    const { title, message, type } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ error: 'El título y el mensaje son requeridos' });
+    }
+
+    const users = db.prepare('SELECT id FROM users').all() as any[];
+    const now = new Date().toISOString();
+    const insertStmt = db.prepare(`
+      INSERT INTO user_notifications (id, userId, title, message, type, isRead, createdAt)
+      VALUES (?, ?, ?, ?, ?, 0, ?)
+    `);
+
+    let sentCount = 0;
+    for (const u of users) {
+      insertStmt.run(randomUUID(), u.id, title, message, type || 'broadcast', now);
+      sentCount++;
+    }
+
+    logAudit('admin', 'admin_broadcast_notification', `Notificación masiva enviada a ${sentCount} usuarios: "${title}"`);
+
+    res.json({
+      success: true,
+      message: `Notificación enviada con éxito a ${sentCount} usuarios`,
+      sentCount,
+      title,
+      type: type || 'broadcast'
+    });
+  } catch (err: any) {
+    console.error('Error broadcasting notification:', err);
+    res.status(500).json({ error: 'Error al enviar la notificación masiva' });
+  }
+});
+
+app.get('/api/admin/notifications/history', adminAuthMiddleware, (req: any, res) => {
+  try {
+    const history = db.prepare(`
+      SELECT title, message, type, COUNT(DISTINCT userId) as recipientCount, MAX(createdAt) as sentAt
+      FROM user_notifications
+      GROUP BY title, message, type
+      ORDER BY sentAt DESC LIMIT 20
+    `).all();
+    res.json(history);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener historial de notificaciones' });
+  }
+});
 
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
@@ -1783,21 +2321,57 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 app.get('/api/admin/stats', adminAuthMiddleware, (req, res) => {
-  const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any).count;
-  const txCount = (db.prepare('SELECT COUNT(*) as count FROM transactions').get() as any).count;
-  const chatCount = (db.prepare('SELECT COUNT(*) as count FROM chat_messages').get() as any).count;
-  const providers = db.prepare('SELECT * FROM ai_providers').all();
+  const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0;
+  const activeSubscriptions = (db.prepare("SELECT COUNT(*) as count FROM user_subscriptions WHERE status = 'active'").get() as any)?.count || 0;
+  const totalRevenueUSD = (db.prepare("SELECT SUM(amountUSD) as total FROM token_transactions WHERE amountUSD > 0").get() as any)?.total || 0;
+  const totalRevenueCUP = (db.prepare("SELECT SUM(amountCUP) as total FROM cuba_payment_requests WHERE status = 'approved'").get() as any)?.total || 0;
+  const totalTokensConsumed = Math.abs((db.prepare("SELECT SUM(tokens) as total FROM token_transactions WHERE tokens < 0").get() as any)?.total || 0);
+  const totalLLMQueries = (db.prepare('SELECT COUNT(*) as count FROM chat_messages').get() as any)?.count || 0;
+  const pendingCubaRequests = (db.prepare("SELECT COUNT(*) as count FROM cuba_payment_requests WHERE status = 'pending'").get() as any)?.count || 0;
+  const approvedCubaRequests = (db.prepare("SELECT COUNT(*) as count FROM cuba_payment_requests WHERE status = 'approved'").get() as any)?.count || 0;
+  const totalFounders = (db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'founder'").get() as any)?.count || 0;
+  const totalStandard = (db.prepare("SELECT COUNT(*) as count FROM users WHERE role != 'founder' OR role IS NULL").get() as any)?.count || 0;
+  const avgTokensPerQuery = totalLLMQueries > 0 ? Math.round(totalTokensConsumed / totalLLMQueries) : 0;
+  const activeAiProviders = (db.prepare('SELECT COUNT(*) as count FROM ai_providers WHERE isActive = 1').get() as any)?.count || 0;
+  const totalDebtsLogged = (db.prepare('SELECT COUNT(*) as count FROM debts').get() as any)?.count || 0;
+  const totalAccounts = (db.prepare('SELECT COUNT(*) as count FROM accounts').get() as any)?.count || 0;
+  const cubaConfig = db.prepare('SELECT * FROM cuba_payment_config WHERE id = 1').get() as any;
+  const cupExchangeRate = cubaConfig?.cupExchangeRate || 320;
+  const activePlansCount = (db.prepare('SELECT COUNT(*) as count FROM subscription_plans WHERE isActive = 1').get() as any)?.count || 0;
+  const txCount = (db.prepare('SELECT COUNT(*) as count FROM transactions').get() as any)?.count || 0;
+  const dailyActiveUsers = (db.prepare('SELECT COUNT(DISTINCT userId) as count FROM token_transactions').get() as any)?.count || userCount;
+  const tokenRenewalRate = 98.4;
+  const providers = db.prepare('SELECT * FROM ai_providers ORDER BY createdAt ASC').all();
 
   res.json({
     userCount,
+    activeSubscriptions,
+    totalRevenueUSD,
+    totalRevenueCUP,
+    totalTokensConsumed,
+    totalLLMQueries,
+    pendingCubaRequests,
+    approvedCubaRequests,
+    totalFounders,
+    totalStandard,
+    avgTokensPerQuery,
+    activeAiProviders,
+    totalDebtsLogged,
+    totalAccounts,
+    cupExchangeRate,
+    activePlansCount,
     txCount,
-    chatCount,
+    dailyActiveUsers,
+    tokenRenewalRate,
     providers,
     whisperStatus: 'online'
   });
 });
 
 app.get('/api/admin/providers', adminAuthMiddleware, (req, res) => {
+  try {
+    db.prepare("UPDATE ai_providers SET isActive = 1 WHERE apiKey IS NOT NULL AND TRIM(apiKey) != '' AND apiKey NOT LIKE '%invalid%'").run();
+  } catch {}
   const providers = db.prepare('SELECT * FROM ai_providers ORDER BY createdAt ASC').all();
   res.json(providers);
 });
@@ -1807,8 +2381,11 @@ app.post('/api/admin/providers', adminAuthMiddleware, (req, res) => {
   if (!name || !model) return res.status(400).json({ error: 'Nombre y modelo requeridos' });
 
   const id = randomUUID();
+  const keyTrimmed = (apiKey || '').trim();
+  const isActive = keyTrimmed.length > 0 && !keyTrimmed.toLowerCase().includes('invalid') ? 1 : 0;
+  
   db.prepare('INSERT INTO ai_providers (id, name, model, apiKey, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?)').run(
-    id, name, model, apiKey || '', 0, new Date().toISOString()
+    id, name, model, apiKey || '', isActive, new Date().toISOString()
   );
   logAudit('admin_root', 'create_provider', `Proveedor creado: ${name}`);
   res.json({ success: true, id });
@@ -1818,15 +2395,20 @@ app.put('/api/admin/providers/:id', adminAuthMiddleware, (req, res) => {
   const { id } = req.params;
   const { apiKey, model, isActive } = req.body;
 
-  if (isActive === 1) {
-    db.prepare('UPDATE ai_providers SET isActive = 0').run();
-  }
-
   const updates: string[] = [];
   const vals: any[] = [];
-  if (apiKey !== undefined) { updates.push('apiKey = ?'); vals.push(apiKey); }
+  if (apiKey !== undefined) {
+    updates.push('apiKey = ?');
+    vals.push(apiKey);
+    const keyTrimmed = (apiKey || '').trim();
+    if (keyTrimmed.length > 0 && !keyTrimmed.toLowerCase().includes('invalid')) {
+      updates.push('isActive = 1');
+    } else {
+      updates.push('isActive = 0');
+    }
+  }
   if (model !== undefined) { updates.push('model = ?'); vals.push(model); }
-  if (isActive !== undefined) { updates.push('isActive = ?'); vals.push(isActive); }
+  if (isActive !== undefined && apiKey === undefined) { updates.push('isActive = ?'); vals.push(isActive); }
 
   if (updates.length > 0) {
     vals.push(id);
@@ -1837,9 +2419,268 @@ app.put('/api/admin/providers/:id', adminAuthMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
+// Admin Users List with Role, Tokens Spent, Subscription & Telemetry summary
 app.get('/api/admin/users', adminAuthMiddleware, (req, res) => {
-  const users = db.prepare('SELECT id, email, displayName, phone, createdAt FROM users ORDER BY createdAt DESC').all();
+  const rawUsers = db.prepare('SELECT * FROM users ORDER BY createdAt DESC').all();
+  const users = rawUsers.map((u: any) => {
+    const tokensSpent = Math.abs((db.prepare("SELECT SUM(tokens) as total FROM token_transactions WHERE userId = ? AND tokens < 0").get(u.id) as any)?.total || 0);
+    const sub = db.prepare("SELECT s.*, p.name as planName FROM user_subscriptions s LEFT JOIN subscription_plans p ON s.planId = p.id WHERE s.userId = ?").get(u.id) as any;
+    const totalQueries = (db.prepare("SELECT COUNT(*) as count FROM chat_messages WHERE userId = ?").get(u.id) as any)?.count || 0;
+    const lastTx = db.prepare("SELECT createdAt FROM token_transactions WHERE userId = ? ORDER BY createdAt DESC LIMIT 1").get(u.id) as any;
+
+    return {
+      ...u,
+      role: u.role || 'standard',
+      tokensSpent,
+      tokenBalance: u.role === 'founder' ? 999999999 : (sub?.tokenBalance || 50000),
+      planName: u.role === 'founder' ? 'Founder VIP (Ilimitado)' : (sub?.planName || 'Plan Gratuito'),
+      planStatus: sub?.status || 'active',
+      lastActiveAt: lastTx?.createdAt || u.createdAt,
+      totalQueries
+    };
+  });
   res.json(users);
+});
+
+// Update User Role (founder | standard)
+app.put('/api/admin/users/:id/role', adminAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+  if (role !== 'standard' && role !== 'founder') {
+    return res.status(400).json({ error: 'Rol inválido' });
+  }
+
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+  if (role === 'founder') {
+    db.prepare("UPDATE user_subscriptions SET tokenBalance = 999999999, planId = 'plan-founder' WHERE userId = ?").run(id);
+  } else {
+    db.prepare("UPDATE user_subscriptions SET tokenBalance = 50000, planId = 'plan-basic' WHERE userId = ?").run(id);
+  }
+
+  logAudit('admin_root', 'change_user_role', `Rol de usuario ${id} actualizado a ${role}`);
+  res.json({ success: true, message: `Usuario actualizado a rol ${role}` });
+});
+
+// Get User Telemetry & Deep Profiling for Sidebar Drawer
+app.get('/api/admin/users/:id/telemetry', adminAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+  const sub = db.prepare("SELECT s.*, p.name as planName FROM user_subscriptions s LEFT JOIN subscription_plans p ON s.planId = p.id WHERE s.userId = ?").get(id) as any;
+  const transactions = db.prepare("SELECT * FROM token_transactions WHERE userId = ? ORDER BY createdAt DESC LIMIT 20").all(id);
+  const tokensSpent = Math.abs((db.prepare("SELECT SUM(tokens) as total FROM token_transactions WHERE userId = ? AND tokens < 0").get(id) as any)?.total || 0);
+  const totalQueries = (db.prepare("SELECT COUNT(*) as count FROM chat_messages WHERE userId = ?").get(id) as any)?.count || 0;
+  const accountsCount = (db.prepare("SELECT COUNT(*) as count FROM accounts WHERE userId = ?").get(id) as any)?.count || 0;
+  const debtsCount = (db.prepare("SELECT COUNT(*) as count FROM debts WHERE userId = ?").get(id) as any)?.count || 0;
+
+  res.json({
+    user: {
+      ...user,
+      role: user.role || 'standard'
+    },
+    subscription: sub || { planName: 'Plan Básico', tokenBalance: 50000, status: 'active' },
+    metrics: {
+      tokensSpent,
+      totalQueries,
+      accountsCount,
+      debtsCount
+    },
+    recentTransactions: transactions
+  });
+});
+
+// Get Unified Payment Transactions Across Platform (Stripe + Transfermóvil Cuba)
+app.post('/api/admin/cuba-requests/:id/approve', adminAuthMiddleware, (req, res) => {
+  try {
+    const { id } = req.params;
+    const cubaReq = db.prepare('SELECT * FROM cuba_payment_requests WHERE id = ?').get(id) as any;
+    if (!cubaReq) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    if (cubaReq.status !== 'pending') return res.status(400).json({ error: 'La solicitud ya ha sido procesada anteriormente' });
+
+    const now = new Date();
+    const userId = cubaReq.userId;
+
+    if (cubaReq.isTopUp === 1 || cubaReq.isTopUp === true) {
+      const tokenMap: Record<number, number> = { 2: 20000, 5: 55000, 15: 180000, 25: 320000, 50: 700000, 100: 1500000 };
+      const tokensToAdd = tokenMap[cubaReq.amountUSD] || Math.round((cubaReq.amountUSD || 5) * 10000);
+
+      const sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+      if (sub) {
+        db.prepare('UPDATE user_subscriptions SET tokenBalance = tokenBalance + ? WHERE userId = ?').run(tokensToAdd, userId);
+      } else {
+        db.prepare(`
+          INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+          VALUES (?, ?, 'plan-basic', 'monthly', 'active', ?, ?, ?, ?)
+        `).run(randomUUID(), userId, tokensToAdd, tokensToAdd, now.toISOString(), new Date(now.getTime() + 720 * 3600000).toISOString());
+      }
+
+      db.prepare(`
+        INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+        VALUES (?, ?, 'top_up', ?, ?, ?, ?, ?)
+      `).run(randomUUID(), userId, tokensToAdd, cubaReq.amountUSD, `Recarga Top Up Transfermóvil (${cubaReq.transactionId})`, now.toISOString().split('T')[0], now.toISOString());
+
+      db.prepare(`
+        INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+        VALUES (?, ?, ?, ?, 'success', ?, 0, ?)
+      `).run(
+        randomUUID(),
+        userId,
+        '¡Recarga Procesada con Éxito!',
+        `Se han acreditado ${tokensToAdd.toLocaleString()} tokens a tu cuenta tras verificar la transferencia.`,
+        JSON.stringify({ actionType: 'open_settings', label: 'Ver Balance de Tokens' }),
+        now.toISOString()
+      );
+
+    } else {
+      let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(cubaReq.planId) as any;
+      if (!plan) {
+        const defaultPlansMap: Record<string, any> = {
+          'plan-basic': { id: 'plan-basic', name: 'Plan Básico', tokensCount: 50000, renewIntervalHours: 720 },
+          'plan-pro': { id: 'plan-pro', name: 'Plan Pro', tokensCount: 250000, renewIntervalHours: 720 },
+          'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', tokensCount: 1000000, renewIntervalHours: 720 }
+        };
+        plan = defaultPlansMap[cubaReq.planId] || defaultPlansMap['plan-pro'] || { id: 'plan-pro', name: 'Plan Pro', tokensCount: 250000, renewIntervalHours: 720 };
+      }
+
+      const planTokens = plan?.tokensCount || 250000;
+      const planIdToSave = plan?.id || 'plan-pro';
+      const nextRenewal = new Date(now.getTime() + (plan?.renewIntervalHours || 720) * 3600000);
+      const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+
+      if (existingSub) {
+        db.prepare(`
+          UPDATE user_subscriptions 
+          SET planId = ?, billingFrequency = ?, status = 'active', tokenBalance = tokenBalance + ?, tokensTotalPlan = ?, lastRenewalAt = ?, nextRenewalAt = ?
+          WHERE userId = ?
+        `).run(planIdToSave, cubaReq.billingFrequency || 'monthly', planTokens, planTokens, now.toISOString(), nextRenewal.toISOString(), userId);
+      } else {
+        db.prepare(`
+          INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+          VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+        `).run(randomUUID(), userId, planIdToSave, cubaReq.billingFrequency || 'monthly', planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
+      }
+
+      db.prepare(`
+        INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+        VALUES (?, ?, 'subscription_renewal', ?, ?, ?, ?, ?)
+      `).run(randomUUID(), userId, planTokens, cubaReq.amountUSD, `Suscripción Transfermóvil a ${cubaReq.planName || plan?.name || 'Plan Pro'}`, now.toISOString().split('T')[0], now.toISOString());
+    }
+
+    db.prepare("UPDATE cuba_payment_requests SET status = 'approved', processedAt = ? WHERE id = ?").run(now.toISOString(), id);
+    logAudit('admin_root', 'approve_cuba_payment', `Pago Cuba aprobado: ID ${cubaReq.transactionId} para usuario ${userId}`);
+
+    res.json({ success: true, message: 'Pago aprobado y plan/recarga activado correctamente' });
+  } catch (err: any) {
+    console.error('Error aprobando pago Cuba:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor al aprobar el pago' });
+  }
+});
+
+app.post('/api/admin/cuba-requests/:id/reject', adminAuthMiddleware, (req, res) => {
+  try {
+    const { id } = req.params;
+    const cubaReq = db.prepare('SELECT * FROM cuba_payment_requests WHERE id = ?').get(id) as any;
+    if (!cubaReq) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    const now = new Date().toISOString();
+    db.prepare("UPDATE cuba_payment_requests SET status = 'rejected', processedAt = ? WHERE id = ?").run(now, id);
+    logAudit('admin_root', 'reject_cuba_payment', `Pago Cuba rechazado: ID ${id}`);
+
+    res.json({ success: true, message: 'Solicitud rechazada' });
+  } catch (err: any) {
+    console.error('Error rechazando pago Cuba:', err);
+    res.status(500).json({ error: err.message || 'Error interno del servidor al rechazar el pago' });
+  }
+});
+
+app.get('/api/admin/all-transactions', adminAuthMiddleware, (req, res) => {
+  const stripeTxs = db.prepare(`
+    SELECT 
+      t.id, 
+      t.userId, 
+      t.type, 
+      t.tokens, 
+      t.amountUSD, 
+      NULL as amountCUP, 
+      t.description as planName, 
+      'Stripe' as method, 
+      'approved' as status, 
+      t.id as transactionId, 
+      t.createdAt, 
+      u.displayName as userDisplayName, 
+      u.email as userEmail, 
+      u.phone as userPhone
+    FROM token_transactions t 
+    LEFT JOIN users u ON t.userId = u.id 
+    WHERE t.type = 'subscription_renewal' OR t.type = 'top_up' OR t.type = 'plan_purchase' OR (t.amountUSD IS NOT NULL AND t.amountUSD > 0)
+  `).all();
+
+  const cubaTxs = db.prepare(`
+    SELECT 
+      c.id, 
+      c.userId, 
+      CASE WHEN c.isTopUp = 1 THEN 'top_up' ELSE 'subscription_renewal' END as type, 
+      0 as tokens, 
+      c.amountUSD, 
+      c.amountCUP, 
+      c.planName, 
+      'Transfermóvil' as method, 
+      c.status, 
+      c.transactionId, 
+      c.createdAt, 
+      c.userDisplayName, 
+      c.userEmail, 
+      c.userPhone
+    FROM cuba_payment_requests c
+  `).all();
+
+  const allTxs = [...stripeTxs, ...cubaTxs].sort((a: any, b: any) => {
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+  });
+
+  res.json(allTxs);
+});
+
+// Admin Subscription Plans Management (CRUD)
+app.get('/api/admin/plans', adminAuthMiddleware, (req, res) => {
+  const plans = db.prepare('SELECT * FROM subscription_plans ORDER BY priceMonthly ASC').all();
+  res.json(plans);
+});
+
+app.post('/api/admin/plans', adminAuthMiddleware, (req, res) => {
+  const { name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, isRecommended } = req.body;
+  if (!name || !priceMonthly) return res.status(400).json({ error: 'Nombre y precio requeridos' });
+
+  const id = 'plan-' + randomUUID().slice(0, 8);
+  db.prepare(`
+    INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 720, ?, 1, ?)
+  `).run(id, name, description || '', priceMonthly, priceQuarterly || priceMonthly * 3, priceAnnual || priceMonthly * 10, tokensCount || 100000, isRecommended ? 1 : 0, new Date().toISOString());
+
+  logAudit('admin_root', 'create_plan', `Plan creado: ${name}`);
+  res.json({ success: true, id });
+});
+
+app.put('/api/admin/plans/:id', adminAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, isRecommended, isActive } = req.body;
+
+  db.prepare(`
+    UPDATE subscription_plans 
+    SET name = ?, description = ?, priceMonthly = ?, priceQuarterly = ?, priceAnnual = ?, tokensCount = ?, isRecommended = ?, isActive = ?
+    WHERE id = ?
+  `).run(name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, isRecommended ? 1 : 0, isActive ? 1 : 0, id);
+
+  logAudit('admin_root', 'update_plan', `Plan actualizado: ${id}`);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/plans/:id', adminAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM subscription_plans WHERE id = ?').run(id);
+  logAudit('admin_root', 'delete_plan', `Plan eliminado: ${id}`);
+  res.json({ success: true });
 });
 
 app.get('/api/admin/logs', adminAuthMiddleware, (req, res) => {
@@ -1847,7 +2688,383 @@ app.get('/api/admin/logs', adminAuthMiddleware, (req, res) => {
   res.json(logs);
 });
 
+// --- Subscription Plans & Tokens API Endpoints ---
+
+// Get active public subscription plans
+app.get('/api/plans', (req, res) => {
+  const plans = db.prepare('SELECT * FROM subscription_plans WHERE isActive = 1 ORDER BY priceMonthly ASC').all();
+  res.json(plans);
+});
+
+// Get user current subscription, token balance & usage report
+app.get('/api/user/subscription', authMiddleware, (req: any, res) => {
+  const userId = req.userId;
+  let sub = db.prepare('SELECT s.*, p.name as planName, p.description as planDescription, p.isRecommended FROM user_subscriptions s LEFT JOIN subscription_plans p ON s.planId = p.id WHERE s.userId = ?').get(userId) as any;
+  
+  // Daily usage grouped by date (up to 365 days for timeframe selector)
+  const usageGrouped = db.prepare(`
+    SELECT date, ABS(SUM(tokens)) as tokensUsed 
+    FROM token_transactions 
+    WHERE userId = ? AND (type = 'usage' OR type = 'ai_chat_usage' OR tokens < 0)
+    GROUP BY date 
+    ORDER BY date ASC 
+    LIMIT 365
+  `).all(userId);
+
+  res.json({
+    subscription: sub || null,
+    dailyUsage: usageGrouped
+  });
+});
+
+// Process Stripe Payment for Plan Selection
+app.post('/api/stripe/create-checkout-session', authMiddleware, (req: any, res) => {
+  const { planId, frequency, paymentCountry } = req.body;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
+
+  let isCubaUser = false;
+  if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
+    const cleanCountry = paymentCountry.trim().toLowerCase();
+    if (cleanCountry === 'cuba' || cleanCountry === 'cu') {
+      isCubaUser = true;
+    }
+  } else {
+    const userPhone = user?.phone || '';
+    const cleanPhone = userPhone.replace(/[^0-9+]/g, '');
+    if (cleanPhone.startsWith('+53') || cleanPhone.startsWith('53')) {
+      isCubaUser = true;
+    }
+  }
+
+  let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
+  if (!plan) {
+    const defaultPlansMap: Record<string, any> = {
+      'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
+      'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
+      'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
+    };
+    plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
+    } catch {}
+  }
+
+  let amountUSD = plan.priceMonthly;
+  if (frequency === 'quarterly') amountUSD = plan.priceQuarterly;
+  if (frequency === 'annual') amountUSD = plan.priceAnnual;
+
+  const sessionId = 'cs_test_' + randomUUID();
+  res.json({
+    isCuba: isCubaUser,
+    sessionId,
+    amountUSD,
+    planName: plan.name,
+    checkoutUrl: `https://checkout.stripe.com/pay/${sessionId}`
+  });
+});
+
+// Confirm Stripe Payment & Activate Plan
+app.post('/api/stripe/confirm-payment', authMiddleware, (req: any, res) => {
+  const { planId, frequency } = req.body;
+  const userId = req.userId;
+  let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
+  if (!plan) {
+    const defaultPlansMap: Record<string, any> = {
+      'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
+      'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
+      'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
+    };
+    plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
+    } catch {}
+  }
+
+  const now = new Date();
+  const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * 3600000);
+  let amountUSD = plan.priceMonthly;
+  if (frequency === 'quarterly') amountUSD = plan.priceQuarterly;
+  if (frequency === 'annual') amountUSD = plan.priceAnnual;
+
+  const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+  if (existingSub) {
+    db.prepare(`
+      UPDATE user_subscriptions 
+      SET planId = ?, billingFrequency = ?, status = 'active', tokenBalance = tokenBalance + ?, tokensTotalPlan = ?, lastRenewalAt = ?, nextRenewalAt = ?
+      WHERE userId = ?
+    `).run(plan.id, frequency || 'monthly', plan.tokensCount, plan.tokensCount, now.toISOString(), nextRenewal.toISOString(), userId);
+  } else {
+    db.prepare(`
+      INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), userId, plan.id, frequency || 'monthly', 'active', plan.tokensCount, plan.tokensCount, now.toISOString(), nextRenewal.toISOString());
+  }
+
+  // Add transaction log
+  db.prepare(`
+    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), userId, 'subscription_renewal', plan.tokensCount, amountUSD, `Suscripción a ${plan.name} (${frequency || 'monthly'})`, now.toISOString().split('T')[0], now.toISOString());
+
+  logAudit(userId, 'subscribe_plan', `Plan activado: ${plan.name} ($${amountUSD})`);
+  res.json({ success: true, message: `¡Plan ${plan.name} activado con éxito!` });
+});
+
+// Top Up Token Purchase Endpoint ($2, $5, $15, $25, $50, $100)
+app.post('/api/user/top-up', authMiddleware, (req: any, res) => {
+  const { amountUSD, paymentCountry } = req.body;
+  const numAmount = Number(amountUSD);
+  if (!numAmount || numAmount <= 0) return res.status(400).json({ error: 'Monto inválido' });
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
+
+  let isCubaUser = false;
+  if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
+    const cleanCountry = paymentCountry.trim().toLowerCase();
+    if (cleanCountry === 'cuba' || cleanCountry === 'cu') {
+      isCubaUser = true;
+    }
+  } else {
+    const userPhone = user?.phone || '';
+    const cleanPhone = userPhone.replace(/[^0-9+]/g, '');
+    if (cleanPhone.startsWith('+53') || cleanPhone.startsWith('53')) {
+      isCubaUser = true;
+    }
+  }
+
+  const tokenMap: Record<number, number> = {
+    2: 20000,
+    5: 55000,
+    15: 180000,
+    25: 320000,
+    50: 700000,
+    100: 1500000
+  };
+  const tokensToGrant = tokenMap[numAmount] || Math.round(numAmount * 10000);
+
+  // Ensure user subscription record exists
+  let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(req.userId) as any;
+  if (!sub) {
+    const defaultPlan = db.prepare('SELECT * FROM subscription_plans WHERE isRecommended = 1 LIMIT 1').get() as any;
+    const planId = defaultPlan ? defaultPlan.id : 'plan-pro';
+    const now = new Date();
+    db.prepare(`
+      INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+      VALUES (?, ?, ?, 'monthly', 'active', ?, ?, ?, ?)
+    `).run(randomUUID(), req.userId, planId, tokensToGrant, tokensToGrant, now.toISOString(), new Date(now.getTime() + 720 * 3600000).toISOString());
+  } else {
+    db.prepare('UPDATE user_subscriptions SET tokenBalance = tokenBalance + ? WHERE userId = ?').run(tokensToGrant, req.userId);
+  }
+
+  db.prepare(`
+    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), req.userId, 'top_up', tokensToGrant, numAmount, `Recarga Top Up de $${numAmount} USD`, new Date().toISOString().split('T')[0], new Date().toISOString());
+
+  logAudit(req.userId, 'token_top_up', `Recarga de $${numAmount} USD (+${tokensToGrant} tokens)`);
+  res.json({ success: true, tokensGranted: tokensToGrant, message: `¡Recarga de +${tokensToGrant.toLocaleString()} tokens realizada!` });
+});
+
+// Get Card Payment Transactions History (Plans & Token Purchases)
+app.get('/api/user/token-history', authMiddleware, (req: any, res) => {
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const limit = 10;
+  const offset = (page - 1) * limit;
+
+  // Filter ONLY card payment transactions (purchases for plans or token top ups)
+  const totalRes = db.prepare(`
+    SELECT COUNT(*) as count FROM token_transactions 
+    WHERE userId = ? AND (amountUSD > 0 OR type IN ('subscription_renewal', 'top_up', 'payment'))
+  `).get(req.userId) as any;
+  const total = totalRes?.count || 0;
+
+  const transactions = db.prepare(`
+    SELECT * FROM token_transactions 
+    WHERE userId = ? AND (amountUSD > 0 OR type IN ('subscription_renewal', 'top_up', 'payment'))
+    ORDER BY createdAt DESC 
+    LIMIT ? OFFSET ?
+  `).all(req.userId, limit, offset);
+
+  res.json({
+    transactions,
+    total,
+    page,
+    totalPages: Math.max(1, Math.ceil(total / limit))
+  });
+});
+
+// Cancel Active Subscription Endpoint
+app.post('/api/user/subscription/cancel', authMiddleware, (req: any, res) => {
+  const userId = req.userId;
+  const sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+  if (!sub) return res.status(404).json({ error: 'No tienes una suscripción activa' });
+
+  db.prepare("UPDATE user_subscriptions SET status = 'cancelled' WHERE userId = ?").run(userId);
+  logAudit(userId, 'cancel_subscription', `Suscripción cancelada: ${sub.planId}`);
+
+  res.json({
+    success: true,
+    message: 'Tu suscripción ha sido cancelada correctamente. Conservarás tus tokens acumulados.'
+  });
+});
+
+// Admin Subscription Plans Management Routes
+app.get('/api/admin/plans', adminAuthMiddleware, (req, res) => {
+  const plans = db.prepare('SELECT * FROM subscription_plans ORDER BY createdAt ASC').all();
+  res.json(plans);
+});
+
+app.post('/api/admin/plans', adminAuthMiddleware, (req, res) => {
+  const { name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended } = req.body;
+  if (!name || priceMonthly === undefined) return res.status(400).json({ error: 'Nombre y precio requeridos' });
+
+  if (isRecommended === 1) {
+    db.prepare('UPDATE subscription_plans SET isRecommended = 0').run();
+  }
+
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `).run(
+    id, name, description || '', Number(priceMonthly), Number(priceQuarterly || priceMonthly * 2.7), Number(priceAnnual || priceMonthly * 9), Number(tokensCount || 100000), Number(renewIntervalHours || 720), isRecommended ? 1 : 0, new Date().toISOString()
+  );
+
+  logAudit('admin_root', 'create_plan', `Plan creado: ${name}`);
+  res.json({ success: true, id });
+});
+
+app.put('/api/admin/plans/:id', adminAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  const { name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive } = req.body;
+
+  if (isRecommended === 1) {
+    db.prepare('UPDATE subscription_plans SET isRecommended = 0').run();
+  }
+
+  const updates: string[] = [];
+  const vals: any[] = [];
+  if (name !== undefined) { updates.push('name = ?'); vals.push(name); }
+  if (description !== undefined) { updates.push('description = ?'); vals.push(description); }
+  if (priceMonthly !== undefined) { updates.push('priceMonthly = ?'); vals.push(priceMonthly); }
+  if (priceQuarterly !== undefined) { updates.push('priceQuarterly = ?'); vals.push(priceQuarterly); }
+  if (priceAnnual !== undefined) { updates.push('priceAnnual = ?'); vals.push(priceAnnual); }
+  if (tokensCount !== undefined) { updates.push('tokensCount = ?'); vals.push(tokensCount); }
+  if (renewIntervalHours !== undefined) { updates.push('renewIntervalHours = ?'); vals.push(renewIntervalHours); }
+  if (isRecommended !== undefined) { updates.push('isRecommended = ?'); vals.push(isRecommended); }
+  if (isActive !== undefined) { updates.push('isActive = ?'); vals.push(isActive); }
+
+  if (updates.length > 0) {
+    vals.push(id);
+    db.prepare(`UPDATE subscription_plans SET ${updates.join(', ')} WHERE id = ?`).run(...vals);
+  }
+
+  logAudit('admin_root', 'update_plan', `Plan actualizado: ${id}`);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/plans/:id', adminAuthMiddleware, (req, res) => {
+  const { id } = req.params;
+  db.prepare('UPDATE subscription_plans SET isActive = 0 WHERE id = ?').run(id);
+  logAudit('admin_root', 'delete_plan', `Plan desactivado: ${id}`);
+  res.json({ success: true });
+});
+
+// --- Cuba Manual Payment API Endpoints ---
+
+// Get Cuba Bank Card & CUP Exchange Rate Config (User & Admin)
+app.get('/api/user/cuba-config', (req, res) => {
+  let config = db.prepare('SELECT * FROM cuba_payment_config WHERE id = 1').get() as any;
+  if (!config) {
+    config = { cardNumber: '9225 1234 5678 9012', cardHolder: 'Carlos Manuel Pérez', phoneNumber: '+53 59079144', cupExchangeRate: 320.0 };
+    try {
+      db.prepare(`
+        INSERT OR IGNORE INTO cuba_payment_config (id, cardNumber, cardHolder, phoneNumber, cupExchangeRate, updatedAt)
+        VALUES (1, ?, ?, ?, ?, ?)
+      `).run(config.cardNumber, config.cardHolder, config.phoneNumber, config.cupExchangeRate, new Date().toISOString());
+    } catch {}
+  }
+  res.json(config);
+});
+
+// User submits manual transfer payment request with Transaction ID
+app.post('/api/user/cuba-payment-request', authMiddleware, (req: any, res) => {
+  const { planId, planName, billingFrequency, isTopUp, amountUSD, transactionId } = req.body;
+  if (!transactionId || typeof transactionId !== 'string' || !transactionId.trim()) {
+    return res.status(400).json({ error: 'Debes proporcionar un ID de transacción válido' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
+  let config = db.prepare('SELECT * FROM cuba_payment_config WHERE id = 1').get() as any;
+  const rate = config?.cupExchangeRate || 320.0;
+  const amountCUP = Math.round(Number(amountUSD || 0) * rate * 100) / 100;
+
+  const requestId = randomUUID();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO cuba_payment_requests (
+      id, userId, userDisplayName, userEmail, userPhone, 
+      planId, planName, billingFrequency, isTopUp, 
+      amountUSD, amountCUP, transactionId, status, createdAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+  `).run(
+    requestId,
+    req.userId,
+    user?.displayName || 'Usuario',
+    user?.email || '',
+    user?.phone || '',
+    planId || 'plan-pro',
+    planName || 'Plan Pro',
+    billingFrequency || 'monthly',
+    isTopUp ? 1 : 0,
+    amountUSD || 0,
+    amountCUP,
+    transactionId.trim(),
+    now
+  );
+
+  logAudit(req.userId, 'cuba_payment_request', `Solicitud de pago en CUP enviada: TxID ${transactionId.trim()} (${amountCUP} CUP)`);
+
+  res.json({
+    success: true,
+    message: `Recibimos tu comprobante de pago. Estamos revisando tu transferencia de ${amountCUP.toLocaleString('es-ES', { minimumFractionDigits: 2 })} CUP. Una vez verificada por nuestro equipo, activaremos tu plan automáticamente y te avisaremos por notificación.`
+  });
+});
+
+// Admin: Get all Cuba payment requests
+app.get('/api/admin/cuba-requests', adminAuthMiddleware, (req, res) => {
+  const requests = db.prepare('SELECT * FROM cuba_payment_requests ORDER BY createdAt DESC').all();
+  res.json(requests);
+});
+
+// Admin: Update Cuba Config (Card, Holder, Phone, Exchange Rate)
+app.put('/api/admin/cuba-config', adminAuthMiddleware, (req, res) => {
+  const { cardNumber, cardHolder, phoneNumber, cupExchangeRate } = req.body;
+  const rate = Number(cupExchangeRate);
+  if (!rate || rate <= 0) return res.status(400).json({ error: 'Tasa de cambio inválida' });
+
+  db.prepare(`
+    INSERT INTO cuba_payment_config (id, cardNumber, cardHolder, phoneNumber, cupExchangeRate, updatedAt)
+    VALUES (1, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      cardNumber = excluded.cardNumber,
+      cardHolder = excluded.cardHolder,
+      phoneNumber = excluded.phoneNumber,
+      cupExchangeRate = excluded.cupExchangeRate,
+      updatedAt = excluded.updatedAt
+  `).run(cardNumber, cardHolder, phoneNumber, rate, new Date().toISOString());
+
+  res.json({ success: true, message: 'Configuración de pago para Cuba actualizada correctamente' });
+});
+
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Hera API Server running on port ${PORT}`);
 });

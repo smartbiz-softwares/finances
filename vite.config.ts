@@ -16,6 +16,9 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
+      allowedHosts: true,
+      host: true,
+      port: 3000,
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: {
         ignored: ['**/*.db', '**/*.db-journal', '**/*.db-wal', '**/*.db-shm']

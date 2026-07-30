@@ -46,13 +46,41 @@
   }
 }
 
-/* Micro-interaction polish (Emil Kowalski Framework) */
-button, .interactive-element {
-  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1), background-color 150ms ease, border-color 150ms ease, opacity 150ms ease;
+/* Micro-interaction & Apple Design Engineering Polish (Emil Kowalski Framework) */
+button, a, input, select, textarea, .interactive-element {
+  transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1), 
+              background-color 150ms ease, 
+              border-color 150ms ease, 
+              box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1), 
+              opacity 150ms ease;
 }
 
-button:active, .interactive-element:active {
-  transform: scale(0.97);
+button:active, a:active, .interactive-element:active {
+  transform: scale(0.965);
+}
+
+.apple-card {
+  transition: transform 220ms cubic-bezier(0.23, 1, 0.32, 1), 
+              box-shadow 220ms cubic-bezier(0.23, 1, 0.32, 1), 
+              border-color 200ms ease;
+}
+
+.apple-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.18), 0 4px 12px -4px rgba(0, 0, 0, 0.08);
+}
+
+.apple-btn-hover {
+  transition: all 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.apple-btn-hover:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.apple-btn-hover:active {
+  transform: scale(0.965) translateY(0);
 }
 
 /* Theme toggle active state highlights via CSS attribute selectors */
