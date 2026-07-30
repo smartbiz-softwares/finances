@@ -623,15 +623,16 @@ app.get('/api/finance/overview', authMiddleware, (req: any, res) => {
 
   // Pillar 5: Consistency (Registros y Actividad) - Max 15 pts
   const txCount = recentTxs.length;
-  const p5_consistency = txCount >= 8 ? 15 : txCount >= 3 ? 10 : 5;
+  const p5_consistency = txCount >= 8 ? 15 : txCount >= 3 ? 10 : (txCount > 0 ? 5 : 0);
 
-  const healthScore = Math.min(100, Math.max(15, p1_savings + p2_debt + p3_liquidity + p4_goals + p5_consistency));
+  const hasUserData = accounts.length > 0 || recentTxs.length > 0 || goals.length > 0 || debts.length > 0;
+  const healthScore = hasUserData ? Math.min(100, Math.max(0, p1_savings + (totalPendingDebtAmount > 0 ? p2_debt : 25) + p3_liquidity + p4_goals + p5_consistency)) : 0;
   const scoreBreakdown = {
-    savings: { pts: p1_savings, max: 25, label: 'Ahorro & Flujo de Caja' },
-    debt: { pts: p2_debt, max: 25, label: 'Control de Deudas' },
-    liquidity: { pts: p3_liquidity, max: 20, label: 'Liquidez & Cuentas' },
-    goals: { pts: p4_goals, max: 15, label: 'Metas de Ahorro' },
-    consistency: { pts: p5_consistency, max: 15, label: 'Consistencia de Registros' }
+    savings: { pts: hasUserData ? p1_savings : 0, max: 25, label: 'Ahorro & Flujo de Caja' },
+    debt: { pts: hasUserData ? p2_debt : 0, max: 25, label: 'Control de Deudas' },
+    liquidity: { pts: hasUserData ? p3_liquidity : 0, max: 20, label: 'Liquidez & Cuentas' },
+    goals: { pts: hasUserData ? p4_goals : 0, max: 15, label: 'Metas de Ahorro' },
+    consistency: { pts: hasUserData ? p5_consistency : 0, max: 15, label: 'Consistencia de Registros' }
   };
 
   res.json({

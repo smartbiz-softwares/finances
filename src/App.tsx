@@ -7709,7 +7709,7 @@ export default function App() {
                       {/* SVG Circular Border Loading Animation */}
                       <div className="relative w-36 h-36 mx-auto flex items-center justify-center">
                         {(() => {
-                          const scoreVal = overview?.healthScore || 88;
+                          const scoreVal = overview?.healthScore ?? 0;
                           const radius = 50;
                           const circ = 2 * Math.PI * radius; // ~314.159
                           const strokeOffset = circ - (scoreVal / 100) * circ;
@@ -7758,9 +7758,9 @@ export default function App() {
                       <div className="space-y-1">
                         <span className={cn(
                           "px-3 py-1 rounded-full text-xs font-bold uppercase font-mono border inline-block",
-                          (overview?.healthScore || 88) >= 80 ? "bg-success/15 text-success border-success/30" : (overview?.healthScore || 88) >= 60 ? "bg-brand/15 text-brand border-brand/30" : "bg-warning/15 text-warning border-warning/30"
+                          (overview?.healthScore ?? 0) >= 80 ? "bg-success/15 text-success border-success/30" : (overview?.healthScore ?? 0) >= 60 ? "bg-brand/15 text-brand border-brand/30" : (overview?.healthScore ?? 0) > 0 ? "bg-warning/15 text-warning border-warning/30" : "bg-surface-hover text-text-secondary border-border"
                         )}>
-                          {(overview?.healthScore || 88) >= 80 ? 'Excelente Salud Financiera' : (overview?.healthScore || 88) >= 60 ? 'Salud Financiera Buena' : 'Requiere Atención'}
+                          {(overview?.healthScore ?? 0) >= 80 ? 'Excelente Salud Financiera' : (overview?.healthScore ?? 0) >= 60 ? 'Salud Financiera Buena' : (overview?.healthScore ?? 0) > 0 ? 'Requiere Atención' : 'Sin Registros Aún'}
                         </span>
                         <p className="text-[11px] text-text-secondary max-w-xs mx-auto leading-relaxed pt-1">
                           Calculado en tiempo real evaluando tus ingresos, gastos, nivel de deudas, cuentas y consistencia de ahorro.
@@ -7780,11 +7780,11 @@ export default function App() {
 
                       <div className="space-y-2.5">
                         {[
-                          { label: 'Ahorro & Capacidad de Flujo', pts: overview?.scoreBreakdown?.savings?.pts ?? 22, max: 25, desc: 'Diferencial positivo entre ingresos y gastos totales' },
-                          { label: 'Nivel de Endeudamiento', pts: overview?.scoreBreakdown?.debt?.pts ?? 25, max: 25, desc: 'Proporción de deudas activas frente a tu capital disponible' },
-                          { label: 'Liquidez & Fondos en Cuentas', pts: overview?.scoreBreakdown?.liquidity?.pts ?? 18, max: 20, desc: 'Saldo acumulado en tus cuentas bancarias y efectivo' },
-                          { label: 'Progreso de Metas de Ahorro', pts: overview?.scoreBreakdown?.goals?.pts ?? 12, max: 15, desc: 'Avance en tus fondos de reserva y metas trazadas' },
-                          { label: 'Consistencia de Registros', pts: overview?.scoreBreakdown?.consistency?.pts ?? 15, max: 15, desc: 'Frecuencia de actualización de tus transacciones' },
+                          { label: 'Ahorro & Capacidad de Flujo', pts: overview?.scoreBreakdown?.savings?.pts ?? 0, max: 25, desc: 'Diferencial positivo entre ingresos y gastos totales' },
+                          { label: 'Nivel de Endeudamiento', pts: overview?.scoreBreakdown?.debt?.pts ?? 0, max: 25, desc: 'Proporción de deudas activas frente a tu capital disponible' },
+                          { label: 'Liquidez & Fondos en Cuentas', pts: overview?.scoreBreakdown?.liquidity?.pts ?? 0, max: 20, desc: 'Saldo acumulado en tus cuentas bancarias y efectivo' },
+                          { label: 'Progreso de Metas de Ahorro', pts: overview?.scoreBreakdown?.goals?.pts ?? 0, max: 15, desc: 'Avance en tus fondos de reserva y metas trazadas' },
+                          { label: 'Consistencia de Registros', pts: overview?.scoreBreakdown?.consistency?.pts ?? 0, max: 15, desc: 'Frecuencia de actualización de tus transacciones' },
                         ].map((p, idx) => {
                           const pct = Math.round((p.pts / p.max) * 100);
                           return (
@@ -7825,14 +7825,14 @@ export default function App() {
                         {
                           title: 'Aumentar Reserva de Ahorro',
                           impact: '+6 pts en Score',
-                          desc: 'Tu capacidad de ahorro actual es positiva. Si destinas un 5% adicional de tus ingresos al fondo de reserva, tu salud financiera subirá de nivel.',
+                          desc: 'Destinar un porcentaje constante de tus ingresos al fondo de reserva eleva tu estabilidad financiera.',
                           actionText: 'Ver Metas de Ahorro',
                           actionTab: 'goals'
                         },
                         {
                           title: 'Optimización de Deudas',
                           impact: '+8 pts en Score',
-                          desc: 'Liquidando tu deuda pendiente de 150 € con Carlos Gómez elevarás tu pilar de endeudamiento a la puntuación máxima de 25 puntos.',
+                          desc: 'Mantener un control al día de tus deudas pendientes protegerá tu puntuación en el score Hera.',
                           actionText: 'Gestor de Deudas',
                           actionTab: 'debts'
                         },
