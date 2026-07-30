@@ -1946,10 +1946,11 @@ export default function App() {
   // Fetch Admin Plans
   const fetchAdminPlans = useCallback(async () => {
     try {
-      const res = await api('/api/admin/plans');
+      const headers = adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {};
+      const res = await api('/api/admin/plans', { headers });
       setAdminPlans(res);
     } catch { }
-  }, []);
+  }, [adminToken]);
 
   useEffect(() => {
     fetchSubscriptionPlans();
@@ -2235,16 +2236,20 @@ export default function App() {
       isRecommended: planForm.isRecommended ? 1 : 0
     };
 
+    const headers = adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {};
+
     try {
       if (editingPlan) {
         await api(`/api/admin/plans/${editingPlan.id}`, {
           method: 'PUT',
+          headers,
           body: JSON.stringify(payload)
         });
         showToast('Plan actualizado correctamente', 'success');
       } else {
         await api('/api/admin/plans', {
           method: 'POST',
+          headers,
           body: JSON.stringify(payload)
         });
         showToast('Nuevo plan creado correctamente', 'success');
@@ -2260,8 +2265,9 @@ export default function App() {
 
   const handleDeleteAdminPlan = async (planId: string) => {
     if (!confirm('¿Estás seguro de eliminar este plan de suscripción?')) return;
+    const headers = adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {};
     try {
-      await api(`/api/admin/plans/${planId}`, { method: 'DELETE' });
+      await api(`/api/admin/plans/${planId}`, { method: 'DELETE', headers });
       showToast('Plan eliminado correctamente', 'success');
       setShowPlanEditModal(false);
       setEditingPlan(null);
