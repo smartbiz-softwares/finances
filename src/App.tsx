@@ -7275,7 +7275,7 @@ export default function App() {
                           <span className="text-[11px] text-text-secondary font-medium">Ahorro Proyectado (30d)</span>
                           <p className="text-2xl font-bold font-mono text-brand flex items-center gap-1">
                             <TrendingUp size={18} />
-                            <AnimatedCountUp value={aiReportData?.projectedSavings30d || 280} prefix="+" suffix="€" />
+                            <AnimatedCountUp value={aiReportData?.projectedSavings30d ?? 0} prefix="+" suffix="€" />
                           </p>
                         </AnimatedCard>
                       </div>
@@ -7298,15 +7298,12 @@ export default function App() {
                               .sort((a, b) => b.value - a.value);
 
                             if (sortedCats.length === 0) {
-                              sortedCats = [
-                                { label: 'Alimentación', value: 480 },
-                                { label: 'Vivienda', value: 360 },
-                                { label: 'Restaurantes', value: 240 },
-                                { label: 'Transporte', value: 180 },
-                                { label: 'Ocio & Varios', value: 120 },
-                                { label: 'Servicios', value: 95 },
-                                { label: 'Salud', value: 70 }
-                              ];
+                              return (
+                                <div className="p-8 bg-bg border border-border/60 rounded-2xl text-center space-y-2">
+                                  <p className="text-xs font-semibold text-text-primary">Sin gastos registrados en el periodo</p>
+                                  <p className="text-[11px] text-text-secondary">Registra tus primeros movimientos para generar el desglose por categorías.</p>
+                                </div>
+                              );
                             }
 
                             const maxVal = Math.max(...sortedCats.map(c => c.value), 1);
@@ -7420,9 +7417,9 @@ export default function App() {
                           <div className="h-64 w-full pt-2 min-h-[220px]">
                             <ResponsiveContainer width="100%" height="100%">
                               <BarChart data={[
-                                { name: 'Ingresos', amount: Number(overview?.summary?.totalIncome) || 3300, fill: '#10B981' },
-                                { name: 'Gastos', amount: Number(overview?.summary?.totalExpense) || 1511.89, fill: '#EF4444' },
-                                { name: 'Ahorro Neto', amount: Math.max(0, (Number(overview?.summary?.totalIncome) || 3300) - (Number(overview?.summary?.totalExpense) || 1511.89)), fill: '#F59E0B' }
+                                { name: 'Ingresos', amount: Number(overview?.summary?.totalIncome) || 0, fill: '#10B981' },
+                                { name: 'Gastos', amount: Number(overview?.summary?.totalExpense) || 0, fill: '#EF4444' },
+                                { name: 'Ahorro Neto', amount: Math.max(0, (Number(overview?.summary?.totalIncome) || 0) - (Number(overview?.summary?.totalExpense) || 0)), fill: '#F59E0B' }
                               ]} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
                                 <XAxis dataKey="name" stroke="#888888" fontSize={11} tickLine={false} axisLine={false} />
                                 <YAxis stroke="#888888" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(val: any) => `${formatCompactNumber(val)}€`} />
