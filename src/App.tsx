@@ -8137,8 +8137,7 @@ export default function App() {
                                         className="px-3 py-1.5 rounded-xl bg-brand/15 hover:bg-brand/25 text-brand border border-brand/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.96]"
                                         title="Registrar abono o pago parcial"
                                       >
-                                        <PlusCircle size={14} />
-                                        <span>+ Abonar</span>
+                                        <span>Abonar</span>
                                       </button>
 
                                       <button
