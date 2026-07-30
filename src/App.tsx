@@ -2013,7 +2013,7 @@ export default function App() {
   const fetchAdminCubaRequests = useCallback(async () => {
     if (!adminToken) return;
     try {
-      const res = await fetch('http://localhost:4000/api/admin/cuba-requests', {
+      const res = await fetch('/api/admin/cuba-requests', {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
       const data = await res.json();
@@ -2061,7 +2061,7 @@ export default function App() {
     e.preventDefault();
     if (!adminToken) return;
     try {
-      const res = await fetch('http://localhost:4000/api/admin/cuba-config', {
+      const res = await fetch('/api/admin/cuba-config', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2087,7 +2087,7 @@ export default function App() {
   const handleApproveCubaRequest = async (requestId: string) => {
     if (!adminToken) return;
     try {
-      const res = await fetch(`http://localhost:4000/api/admin/cuba-requests/${requestId}/approve`, {
+      const res = await fetch(`/api/admin/cuba-requests/${requestId}/approve`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
@@ -2108,7 +2108,7 @@ export default function App() {
   const handleRejectCubaRequest = async (requestId: string) => {
     if (!adminToken) return;
     try {
-      const res = await fetch(`http://localhost:4000/api/admin/cuba-requests/${requestId}/reject`, {
+      const res = await fetch(`/api/admin/cuba-requests/${requestId}/reject`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
@@ -2928,7 +2928,7 @@ export default function App() {
         });
       } catch {
         try {
-          fetchRes = await fetch('http://localhost:4000/api/export-document', {
+          fetchRes = await fetch('/api/export-document', {
             method: 'POST',
             headers,
             body: JSON.stringify({ format, title, columns, rows, summary: docData?.summary })
@@ -3807,7 +3807,7 @@ export default function App() {
     e.preventDefault();
     setAdminLoading(true);
     try {
-      const res = await fetch('http://localhost:4000/api/admin/login', {
+      const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: adminUsername, password: adminPassword })
@@ -3832,13 +3832,13 @@ export default function App() {
     try {
       const headers = { 'Authorization': `Bearer ${t}` };
       const [statsRes, provsRes, usersRes, logsRes, plansRes, cubaRes, allTxsRes] = await Promise.all([
-        fetch('http://localhost:4000/api/admin/stats', { headers }).then(r => r.json()),
-        fetch('http://localhost:4000/api/admin/providers', { headers }).then(r => r.json()),
-        fetch('http://localhost:4000/api/admin/users', { headers }).then(r => r.json()),
-        fetch('http://localhost:4000/api/admin/logs', { headers }).then(r => r.json()),
-        fetch('http://localhost:4000/api/admin/plans', { headers }).then(r => r.json()),
-        fetch('http://localhost:4000/api/admin/cuba-requests', { headers }).then(r => r.json()),
-        fetch('http://localhost:4000/api/admin/all-transactions', { headers }).then(r => r.json())
+        fetch('/api/admin/stats', { headers }).then(r => r.json()),
+        fetch('/api/admin/providers', { headers }).then(r => r.json()),
+        fetch('/api/admin/users', { headers }).then(r => r.json()),
+        fetch('/api/admin/logs', { headers }).then(r => r.json()),
+        fetch('/api/admin/plans', { headers }).then(r => r.json()),
+        fetch('/api/admin/cuba-requests', { headers }).then(r => r.json()),
+        fetch('/api/admin/all-transactions', { headers }).then(r => r.json())
       ]);
 
       setAdminStats(statsRes);
@@ -3855,7 +3855,7 @@ export default function App() {
     if (!adminToken) return;
     const newRole = currentRole === 'founder' ? 'standard' : 'founder';
     try {
-      const res = await fetch(`http://localhost:4000/api/admin/users/${userId}/role`, {
+      const res = await fetch(`/api/admin/users/${userId}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -3885,7 +3885,7 @@ export default function App() {
     setUserTelemetryData(null);
     if (!adminToken) return;
     try {
-      const res = await fetch(`http://localhost:4000/api/admin/users/${u.id}/telemetry`, {
+      const res = await fetch(`/api/admin/users/${u.id}/telemetry`, {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
       const data = await res.json();
@@ -3904,7 +3904,7 @@ export default function App() {
   const handleUpdateProviderKey = async (id: string, apiKey: string, isActive: number) => {
     if (!adminToken) return;
     try {
-      await fetch(`http://localhost:4000/api/admin/providers/${id}`, {
+      await fetch(`/api/admin/providers/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -3923,7 +3923,7 @@ export default function App() {
     e.preventDefault();
     if (!newProviderName || !newProviderModel || !adminToken) return;
     try {
-      await fetch('http://localhost:4000/api/admin/providers', {
+      await fetch('/api/admin/providers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
