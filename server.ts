@@ -6,8 +6,8 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { AgentOrchestrator } from './src/agent/brain/orchestrator';
-import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine';
+import { AgentOrchestrator } from './src/agent/brain/orchestrator.ts';
+import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine.ts';
 
 const app = express();
 app.use(cors());
@@ -84,7 +84,6 @@ db.exec(`
     status TEXT DEFAULT 'active'
   );
   CREATE INDEX IF NOT EXISTS idx_goals_userId ON goals(userId);
-  try { db.exec("ALTER TABLE goals ADD COLUMN planData TEXT"); } catch {}
 
   CREATE TABLE IF NOT EXISTS chat_messages (
     id TEXT PRIMARY KEY,
@@ -130,7 +129,6 @@ db.exec(`
     createdAt TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_notifications_userId ON user_notifications(userId);
-  try { db.exec("ALTER TABLE user_notifications ADD COLUMN actionData TEXT"); } catch {}
 
   CREATE TABLE IF NOT EXISTS debt_payments (
     id TEXT PRIMARY KEY,
@@ -3068,6 +3066,9 @@ app.put('/api/admin/cuba-config', adminAuthMiddleware, (req, res) => {
 });
 
 // Servir el Frontend compilado (dist/) directamente desde Express para soporte Single-Port / Proxy Nginx Simple
+import { fileURLToPath } from 'url';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));
 app.get('*', (req, res, next) => {

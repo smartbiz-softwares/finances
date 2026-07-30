@@ -1,11 +1,11 @@
 import Database from 'better-sqlite3';
-import { SecurityFence } from '../security/securityFence';
-import { MemoryManager } from '../memory/memoryManager';
-import { MirrorToneEngine } from '../profile/mirrorToneEngine';
-import { ToolRegistry } from '../tools/toolRegistry';
-import { LearningPipeline } from '../learning/learningPipeline';
-import { AuditLogger } from '../observability/auditLogger';
-import { eventBus } from '../eventBus';
+import { SecurityFence } from '../security/securityFence.ts';
+import { MemoryManager } from '../memory/memoryManager.ts';
+import { MirrorToneEngine } from '../profile/mirrorToneEngine.ts';
+import { ToolRegistry } from '../tools/toolRegistry.ts';
+import { LearningPipeline } from '../learning/learningPipeline.ts';
+import { AuditLogger } from '../observability/auditLogger.ts';
+import { eventBus } from '../eventBus.ts';
 
 export class AgentOrchestrator {
   private memoryManager: MemoryManager;

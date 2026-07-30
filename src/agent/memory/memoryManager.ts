@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { GitSyncService } from './gitSyncService';
+import { GitSyncService } from './gitSyncService.ts';
 
 export interface MemoryContext {
   shortMemory: { role: string; content: string }[];

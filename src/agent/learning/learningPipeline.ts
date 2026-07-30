@@ -1,4 +1,4 @@
-import { MemoryManager } from '../memory/memoryManager';
+import { MemoryManager } from '../memory/memoryManager.ts';
 import Database from 'better-sqlite3';
 
 /**
