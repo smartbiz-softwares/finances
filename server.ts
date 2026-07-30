@@ -3067,6 +3067,14 @@ app.put('/api/admin/cuba-config', adminAuthMiddleware, (req, res) => {
   res.json({ success: true, message: 'Configuración de pago para Cuba actualizada correctamente' });
 });
 
+// Servir el Frontend compilado (dist/) directamente desde Express para soporte Single-Port / Proxy Nginx Simple
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) return next();
+  res.sendFile(path.join(distPath, 'index.html'));
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`Hera API Server running on port ${PORT}`);
