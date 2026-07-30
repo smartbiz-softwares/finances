@@ -2223,17 +2223,29 @@ export default function App() {
       showToast('Nombre y precio mensual son requeridos', 'error');
       return;
     }
+
+    const payload = {
+      name: planForm.name,
+      description: planForm.description,
+      priceMonthly: parseFloat(planForm.priceMonthly) || 0,
+      priceQuarterly: parseFloat(planForm.priceQuarterly) || 0,
+      priceAnnual: parseFloat(planForm.priceAnnual) || 0,
+      tokensCount: parseInt(planForm.tokensCount) || 100000,
+      renewIntervalHours: parseInt(planForm.renewIntervalHours) || 720,
+      isRecommended: planForm.isRecommended ? 1 : 0
+    };
+
     try {
       if (editingPlan) {
         await api(`/api/admin/plans/${editingPlan.id}`, {
           method: 'PUT',
-          body: JSON.stringify(planForm)
+          body: JSON.stringify(payload)
         });
         showToast('Plan actualizado correctamente', 'success');
       } else {
         await api('/api/admin/plans', {
           method: 'POST',
-          body: JSON.stringify(planForm)
+          body: JSON.stringify(payload)
         });
         showToast('Nuevo plan creado correctamente', 'success');
       }

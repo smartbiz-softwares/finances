@@ -2665,46 +2665,7 @@ app.get('/api/admin/all-transactions', adminAuthMiddleware, (req, res) => {
   res.json(allTxs);
 });
 
-// Admin Subscription Plans Management (CRUD)
-app.get('/api/admin/plans', adminAuthMiddleware, (req, res) => {
-  const plans = db.prepare('SELECT * FROM subscription_plans ORDER BY priceMonthly ASC').all();
-  res.json(plans);
-});
 
-app.post('/api/admin/plans', adminAuthMiddleware, (req, res) => {
-  const { name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, isRecommended } = req.body;
-  if (!name || !priceMonthly) return res.status(400).json({ error: 'Nombre y precio requeridos' });
-
-  const id = 'plan-' + randomUUID().slice(0, 8);
-  db.prepare(`
-    INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 720, ?, 1, ?)
-  `).run(id, name, description || '', priceMonthly, priceQuarterly || priceMonthly * 3, priceAnnual || priceMonthly * 10, tokensCount || 100000, isRecommended ? 1 : 0, new Date().toISOString());
-
-  logAudit('admin_root', 'create_plan', `Plan creado: ${name}`);
-  res.json({ success: true, id });
-});
-
-app.put('/api/admin/plans/:id', adminAuthMiddleware, (req, res) => {
-  const { id } = req.params;
-  const { name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, isRecommended, isActive } = req.body;
-
-  db.prepare(`
-    UPDATE subscription_plans 
-    SET name = ?, description = ?, priceMonthly = ?, priceQuarterly = ?, priceAnnual = ?, tokensCount = ?, isRecommended = ?, isActive = ?
-    WHERE id = ?
-  `).run(name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, isRecommended ? 1 : 0, isActive ? 1 : 0, id);
-
-  logAudit('admin_root', 'update_plan', `Plan actualizado: ${id}`);
-  res.json({ success: true });
-});
-
-app.delete('/api/admin/plans/:id', adminAuthMiddleware, (req, res) => {
-  const { id } = req.params;
-  db.prepare('DELETE FROM subscription_plans WHERE id = ?').run(id);
-  logAudit('admin_root', 'delete_plan', `Plan eliminado: ${id}`);
-  res.json({ success: true });
-});
 
 app.get('/api/admin/logs', adminAuthMiddleware, (req, res) => {
   const logs = db.prepare('SELECT * FROM audit_logs ORDER BY createdAt DESC LIMIT 100').all();
