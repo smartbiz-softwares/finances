@@ -2543,13 +2543,13 @@ export default function App() {
     setDebtsLoading(true);
     try {
       const res = await api('/finance/debts');
-      if (Array.isArray(res) && res.length > 0) {
+      if (Array.isArray(res)) {
         setDebtsList(res);
       } else {
-        setDebtsList(DEFAULT_SAMPLE_DEBTS);
+        setDebtsList([]);
       }
     } catch {
-      setDebtsList(DEFAULT_SAMPLE_DEBTS);
+      setDebtsList([]);
     } finally {
       setDebtsLoading(false);
     }
