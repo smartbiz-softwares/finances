@@ -306,98 +306,6 @@ function logAudit(userId: string | null, action: string, details?: string) {
 }
 
 // Seed default financial portfolio for user if no accounts exist
-function seedUserDataIfEmpty(userId: string) {
-  const accountCount = (db.prepare('SELECT COUNT(*) as count FROM accounts WHERE userId = ?').get(userId) as any).count;
-  if (accountCount > 0) return;
-
-  const bankId = randomUUID();
-  const cashId = randomUUID();
-  const cardId = randomUUID();
-  const cryptoId = randomUUID();
-
-  // Initial accounts (safely inserted within valid CHECK constraints)
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(bankId, userId, 'bank', 'Cuenta Principal (BBVA)', 3450.00, 'EUR', 'Building2', '#3B82F6'); } catch { }
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cashId, userId, 'cash', 'Efectivo', 180.50, 'EUR', 'Wallet', '#10B981'); } catch { }
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cardId, userId, 'card', 'Tarjeta Crédito Hera', -420.00, 'EUR', 'CreditCard', '#F59E0B'); } catch { }
-  try { db.prepare('INSERT INTO accounts (id, userId, type, name, balance, currency, icon, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(cryptoId, userId, 'bank', 'Wallet Cripto (BTC/ETH)', 890.00, 'EUR', 'Coins', '#8B5CF6'); } catch { }
-
-  // Initial transactions
-  const now = new Date();
-  const formatDate = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86400000).toISOString().split('T')[0];
-
-  const sampleTxs = [
-    { acc: bankId, type: 'income', amount: 2800.00, cat: 'Salario', desc: 'Nómina mensual', date: formatDate(1) },
-    { acc: cardId, type: 'expense', amount: 48.50, cat: 'Restaurantes', desc: 'Cena con amigos', date: formatDate(1) },
-    { acc: bankId, type: 'expense', amount: 95.00, cat: 'Servicios', desc: 'Electricidad e internet', date: formatDate(3) },
-    { acc: cardId, type: 'expense', amount: 14.99, cat: 'Suscripciones', desc: 'Netflix Premium', date: formatDate(5) },
-    { acc: cardId, type: 'expense', amount: 14.99, cat: 'Suscripciones', desc: 'Netflix Premium (Cobro duplicado)', date: formatDate(5) },
-    { acc: cashId, type: 'expense', amount: 35.00, cat: 'Gasolina', desc: 'Repostaje coche', date: formatDate(6) },
-    { acc: cardId, type: 'expense', amount: 12.00, cat: 'Suscripciones', desc: 'Gimnasio no utilizado', date: formatDate(10) },
-    { acc: bankId, type: 'expense', amount: 620.00, cat: 'Alquiler', desc: 'Pago de vivienda', date: formatDate(12) },
-    { acc: cardId, type: 'expense', amount: 110.00, cat: 'Compras', desc: 'Ropa Zara', date: formatDate(15) }
-  ];
-
-  for (const t of sampleTxs) {
-    db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-      randomUUID(), userId, t.acc, t.type, t.amount, t.cat, t.desc, t.date
-    );
-  }
-
-  // Initial goals
-  db.prepare('INSERT INTO goals (id, userId, name, targetAmount, currentAmount, deadline, weeklyTarget, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    randomUUID(), userId, 'Fondo de Emergencia (3 meses)', 3000.00, 1850.00, '2026-12-31', 65.00, 'active'
-  );
-  db.prepare('INSERT INTO goals (id, userId, name, targetAmount, currentAmount, deadline, weeklyTarget, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-    randomUUID(), userId, 'Viaje de Vacaciones a Japón', 2500.00, 920.00, '2027-04-15', 50.00, 'active'
-  );
-
-  // Initial debts & receivables
-  try {
-    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      randomUUID(), userId, 'Cena de cumpleaños', 'Carlos Gómez', 'debt', 150.00, 0, '2026-08-15', 'pending'
-    );
-    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      randomUUID(), userId, 'Préstamo proyecto web', 'Laura Martínez', 'receivable', 280.00, 0, '2026-08-30', 'pending'
-    );
-    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      randomUUID(), userId, 'Cuota mensual equipo', 'Banco Santander', 'debt', 450.00, 0, '2026-09-01', 'pending'
-    );
-    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      randomUUID(), userId, 'Entrada de concierto', 'Pedro Sánchez', 'receivable', 65.00, 65.00, '2026-07-20', 'paid'
-    );
-
-    // Initial card payment history for plans & token purchases
-    db.prepare(`
-      INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(randomUUID(), userId, 'subscription_renewal', 250000, 14.99, 'Suscripción a Plan Pro', formatDate(15), new Date(now.getTime() - 15 * 86400000).toISOString());
-
-    db.prepare(`
-      INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(randomUUID(), userId, 'top_up', 55000, 5.00, 'Recarga Top Up de Tokens', formatDate(5), new Date(now.getTime() - 5 * 86400000).toISOString());
-  } catch { }
-}
-
-// Seed user Christian specifically (jcksparrow0209@gmail.com / +5359079144)
-function seedChristianUser() {
-  const christianPhones = ['+5359079144', '5359079144'];
-  for (const phone of christianPhones) {
-    let user = db.prepare('SELECT * FROM users WHERE phone = ? OR email = ?').get(phone, 'jcksparrow0209@gmail.com') as any;
-    if (!user) {
-      const id = randomUUID();
-      db.prepare('INSERT INTO users (id, email, displayName, phone, theme, currency, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-        id, 'jcksparrow0209@gmail.com', 'Christian', phone, 'dark', 'EUR', new Date().toISOString()
-      );
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
-    } else {
-      db.prepare('UPDATE users SET displayName = ?, email = ? WHERE id = ?').run('Christian', 'jcksparrow0209@gmail.com', user.id);
-    }
-    seedUserDataIfEmpty(user.id);
-  }
-}
-// seedChristianUser();
-
 // --- Helpers ---
 
 function generateOTP(): string {
@@ -630,7 +538,6 @@ app.post('/api/verify-otp', (req, res) => {
     isNewUser = true;
   }
 
-  seedUserDataIfEmpty(user.id);
   logAudit(user.id, 'login', `Inicio de sesión verificado para ${phone}`);
 
   const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
@@ -656,7 +563,6 @@ app.post('/api/verify-otp', (req, res) => {
 app.get('/api/me', authMiddleware, (req: any, res) => {
   const user = db.prepare('SELECT id, email, displayName, phone, photoURL, birthDate, address, theme, currency, createdAt FROM users WHERE id = ?').get(req.userId);
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-  seedUserDataIfEmpty(req.userId);
   res.json(user);
 });
 
@@ -681,7 +587,6 @@ app.put('/api/me', authMiddleware, (req: any, res) => {
 // --- User Financial Data API Routes (Strictly Filtered by req.userId) ---
 
 app.get('/api/finance/overview', authMiddleware, (req: any, res) => {
-  seedUserDataIfEmpty(req.userId);
   const summary = getDBUserSummary(req.userId);
   const accounts = getDBAccounts(req.userId);
   const recentTxs = getDBTransactions(req.userId, 10);
@@ -1660,7 +1565,6 @@ app.post('/api/chat', authMiddleware, async (req: any, res) => {
   if (!message) return res.status(400).json({ error: 'Mensaje requerido' });
 
   const userId = req.userId;
-  seedUserDataIfEmpty(userId);
 
   // 1. Retrieve or auto-seed active subscription for token accounting
   let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
