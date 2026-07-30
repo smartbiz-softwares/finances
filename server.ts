@@ -2312,7 +2312,10 @@ app.get('/api/admin/notifications/history', adminAuthMiddleware, (req: any, res)
 
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === 'admin' && password === 'admin') {
+  const expectedAdminUser = process.env.ADMIN_USERNAME || 'admin';
+  const expectedAdminPass = process.env.ADMIN_PASSWORD || 'fuKWDqqmXn';
+
+  if (username === expectedAdminUser && password === expectedAdminPass) {
     const adminToken = jwt.sign({ adminId: 'admin_root', role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: '7d' });
     logAudit('admin_root', 'admin_login', 'Inicio de sesión de administrador exitoso');
     return res.json({ success: true, token: adminToken });
