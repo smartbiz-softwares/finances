@@ -7919,7 +7919,32 @@ export default function App() {
                     </div>
                   </motion.div>
 
+                  {/* Estado vacío: sin movimientos aún no existe score que mostrar */}
+                  {overview && overview.scoreReady === false && (
+                    <div className="bg-surface border border-border p-10 rounded-3xl text-center space-y-4 shadow-xs">
+                      <div className="w-16 h-16 rounded-3xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center mx-auto">
+                        <ShieldCheck size={28} strokeWidth={1.5} />
+                      </div>
+                      <div className="space-y-1.5 max-w-md mx-auto">
+                        <h3 className="font-serif font-bold text-lg text-text-primary">Tu Score Hera está en camino</h3>
+                        <p className="text-xs text-text-secondary leading-relaxed">
+                          Registra tus primeros gastos e ingresos y aquí aparecerá tu evaluación
+                          de los 5 pilares financieros: ahorro, deudas, liquidez, metas y consistencia.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('chat')}
+                        className="bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors duration-200 inline-flex items-center gap-2"
+                      >
+                        <Mic size={14} />
+                        Registrar mi primer movimiento
+                      </button>
+                    </div>
+                  )}
+
                   {/* Animated Score Hero Card & 5 Pillars Grid */}
+                  {(!overview || overview.scoreReady !== false) && (
+                  <>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* Hero Circular SVG Animated Ring Gauge */}
                     <motion.div
@@ -8113,6 +8138,8 @@ export default function App() {
                       ))}
                     </div>
                   </motion.div>
+                  </>
+                  )}
                 </div>
               )}
 

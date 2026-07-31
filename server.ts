@@ -1051,14 +1051,17 @@ app.get('/api/finance/overview', authMiddleware, (req: any, res) => {
   const txCount = recentTxs.length;
   const p5_consistency = txCount >= 8 ? 15 : txCount >= 3 ? 10 : (txCount > 0 ? 5 : 0);
 
-  const hasUserData = accounts.length > 0 || recentTxs.length > 0 || goals.length > 0 || debts.length > 0;
-  const healthScore = hasUserData ? Math.min(100, Math.max(0, p1_savings + (totalPendingDebtAmount > 0 ? p2_debt : 25) + p3_liquidity + p4_goals + p5_consistency)) : 0;
+  // El score solo tiene sentido con historial real: sin transacciones, los
+  // pilares evalúan el vacío (0 gastos = "ahorro bajo", 0 deudas = "perfecto")
+  // y castigan al usuario recién llegado con un número arbitrario.
+  const scoreReady = recentTxs.length > 0;
+  const healthScore = scoreReady ? Math.min(100, Math.max(0, p1_savings + (totalPendingDebtAmount > 0 ? p2_debt : 25) + p3_liquidity + p4_goals + p5_consistency)) : null;
   const scoreBreakdown = {
-    savings: { pts: hasUserData ? p1_savings : 0, max: 25, label: 'Ahorro & Flujo de Caja' },
-    debt: { pts: hasUserData ? p2_debt : 0, max: 25, label: 'Control de Deudas' },
-    liquidity: { pts: hasUserData ? p3_liquidity : 0, max: 20, label: 'Liquidez & Cuentas' },
-    goals: { pts: hasUserData ? p4_goals : 0, max: 15, label: 'Metas de Ahorro' },
-    consistency: { pts: hasUserData ? p5_consistency : 0, max: 15, label: 'Consistencia de Registros' }
+    savings: { pts: scoreReady ? p1_savings : 0, max: 25, label: 'Ahorro & Flujo de Caja' },
+    debt: { pts: scoreReady ? p2_debt : 0, max: 25, label: 'Control de Deudas' },
+    liquidity: { pts: scoreReady ? p3_liquidity : 0, max: 20, label: 'Liquidez & Cuentas' },
+    goals: { pts: scoreReady ? p4_goals : 0, max: 15, label: 'Metas de Ahorro' },
+    consistency: { pts: scoreReady ? p5_consistency : 0, max: 15, label: 'Consistencia de Registros' }
   };
 
   res.json({
@@ -1067,6 +1070,7 @@ app.get('/api/finance/overview', authMiddleware, (req: any, res) => {
     recentTxs,
     goals,
     healthScore,
+    scoreReady,
     scoreBreakdown
   });
 });
