@@ -25,8 +25,14 @@ app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '2
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const JWT_SECRET = 'hera-secret-key-change-in-production';
-const ADMIN_JWT_SECRET = 'hera-admin-secret-key-prod';
+// Secretos de firma de sesión: SIEMPRE desde el entorno en producción.
+// El fallback solo existe para desarrollo local; con él, cualquiera que lea
+// el repositorio puede firmar tokens de cualquier usuario.
+const JWT_SECRET = process.env.JWT_SECRET || 'hera-secret-key-change-in-production';
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'hera-admin-secret-key-prod';
+if (!process.env.JWT_SECRET || !process.env.ADMIN_JWT_SECRET) {
+  console.warn('⚠️ [Seguridad] JWT_SECRET / ADMIN_JWT_SECRET no definidos en .env: usando valores de desarrollo. NO usar así en producción.');
+}
 const db = new Database('hera.db');
 db.pragma('journal_mode = WAL');
 
