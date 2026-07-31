@@ -1383,16 +1383,8 @@ export default function App() {
   const [aiReportData, setAiReportData] = useState<any>(null);
 
   // Chat AI Thinking & Reasoning Stream State
-  const [chatThinkingStepIndex, setChatThinkingStepIndex] = useState(0);
   const [currentReasoningText, setCurrentReasoningText] = useState('');
   const [actionProcessing, setActionProcessing] = useState<string | null>(null);
-
-  const chatThinkingStepTexts = [
-    "Analizando consulta...",
-    "Evaluando saldos...",
-    "Procesando contexto...",
-    "Sintetizando..."
-  ];
 
   // Chat History & Bottom Sheet Modal State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -4404,11 +4396,6 @@ export default function App() {
     setChatInput('');
     setChatLoading(true);
     setCurrentReasoningText('');
-    setChatThinkingStepIndex(0);
-
-    const stepInterval = setInterval(() => {
-      setChatThinkingStepIndex(prev => (prev + 1) % 4);
-    }, 1100);
 
     try {
       const data = await api('/chat', {
@@ -6789,8 +6776,19 @@ export default function App() {
                             disabled={!chatInput.trim() || chatLoading}
                             className="px-4 py-2 bg-brand hover:bg-brand-hover text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow-md disabled:opacity-40 transition-all active:scale-[0.97] cursor-pointer"
                           >
-                            {chatLoading ? <Sparkles size={14} className="animate-spin" /> : <Send size={14} />}
-                            <span>Consultar</span>
+                            {chatLoading ? (
+                              /* Cargando: solo tres puntos, sin la palabra */
+                              <span className="flex items-center gap-1 py-1" aria-label="Consultando">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.3s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
+                              </span>
+                            ) : (
+                              <>
+                                <Send size={14} />
+                                <span>Consultar</span>
+                              </>
+                            )}
                           </button>
                         </div>
                       </motion.div>
@@ -7264,17 +7262,11 @@ export default function App() {
                             </div>
 
                             <div className="bg-surface border border-border/80 p-3.5 rounded-2xl space-y-2 shadow-xs text-xs">
-                              <div className="flex items-center gap-3">
-                                {/* 3 Emil-Style Animated Bouncing Dots (No badge background) */}
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
-                                  <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
-                                  <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" />
-                                </div>
-
-                                <span className="font-medium text-text-primary text-xs font-sans tracking-tight">
-                                  {chatThinkingStepTexts[chatThinkingStepIndex]}
-                                </span>
+                              {/* Solo tres puntos: sin texto rotatorio que distraiga */}
+                              <div className="flex items-center gap-1 shrink-0 py-0.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-brand animate-bounce" />
                               </div>
 
                               {/* Live Stream Reasoning Tokens Box (if active) */}
@@ -7410,8 +7402,19 @@ export default function App() {
                               disabled={!chatInput.trim() || chatLoading}
                               className="px-4 py-2 bg-brand hover:bg-brand-hover text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow-md disabled:opacity-40 transition-all active:scale-[0.97] cursor-pointer"
                             >
-                              {chatLoading ? <Sparkles size={14} className="animate-spin" /> : <Send size={14} />}
-                              <span>Consultar</span>
+                            {chatLoading ? (
+                                /* Cargando: solo tres puntos, sin la palabra */
+                                <span className="flex items-center gap-1 py-1" aria-label="Consultando">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.3s]" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]" />
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
+                                </span>
+                              ) : (
+                                <>
+                                  <Send size={14} />
+                                  <span>Consultar</span>
+                                </>
+                              )}
                             </button>
                           </div>
                         </div>
