@@ -19,6 +19,7 @@ import {
   Lock,
   ArrowRight,
   MessageSquare,
+  Bot,
   Clock,
   PieChart,
   Target,
@@ -1085,6 +1086,10 @@ export default function App() {
   const [onbAddress, setOnbAddress] = useState('');
   const [onbSaving, setOnbSaving] = useState(false);
   const [onbDone, setOnbDone] = useState(false);
+  // Primera cuenta del onboarding
+  const [onbAccType, setOnbAccType] = useState<'cash' | 'bank' | 'card'>('cash');
+  const [onbAccName, setOnbAccName] = useState('');
+  const [onbAccBalance, setOnbAccBalance] = useState('');
 
   // User Finance Data State
   const [overview, setOverview] = useState<any>(null);
@@ -2351,26 +2356,30 @@ export default function App() {
       }
     } catch { }
 
-    const userPhone = (localStorage.getItem('hera_user_phone') || '+5359079144').trim();
-    let detectedCountry = 'Cuba';
-    for (const key of Object.keys(COUNTRIES_DATA)) {
-      if (COUNTRIES_DATA[key].phonePrefixes.some(p => userPhone.startsWith(p))) {
-        detectedCountry = key;
-        break;
+    // Sin datos guardados todo empieza vacío: nada de tarjetas, nombres ni
+    // direcciones inventadas. Solo se pre-detecta el país por el prefijo
+    // telefónico del usuario, si existe.
+    const userPhone = (localStorage.getItem('hera_user_phone') || '').trim();
+    let detectedCountry = '';
+    if (userPhone) {
+      for (const key of Object.keys(COUNTRIES_DATA)) {
+        if (COUNTRIES_DATA[key].phonePrefixes.some(p => userPhone.startsWith(p))) {
+          detectedCountry = key;
+          break;
+        }
       }
     }
-    const initialStates = COUNTRIES_DATA[detectedCountry]?.states || ['La Habana'];
     return {
-      cardNumber: '4242 4242 4242 4242',
-      cardExp: '12/28',
-      cardCvc: '123',
-      firstName: 'Christian',
-      lastName: 'Sparrow',
-      address1: 'Calle Principal #123',
-      address2: 'Apto 4B',
-      city: detectedCountry === 'Cuba' ? 'La Habana' : 'Madrid',
-      state: initialStates[0] || '',
-      zip: '10400',
+      cardNumber: '',
+      cardExp: '',
+      cardCvc: '',
+      firstName: '',
+      lastName: '',
+      address1: '',
+      address2: '',
+      city: '',
+      state: '',
+      zip: '',
       country: detectedCountry
     };
   });
@@ -2609,13 +2618,6 @@ export default function App() {
   const [newDebtType, setNewDebtType] = useState<'debt' | 'receivable'>('debt');
   const [newDebtAmount, setNewDebtAmount] = useState('');
   const [newDebtDueDate, setNewDebtDueDate] = useState('');
-
-  const DEFAULT_SAMPLE_DEBTS = [
-    { id: 'sample-1', name: 'Cena de cumpleaños', personOrEntity: 'Carlos Gómez', type: 'debt', amount: 150.00, dueDate: '2026-08-15', status: 'pending' },
-    { id: 'sample-2', name: 'Préstamo proyecto web', personOrEntity: 'Laura Martínez', type: 'receivable', amount: 280.00, dueDate: '2026-08-30', status: 'pending' },
-    { id: 'sample-3', name: 'Cuota mensual equipo', personOrEntity: 'Banco Santander', type: 'debt', amount: 450.00, dueDate: '2026-09-01', status: 'pending' },
-    { id: 'sample-4', name: 'Entrada de concierto', personOrEntity: 'Pedro Sánchez', type: 'receivable', amount: 65.00, dueDate: '2026-07-20', status: 'paid' },
-  ];
 
   const fetchDebtsList = useCallback(async () => {
     setDebtsLoading(true);
@@ -3174,8 +3176,34 @@ export default function App() {
   const [newProviderModel, setNewProviderModel] = useState('');
   const [newProviderKey, setNewProviderKey] = useState('');
 
-  const openOnboarding = useCallback((initialData: { name?: string; birthDate?: string; email?: string; address?: string; phone?: string; photoURL?: string }) => {
-    setOnbStep(0);
+  /** Persiste el avance del onboarding (nunca retrocede en el servidor). */
+  const advanceOnboarding = useCallback(async (step: number) => {
+    try { await api('/me/onboarding', { method: 'PUT', body: JSON.stringify({ step }) }); } catch { }
+  }, []);
+
+  /**
+   * Cierra el asistente y, si el usuario eligió cómo registrar su primer
+   * movimiento, lo lleva directo a esa acción en el chat.
+   */
+  const finishOnboarding = useCallback((dest?: 'voice' | 'photo' | 'chat') => {
+    setShowOnboarding(false);
+    advanceOnboarding(3);
+    if (!dest) return;
+    setActiveTab('chat');
+    if (dest === 'voice') {
+      setTimeout(() => { try { startVoiceRecording(); } catch { } }, 450);
+    } else if (dest === 'photo') {
+      setTimeout(() => { (document.getElementById('chat-receipt-input') as HTMLInputElement)?.click(); }, 450);
+    } else {
+      setTimeout(() => setChatInput('Quiero registrar mi primer gasto: '), 300);
+    }
+  }, [advanceOnboarding]);
+
+  const openOnboarding = useCallback((initialData: { name?: string; birthDate?: string; email?: string; address?: string; phone?: string; photoURL?: string; startStep?: number }) => {
+    setOnbStep(initialData.startStep ?? -1);
+    setOnbAccType('cash');
+    setOnbAccName('');
+    setOnbAccBalance('');
     setOnbSaving(false);
     setOnbDone(false);
     setOnbName(initialData.name && initialData.name !== initialData.phone ? initialData.name : '');
@@ -3498,8 +3526,20 @@ export default function App() {
       setProfile(userProfile);
       loadUserData();
 
-      if (data.isNewUser || !data.user.displayName || data.user.displayName === fullPhone || !data.user.birthDate) {
-        openOnboarding({ name: data.user.displayName, phone: fullPhone, photoURL: data.user.photoURL });
+      const onbProgress = data.user.onboardingStep ?? 0;
+      if (data.isNewUser || onbProgress < 3) {
+        openOnboarding({
+          name: data.user.displayName,
+          birthDate: data.user.birthDate,
+          email: data.user.email,
+          address: data.user.address,
+          phone: fullPhone,
+          photoURL: data.user.photoURL,
+          // Usuario nuevo ve la bienvenida; uno a medias retoma donde quedó.
+          // Progreso servidor: 0=perfil, 1=cuenta, 2=primer movimiento.
+          // Pasos del asistente: -1 bienvenida, 0-1 perfil, 2 cuenta, 3 movimiento.
+          startStep: data.isNewUser ? -1 : (onbProgress === 0 ? 0 : onbProgress === 1 ? 2 : 3)
+        });
       } else {
         showToast('¡Bienvenido a HeraWallet!', 'success');
       }
@@ -6080,7 +6120,7 @@ export default function App() {
                           <div className="flex items-center gap-2">
                             <label className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-text-primary cursor-pointer transition-colors" title="Escanear recibo">
                               <Paperclip size={18} />
-                              <input type="file" accept="image/*" className="hidden" onChange={handleReceiptUpload} />
+                              <input id="chat-receipt-input" type="file" accept="image/*" className="hidden" onChange={handleReceiptUpload} />
                             </label>
                             <button
                               type="button"
@@ -10450,54 +10490,103 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Onboarding Dialog */}
+      {/* Onboarding Wizard: bienvenida → perfil → primera cuenta → primer registro */}
       <AnimatePresence>
         {showOnboarding && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-md w-full bg-surface border border-border p-6 rounded-3xl space-y-4"
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 12 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-md w-full bg-surface border border-border rounded-3xl overflow-hidden"
             >
-              <h3 className="text-xl font-serif font-semibold">
-                {onbStep === 0 ? 'Bienvenido a HeraWallet' : 'Casi listos'}
-              </h3>
-              <p className="text-xs text-text-secondary">
-                {onbStep === 0
-                  ? 'Queremos conocerte un poco mejor para personalizar tu experiencia.'
-                  : 'Solo necesitamos un par de datos de contacto para asegurar tu cuenta.'}
-              </p>
+              {/* Barra de progreso: solo a partir del primer paso real */}
+              {onbStep >= 0 && (
+                <div className="px-6 pt-5">
+                  <div className="flex items-center gap-2">
+                    {[
+                      { label: 'Perfil', done: onbStep > 1, active: onbStep <= 1 },
+                      { label: 'Tu dinero', done: onbStep > 2, active: onbStep === 2 },
+                      { label: 'Primer registro', done: false, active: onbStep === 3 }
+                    ].map((s) => (
+                      <div key={s.label} className="flex-1">
+                        <div className={cn(
+                          'h-[3px] rounded-full transition-colors duration-200',
+                          s.done || s.active ? 'bg-brand' : 'bg-border'
+                        )} />
+                        <p className={cn(
+                          'mt-1.5 text-[10px] font-medium tracking-wide transition-colors duration-200',
+                          s.active ? 'text-brand' : s.done ? 'text-text-secondary' : 'text-text-dim'
+                        )}>{s.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              <div className="space-y-3.5 text-xs text-left">
-                {onbStep === 0 ? (
+              <div className="p-6 space-y-4">
+                {onbStep === -1 && (
                   <>
-                    {/* Profile Avatar Upload Picker */}
-                    <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                    {/* Bienvenida */}
+                    <div className="flex flex-col items-center text-center space-y-4 py-2">
+                      <div className="w-16 h-16 rounded-2xl bg-brand flex items-center justify-center">
+                        <span className="font-serif font-bold text-white text-3xl leading-none">H</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <h3 className="text-2xl font-serif font-semibold text-text-primary">Bienvenido a HeraWallet</h3>
+                        <p className="text-sm font-serif italic text-text-secondary">Tus metas empiezan con un mejor control.</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {[
+                        { icon: Mic, text: 'Registra gastos e ingresos hablando, con una foto o chateando con la IA.' },
+                        { icon: Wallet, text: 'Organiza tus cuentas, tarjetas, deudas y metas de ahorro en un solo lugar.' },
+                        { icon: Sparkles, text: 'Recibe análisis inteligentes de tu dinero con tu Plan Gratuito, renovado cada 30 días.' }
+                      ].map((f, i) => (
+                        <div key={i} className="flex items-start gap-3 bg-bg border border-border rounded-2xl px-4 py-3">
+                          <f.icon size={16} className="text-brand mt-0.5 shrink-0" />
+                          <p className="text-xs text-text-secondary leading-relaxed">{f.text}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setOnbStep(0)}
+                      className="w-full bg-brand hover:bg-brand-hover text-white py-3 rounded-xl text-sm font-medium cursor-pointer transition-colors duration-200 flex items-center justify-center gap-2"
+                    >
+                      Empezar
+                      <ArrowRight size={15} />
+                    </button>
+                  </>
+                )}
+
+                {onbStep === 0 && (
+                  <>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-serif font-semibold text-text-primary">Cuéntanos quién eres</h3>
+                      <p className="text-xs text-text-secondary">Tu nombre y fecha de nacimiento personalizan tu experiencia.</p>
+                    </div>
+
+                    {/* Foto de perfil */}
+                    <div className="flex flex-col items-center justify-center py-1 space-y-2">
                       <div className="relative group cursor-pointer">
                         <label htmlFor="onb-photo-input" className="cursor-pointer block relative">
-                          <div className="w-24 h-24 rounded-full border-2 border-dashed border-brand/50 hover:border-brand bg-bg/80 flex items-center justify-center overflow-hidden transition-all duration-200 shadow-md group-hover:scale-[1.03] active:scale-[0.97] relative">
+                          <div className="w-20 h-20 rounded-full border-2 border-dashed border-brand/50 hover:border-brand bg-bg/80 flex items-center justify-center overflow-hidden transition-all duration-200 group-hover:scale-[1.03] active:scale-[0.97]">
                             {onbPhoto ? (
                               <img src={onbPhoto} alt="Foto de perfil" className="w-full h-full object-cover" />
                             ) : (
                               <div className="flex flex-col items-center justify-center text-text-secondary gap-1 p-2">
-                                <UserIcon size={30} className="text-brand/80" />
+                                <UserIcon size={24} className="text-brand/80" />
                                 <span className="text-[10px] font-medium text-text-dim text-center">Añadir foto</span>
                               </div>
                             )}
-
-                            {/* Hover overlay hint */}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[11px] font-medium backdrop-blur-2xs">
-                              <Camera size={18} />
-                            </div>
                           </div>
-
-                          {/* Badge camera icon on bottom right */}
-                          <div className="absolute bottom-0 right-0 bg-brand text-white p-2 rounded-full shadow-lg border-2 border-surface transform translate-x-1 translate-y-1 transition-transform group-hover:scale-110">
-                            <Camera size={13} />
+                          <div className="absolute bottom-0 right-0 bg-brand text-white p-1.5 rounded-full border-2 border-surface transform translate-x-1 translate-y-1 transition-transform group-hover:scale-110">
+                            <Camera size={12} />
                           </div>
                         </label>
-
                         <input
                           id="onb-photo-input"
                           type="file"
@@ -10512,16 +10601,13 @@ export default function App() {
                               }
                               const reader = new FileReader();
                               reader.onload = (event) => {
-                                if (event.target?.result) {
-                                  setOnbPhoto(event.target.result as string);
-                                }
+                                if (event.target?.result) setOnbPhoto(event.target.result as string);
                               };
                               reader.readAsDataURL(file);
                             }
                           }}
                         />
                       </div>
-
                       {onbPhoto && (
                         <button
                           type="button"
@@ -10534,61 +10620,28 @@ export default function App() {
                       )}
                     </div>
 
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-text-secondary">Nombre completo</label>
-                      <input
-                        type="text"
-                        placeholder="Ej. Juan Pérez"
-                        value={onbName}
-                        onChange={e => setOnbName(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60"
-                      />
+                    <div className="space-y-3 text-left">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-text-secondary">Nombre completo</label>
+                        <input
+                          type="text"
+                          placeholder="Ej. Juan Pérez"
+                          value={onbName}
+                          onChange={e => setOnbName(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand/60"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-text-secondary">Fecha de nacimiento</label>
+                        <input
+                          type="date"
+                          value={onbBirthDate}
+                          onChange={e => setOnbBirthDate(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand/60"
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-text-secondary">Fecha de nacimiento</label>
-                      <input
-                        type="date"
-                        value={onbBirthDate}
-                        onChange={e => setOnbBirthDate(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-text-secondary">Correo electrónico</label>
-                      <input
-                        type="email"
-                        placeholder="ejemplo@correo.com"
-                        value={onbEmail}
-                        onChange={e => setOnbEmail(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-text-secondary">Dirección</label>
-                      <input
-                        type="text"
-                        placeholder="Calle, número, ciudad"
-                        value={onbAddress}
-                        onChange={e => setOnbAddress(e.target.value)}
-                        className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-text-primary focus:outline-none focus:border-brand/60"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
 
-              <div className="flex gap-2 pt-2">
-                {onbStep === 0 ? (
-                  <>
-                    <button
-                      onClick={() => setShowOnboarding(false)}
-                      className="flex-1 bg-bg hover:bg-surface-hover text-text-secondary py-2.5 rounded-xl text-xs font-medium border border-border cursor-pointer"
-                    >
-                      Omitir
-                    </button>
                     <button
                       onClick={async () => {
                         try {
@@ -10601,41 +10654,202 @@ export default function App() {
                         setOnbStep(1);
                       }}
                       disabled={!onbName || !onbBirthDate}
-                      className="flex-1 bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer disabled:opacity-50 transition-colors"
+                      className="w-full bg-brand hover:bg-brand-hover text-white py-3 rounded-xl text-sm font-medium cursor-pointer disabled:opacity-50 transition-colors duration-200"
                     >
                       Continuar
                     </button>
                   </>
-                ) : (
+                )}
+
+                {onbStep === 1 && (
                   <>
-                    <button
-                      onClick={() => setOnbStep(0)}
-                      className="flex-1 bg-bg hover:bg-surface-hover text-text-secondary py-2.5 rounded-xl text-xs font-medium border border-border cursor-pointer"
-                    >
-                      Volver
-                    </button>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-serif font-semibold text-text-primary">Datos de contacto</h3>
+                      <p className="text-xs text-text-secondary">Un correo para avisos importantes y recuperar tu cuenta.</p>
+                    </div>
+
+                    <div className="space-y-3 text-left">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-text-secondary">Correo electrónico</label>
+                        <input
+                          type="email"
+                          placeholder="ejemplo@correo.com"
+                          value={onbEmail}
+                          onChange={e => setOnbEmail(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand/60"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-text-secondary">Dirección <span className="text-text-dim">(opcional)</span></label>
+                        <input
+                          type="text"
+                          placeholder="Calle, número, ciudad"
+                          value={onbAddress}
+                          onChange={e => setOnbAddress(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand/60"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => setOnbStep(0)}
+                        className="flex-1 bg-bg hover:bg-surface-hover text-text-secondary py-3 rounded-xl text-sm font-medium border border-border cursor-pointer transition-colors duration-200"
+                      >
+                        Volver
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setOnbSaving(true);
+                          try {
+                            await api('/me', {
+                              method: 'PUT',
+                              body: JSON.stringify({ displayName: onbName, birthDate: onbBirthDate, address: onbAddress, email: onbEmail, photoURL: onbPhoto })
+                            });
+                            await fetchUserProfile();
+                            await advanceOnboarding(1);
+                            setOnbStep(2);
+                          } catch {
+                            showToast('No pudimos guardar tu perfil. Inténtalo de nuevo.', 'error');
+                          } finally {
+                            setOnbSaving(false);
+                          }
+                        }}
+                        className="flex-1 bg-brand hover:bg-brand-hover text-white py-3 rounded-xl text-sm font-medium cursor-pointer transition-colors duration-200"
+                      >
+                        {onbSaving ? 'Guardando...' : 'Continuar'}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {onbStep === 2 && (
+                  <>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-serif font-semibold text-text-primary">Crea tu primera cuenta</h3>
+                      <p className="text-xs text-text-secondary">El lugar de donde sale y entra tu dinero: efectivo, banco o tarjeta.</p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { key: 'cash', label: 'Efectivo', icon: Wallet },
+                        { key: 'bank', label: 'Banco', icon: Building2 },
+                        { key: 'card', label: 'Tarjeta', icon: CreditCard }
+                      ] as const).map(t => (
+                        <button
+                          key={t.key}
+                          type="button"
+                          onClick={() => setOnbAccType(t.key)}
+                          className={cn(
+                            'flex flex-col items-center gap-1.5 py-3.5 rounded-2xl border text-xs font-medium cursor-pointer transition-colors duration-200',
+                            onbAccType === t.key
+                              ? 'border-brand bg-brand/10 text-brand'
+                              : 'border-border bg-bg text-text-secondary hover:border-brand/40'
+                          )}
+                        >
+                          <t.icon size={18} />
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="space-y-3 text-left">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-text-secondary">Nombre de la cuenta</label>
+                        <input
+                          type="text"
+                          placeholder={onbAccType === 'cash' ? 'Ej. Mi efectivo' : onbAccType === 'bank' ? 'Ej. Cuenta nómina' : 'Ej. Visa terminada en 1234'}
+                          value={onbAccName}
+                          onChange={e => setOnbAccName(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand/60"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-text-secondary">Saldo actual ({profile?.currency || 'USD'})</label>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          value={onbAccBalance}
+                          onChange={e => setOnbAccBalance(e.target.value)}
+                          className="w-full bg-bg border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary focus:outline-none focus:border-brand/60"
+                        />
+                      </div>
+                    </div>
+
                     <button
                       onClick={async () => {
                         setOnbSaving(true);
                         try {
-                          await api('/me', {
-                            method: 'PUT',
-                            body: JSON.stringify({ displayName: onbName, birthDate: onbBirthDate, address: onbAddress, email: onbEmail, photoURL: onbPhoto })
+                          await api('/finance/accounts', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                              name: onbAccName.trim(),
+                              type: onbAccType,
+                              balance: parseFloat(onbAccBalance) || 0,
+                              currency: profile?.currency || 'USD',
+                              icon: onbAccType === 'cash' ? 'Wallet' : onbAccType === 'bank' ? 'Building2' : 'CreditCard',
+                              color: '#D97757'
+                            })
                           });
-                          await fetchUserProfile();
-                          setShowOnboarding(false);
-                          showToast('Perfil actualizado correctamente', 'success');
+                          await advanceOnboarding(2);
+                          loadUserData();
+                          setOnbStep(3);
                         } catch {
-                          showToast('Error al guardar', 'error');
+                          showToast('No pudimos crear la cuenta. Inténtalo de nuevo.', 'error');
                         } finally {
                           setOnbSaving(false);
                         }
                       }}
-                      className="flex-1 bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors"
+                      disabled={!onbAccName.trim() || onbSaving}
+                      className="w-full bg-brand hover:bg-brand-hover text-white py-3 rounded-xl text-sm font-medium cursor-pointer disabled:opacity-50 transition-colors duration-200"
                     >
-                      {onbSaving ? 'Guardando...' : 'Comenzar'}
+                      {onbSaving ? 'Creando cuenta...' : 'Crear cuenta'}
                     </button>
                   </>
+                )}
+
+                {onbStep === 3 && (
+                  <>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-serif font-semibold text-text-primary">Registra tu primer movimiento</h3>
+                      <p className="text-xs text-text-secondary">Elige cómo quieres contarle a la IA tu primer gasto o ingreso.</p>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {([
+                        { key: 'voice', icon: Mic, title: 'Hablar', desc: '"Gasté 12 dólares en el almuerzo" — dilo y listo.' },
+                        { key: 'photo', icon: Camera, title: 'Foto de un recibo', desc: 'La IA lee el ticket y registra el gasto por ti.' },
+                        { key: 'chat', icon: Bot, title: 'Chatear con la IA', desc: 'Escríbelo con tus palabras, como en un chat normal.' }
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => finishOnboarding(opt.key)}
+                          className="w-full flex items-center gap-3.5 bg-bg border border-border hover:border-brand/50 rounded-2xl px-4 py-3.5 text-left cursor-pointer transition-colors duration-200 group"
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
+                            <opt.icon size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-text-primary">{opt.title}</p>
+                            <p className="text-[11px] text-text-secondary leading-snug">{opt.desc}</p>
+                          </div>
+                          <ArrowRight size={15} className="ml-auto text-text-dim group-hover:text-brand transition-colors duration-200 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Omitir: siempre disponible, marca el onboarding como cerrado */}
+                {onbStep >= 0 && (
+                  <button
+                    onClick={() => finishOnboarding()}
+                    className="w-full text-center text-[11px] text-text-dim hover:text-text-secondary cursor-pointer transition-colors duration-200 pt-1"
+                  >
+                    Omitir por ahora
+                  </button>
                 )}
               </div>
             </motion.div>
@@ -11029,8 +11243,8 @@ export default function App() {
                           </span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] text-text-secondary">
-                          <span>EXP: {paymentDetails.cardExp || '12/28'}</span>
-                          <span>Titular: {paymentDetails.firstName || 'Christian'} {paymentDetails.lastName || 'Sparrow'}</span>
+                          <span>EXP: {paymentDetails.cardExp || 'MM/YY'}</span>
+                          <span>Titular: {paymentDetails.firstName || paymentDetails.lastName ? `${paymentDetails.firstName} ${paymentDetails.lastName}`.trim() : 'Sin titular'}</span>
                         </div>
                         <p className="text-[10px] text-text-dim truncate">
                           {paymentDetails.address1}, {paymentDetails.city}, {paymentDetails.country}

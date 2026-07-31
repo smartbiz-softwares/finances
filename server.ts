@@ -56,6 +56,8 @@ db.exec(`
   );
 `);
 try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'standard'"); } catch { }
+// Paso del onboarding: 0=perfil, 1=cuenta, 2=primer movimiento, 3=completado.
+try { db.exec("ALTER TABLE users ADD COLUMN onboardingStep INTEGER DEFAULT 0"); } catch { }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS accounts (
@@ -263,8 +265,16 @@ if (providerCount === 0) {
   `).run(randomUUID(), 'DeepSeek', 'deepseek-chat', '', 0, new Date().toISOString());
 }
 
+// Plan Free: el plan de entrada de todo usuario nuevo. Se siembra SIEMPRE que
+// falte (no solo con la tabla vacía) y sus tokens/intervalo son editables
+// desde /panel como cualquier otro plan.
+db.prepare(`
+  INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+  VALUES ('plan-free', 'Plan Gratuito', 'Empieza a controlar tus finanzas con IA sin coste. Tus tokens se renuevan automáticamente cada 30 días.', 0, 0, 0, 25000, 720, 0, 1, ?)
+`).run(new Date().toISOString());
+
 // Seed default subscription plans if empty
-const planCount = (db.prepare('SELECT COUNT(*) as count FROM subscription_plans').get() as any).count;
+const planCount = (db.prepare('SELECT COUNT(*) as count FROM subscription_plans WHERE id != \'plan-free\'').get() as any).count;
 if (planCount === 0) {
   db.prepare(`
     INSERT INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
@@ -414,16 +424,18 @@ function readProviderUsage(raw: any): ProviderUsage {
 
 const FOUNDER_BALANCE = 999999999;
 
-/** Devuelve la suscripción del usuario, creándola con el plan por defecto si no existe. */
+/**
+ * Devuelve la suscripción del usuario, creándola con el Plan Gratuito si no
+ * existe. Nadie recibe un plan de pago sin pagar: los planes de pago solo se
+ * asignan vía Stripe o transferencia verificada.
+ */
 function getOrCreateSubscription(userId: string): any {
   let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
   if (sub) return sub;
 
-  const defaultPlan = db.prepare(
-    "SELECT * FROM subscription_plans WHERE isRecommended = 1 OR id = 'plan-pro' LIMIT 1"
-  ).get() as any;
-  const planId = defaultPlan?.id || 'plan-pro';
-  const totalTokens = defaultPlan?.tokensCount || 250000;
+  const defaultPlan = db.prepare("SELECT * FROM subscription_plans WHERE id = 'plan-free'").get() as any;
+  const planId = defaultPlan?.id || 'plan-free';
+  const totalTokens = defaultPlan?.tokensCount ?? 25000;
   const subId = randomUUID();
   const now = new Date();
   const nextRenewal = new Date(now.getTime() + (defaultPlan?.renewIntervalHours || 720) * 3600000);
@@ -869,7 +881,12 @@ app.post('/api/send-otp', async (req, res) => {
     console.warn(`⚠️ [SMS WARN] No se pudo entregar el SMS a ${cleanPhone}. El código sigue activo en consola.`);
   }
 
-  res.json({ success: true, code, phone: cleanPhone, message: 'Código de verificación enviado exitosamente' });
+  // El código JAMÁS viaja en la respuesta en producción: eso permitiría
+  // iniciar sesión con cualquier número sin recibir el SMS. Solo se expone
+  // con OTP_DEBUG=1 para desarrollo local.
+  const payload: any = { success: true, phone: cleanPhone, message: 'Código de verificación enviado exitosamente' };
+  if (process.env.OTP_DEBUG === '1') payload.code = code;
+  res.json(payload);
 });
 
 function getCurrencyFromPhone(phone: string): string {
@@ -917,6 +934,21 @@ app.post('/api/verify-otp', (req, res) => {
     );
     user = { id, email, displayName: phone, phone, theme: 'dark', currency, createdAt: new Date().toISOString() };
     isNewUser = true;
+
+    // Todo usuario nuevo arranca con el Plan Gratuito (renovación automática cada 720h).
+    getOrCreateSubscription(id);
+
+    // Notificación de bienvenida explicando qué es HeraWallet.
+    db.prepare(`
+      INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+      VALUES (?, ?, ?, ?, 'info', ?, 0, ?)
+    `).run(
+      randomUUID(), id,
+      '¡Bienvenido a HeraWallet! 👋',
+      'HeraWallet es tu asistente de finanzas personales impulsado por IA. Registra gastos e ingresos hablando, con una foto de un recibo o chateando con la IA; crea cuentas y tarjetas, fija metas de ahorro y recibe análisis inteligentes de tu dinero. Empiezas con el Plan Gratuito: tus tokens de IA se renuevan automáticamente cada 30 días. Tus metas empiezan con un mejor control.',
+      JSON.stringify({ actionType: 'open_settings', label: 'Ver mi plan' }),
+      new Date().toISOString()
+    );
   }
 
   logAudit(user.id, 'login', `Inicio de sesión verificado para ${phone}`);
@@ -936,13 +968,25 @@ app.post('/api/verify-otp', (req, res) => {
       birthDate: user.birthDate,
       address: user.address,
       theme: user.theme,
-      currency: user.currency
+      currency: user.currency,
+      onboardingStep: user.onboardingStep ?? 0
     }
   });
 });
 
+// Avanza (nunca retrocede) el paso del onboarding del usuario.
+app.put('/api/me/onboarding', authMiddleware, (req: any, res) => {
+  const step = parseInt(req.body?.step, 10);
+  if (!Number.isInteger(step) || step < 0 || step > 3) {
+    return res.status(400).json({ error: 'Paso de onboarding inválido (0-3)' });
+  }
+  db.prepare('UPDATE users SET onboardingStep = MAX(COALESCE(onboardingStep, 0), ?) WHERE id = ?').run(step, req.userId);
+  const u = db.prepare('SELECT onboardingStep FROM users WHERE id = ?').get(req.userId) as any;
+  res.json({ success: true, onboardingStep: u?.onboardingStep ?? step });
+});
+
 app.get('/api/me', authMiddleware, (req: any, res) => {
-  const user = db.prepare('SELECT id, email, displayName, phone, photoURL, birthDate, address, theme, currency, createdAt FROM users WHERE id = ?').get(req.userId);
+  const user = db.prepare('SELECT id, email, displayName, phone, photoURL, birthDate, address, theme, currency, onboardingStep, createdAt FROM users WHERE id = ?').get(req.userId);
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
   res.json(user);
 });
@@ -2674,7 +2718,7 @@ app.get('/api/notifications', authMiddleware, (req: any, res) => {
     }
 
     // 2. Notificaciones proactivas del Coach Hera (Avance de metas >= 50%)
-    const activeGoals = db.prepare('SELECT * FROM goals WHERE userId = ? AND status = "active"').all(userId) as any[];
+    const activeGoals = db.prepare('SELECT * FROM goals WHERE userId = ? AND status = \'active\'').all(userId) as any[];
     for (const goal of activeGoals) {
       const percentage = Math.round((goal.currentAmount / goal.targetAmount) * 100);
       if (percentage >= 50 && percentage < 100) {
@@ -2726,7 +2770,7 @@ app.get('/api/notifications', authMiddleware, (req: any, res) => {
 app.put('/api/notifications/:id/read', authMiddleware, (req: any, res) => {
   try {
     const { id } = req.params;
-    db.prepare('UPDATE user_notifications SET isRead = 1 WHERE id = ? AND (userId = ? OR userId = "ALL")').run(id, req.userId);
+    db.prepare("UPDATE user_notifications SET isRead = 1 WHERE id = ? AND (userId = ? OR userId = 'ALL')").run(id, req.userId);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al actualizar notificación' });
@@ -2735,7 +2779,7 @@ app.put('/api/notifications/:id/read', authMiddleware, (req: any, res) => {
 
 app.put('/api/notifications/read-all', authMiddleware, (req: any, res) => {
   try {
-    db.prepare('UPDATE user_notifications SET isRead = 1 WHERE userId = ? OR userId = "ALL"').run(req.userId);
+    db.prepare("UPDATE user_notifications SET isRead = 1 WHERE userId = ? OR userId = 'ALL'").run(req.userId);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al marcar notificaciones como leídas' });
@@ -2745,7 +2789,7 @@ app.put('/api/notifications/read-all', authMiddleware, (req: any, res) => {
 app.delete('/api/notifications/:id', authMiddleware, (req: any, res) => {
   try {
     const { id } = req.params;
-    db.prepare('DELETE FROM user_notifications WHERE id = ? AND (userId = ? OR userId = "ALL")').run(id, req.userId);
+    db.prepare("DELETE FROM user_notifications WHERE id = ? AND (userId = ? OR userId = 'ALL')").run(id, req.userId);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al eliminar notificación' });
@@ -2928,8 +2972,8 @@ app.get('/api/admin/users', adminAuthMiddleware, (req, res) => {
       ...u,
       role: u.role || 'standard',
       tokensSpent,
-      tokenBalance: u.role === 'founder' ? 999999999 : (sub?.tokenBalance || 50000),
-      planName: u.role === 'founder' ? 'Founder VIP (Ilimitado)' : (sub?.planName || 'Plan Gratuito'),
+      tokenBalance: u.role === 'founder' ? FOUNDER_BALANCE : (sub?.tokenBalance ?? 0),
+      planName: u.role === 'founder' ? 'Founder VIP (Ilimitado)' : (sub?.planName || 'Sin plan'),
       planStatus: sub?.status || 'active',
       lastActiveAt: lastTx?.createdAt || u.createdAt,
       totalQueries
@@ -2948,9 +2992,12 @@ app.put('/api/admin/users/:id/role', adminAuthMiddleware, (req, res) => {
 
   db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
   if (role === 'founder') {
-    db.prepare("UPDATE user_subscriptions SET tokenBalance = 999999999, planId = 'plan-founder' WHERE userId = ?").run(id);
+    db.prepare("UPDATE user_subscriptions SET tokenBalance = ?, planId = 'plan-founder' WHERE userId = ?").run(FOUNDER_BALANCE, id);
   } else {
-    db.prepare("UPDATE user_subscriptions SET tokenBalance = 50000, planId = 'plan-basic' WHERE userId = ?").run(id);
+    // Al volver a standard baja al Plan Gratuito con la cuota vigente de ese plan.
+    const freePlan = db.prepare("SELECT * FROM subscription_plans WHERE id = 'plan-free'").get() as any;
+    db.prepare("UPDATE user_subscriptions SET tokenBalance = ?, tokensTotalPlan = ?, planId = 'plan-free' WHERE userId = ?")
+      .run(freePlan?.tokensCount ?? 25000, freePlan?.tokensCount ?? 25000, id);
   }
 
   logAudit('admin_root', 'change_user_role', `Rol de usuario ${id} actualizado a ${role}`);
@@ -2975,7 +3022,7 @@ app.get('/api/admin/users/:id/telemetry', adminAuthMiddleware, (req, res) => {
       ...user,
       role: user.role || 'standard'
     },
-    subscription: sub || { planName: 'Plan Básico', tokenBalance: 50000, status: 'active' },
+    subscription: sub || { planName: 'Sin plan', tokenBalance: 0, status: 'none' },
     metrics: {
       tokensSpent,
       totalQueries,
