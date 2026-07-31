@@ -3990,17 +3990,27 @@ export default function App() {
         });
 
         if (res && res.isValidRecord !== false && res.merchant) {
+          // Widget de acción pendiente: el usuario confirma y AHÍ se crea la
+          // transacción y se descuenta el saldo (vía /finance/confirm-action).
+          const parsedAmount = typeof res.amount === 'number' ? res.amount : parseFloat(res.amount || 0);
           const receiptMsg = {
             id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             role: 'assistant',
-            content: `¡Recibo o comprobante analizado con éxito!\n\n**Establecimiento / Concepto**: ${res.merchant}\n**Importe**: ${res.amount}€\n**Categoría**: ${res.category}\n**Fecha**: ${res.date}`,
-            type: 'receipt_summary',
-            data: res
+            content: `¡Recibo o comprobante analizado con éxito!\n\n**Establecimiento / Concepto**: ${res.merchant}\n**Importe**: ${parsedAmount}\n**Categoría**: ${res.category || 'Varios'}\n**Fecha**: ${res.date || new Date().toISOString().split('T')[0]}\n\nConfirma para registrarlo y descontar el saldo de tu cuenta.`,
+            type: 'pending_action',
+            data: {
+              actionType: 'create_transaction',
+              type: res.type || 'expense',
+              amount: parsedAmount,
+              category: res.category || 'Varios',
+              description: res.merchant,
+              accountId: accounts[0]?.id || '',
+              accountName: accounts[0]?.name || 'Cuenta Principal'
+            }
           };
 
           setChatMessages(prev => [...prev, receiptMsg]);
-          loadUserData();
-          showToast('Comprobante verificado correctamente', 'success');
+          showToast('Comprobante verificado. Confirma para guardarlo.', 'success');
         } else {
           showToast(res?.error || 'La foto adjuntada no es un comprobante financiero válido', 'error');
         }
