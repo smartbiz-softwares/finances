@@ -34,6 +34,12 @@ const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'hera-admin-secret-key-
 if (!process.env.JWT_SECRET || !process.env.ADMIN_JWT_SECRET) {
   console.warn('⚠️ [Seguridad] JWT_SECRET / ADMIN_JWT_SECRET no definidos en .env: usando valores de desarrollo. NO usar así en producción.');
 }
+if (!process.env.ADMIN_PASSWORD) {
+  console.warn('⚠️ [Seguridad] ADMIN_PASSWORD no definida en .env: el /panel acepta la contraseña de desarrollo. Defínela antes de exponer la app.');
+}
+if (process.env.OTP_DEBUG === '1') {
+  console.warn('🚨 [Seguridad] OTP_DEBUG=1 ACTIVO: los códigos OTP viajan en la respuesta HTTP. SOLO desarrollo.');
+}
 const db = new Database('hera.db');
 db.pragma('journal_mode = WAL');
 
@@ -45,7 +51,28 @@ const WHISPER_URL = 'http://127.0.0.1:8080/inference';
 // Modelo Gemini configurable: gemini-1.5-flash fue retirado por Google (404).
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-const otpStore = new Map<string, { code: string; expiresAt: number }>();
+const otpStore = new Map<string, { code: string; expiresAt: number; attempts: number }>();
+
+// Límite de envío de OTP: cada SMS cuesta dinero. 3 por número y 10 por IP
+// cada 10 minutos; por encima, 429.
+const otpRateLog = new Map<string, number[]>();
+function otpRateExceeded(key: string, max: number): boolean {
+  const now = Date.now();
+  const windowMs = 10 * 60 * 1000;
+  const hits = (otpRateLog.get(key) || []).filter(t => now - t < windowMs);
+  if (hits.length >= max) { otpRateLog.set(key, hits); return true; }
+  hits.push(now);
+  otpRateLog.set(key, hits);
+  return false;
+}
+// Limpieza periódica para que el mapa no crezca sin límite.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of otpRateLog) {
+    const alive = v.filter(t => now - t < 10 * 60 * 1000);
+    if (alive.length === 0) otpRateLog.delete(k); else otpRateLog.set(k, alive);
+  }
+}, 5 * 60 * 1000);
 
 // --- Database Schema Initialization & Indexing ---
 
@@ -876,9 +903,15 @@ app.post('/api/send-otp', async (req, res) => {
     return res.status(400).json({ error: 'Número telefónico inválido' });
   }
 
+  const clientIp = (req.headers['x-real-ip'] as string) || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
+  if (otpRateExceeded(`phone:${cleanPhone}`, 3) || otpRateExceeded(`ip:${clientIp}`, 10)) {
+    logAudit(null, 'otp_rate_limited', `Bloqueado envío de OTP: ${cleanPhone} desde ${clientIp}`);
+    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos antes de pedir otro código.' });
+  }
+
   // Generar código OTP real de 6 dígitos aleatorios
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(cleanPhone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+  otpStore.set(cleanPhone, { code, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
 
   logAudit(null, 'send_otp', `OTP real (${code}) generado para ${cleanPhone}`);
   console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${cleanPhone}`);
@@ -926,6 +959,13 @@ app.post('/api/verify-otp', (req, res) => {
   }
 
   if (stored.code !== code) {
+    // 5 fallos invalidan el código: 6 dígitos sin tope de intentos serían adivinables.
+    stored.attempts = (stored.attempts || 0) + 1;
+    if (stored.attempts >= 5) {
+      otpStore.delete(phone);
+      logAudit(null, 'otp_bruteforce_blocked', `Código invalidado por intentos fallidos: ${phone}`);
+      return res.status(429).json({ error: 'Demasiados intentos fallidos. Solicita un código nuevo.' });
+    }
     return res.status(400).json({ error: 'Código de verificación incorrecto' });
   }
 

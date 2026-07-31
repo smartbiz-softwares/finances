@@ -3522,20 +3522,49 @@ export default function App() {
       } catch { }
       audio.onended = () => resolve();
       audio.onerror = () => resolve();
+      audio.onpause = () => resolve(); // barge-in: pausa = seguir el flujo, no colgarse
       audio.play().catch(() => resolve());
     });
+
+    // Barge-in: mientras Hera habla, el micrófono sigue vigilado; si el
+    // usuario habla encima (por encima del umbral, sostenido 300ms), se corta
+    // la reproducción y se pasa a escucharle. echoCancellation evita que la
+    // propia voz de Hera se dispare a sí misma.
+    let interrupted = false;
+    const micAnalyser = liveAnalyserRef.current;
+    const bargeData = micAnalyser ? new Uint8Array(micAnalyser.fftSize) : null;
+    let bargeSince = 0;
+    const bargeTimer = setInterval(() => {
+      if (!liveActiveRef.current || !micAnalyser || !bargeData) return;
+      micAnalyser.getByteTimeDomainData(bargeData);
+      let sum = 0;
+      for (let i = 0; i < bargeData.length; i++) { const d = (bargeData[i] - 128) / 128; sum += d * d; }
+      const rms = Math.sqrt(sum / bargeData.length);
+      if (rms > 0.07) {
+        if (!bargeSince) bargeSince = Date.now();
+        else if (Date.now() - bargeSince > 300) {
+          interrupted = true;
+          try { liveAudioRef.current?.pause(); } catch { }
+          try { window.speechSynthesis.cancel(); } catch { }
+        }
+      } else {
+        bargeSince = 0;
+      }
+    }, 80);
 
     // Pipeline: mientras suena el chunk N ya se descarga el N+1.
     let next: Promise<Blob | null> = fetchChunk(chunks[0]);
     let piperOk = true;
     for (let i = 0; i < chunks.length; i++) {
-      if (!liveActiveRef.current) return;
+      if (!liveActiveRef.current || interrupted) break;
       const blob = await next;
       if (i + 1 < chunks.length) next = fetchChunk(chunks[i + 1]);
       if (blob) {
         await playBlob(blob);
       } else { piperOk = false; break; }
     }
+    clearInterval(bargeTimer);
+    if (interrupted) return;
 
     // Fallback: voz del navegador si Piper no está disponible.
     if (!piperOk && liveActiveRef.current) {
@@ -3606,9 +3635,13 @@ export default function App() {
       let spoke = false;
       let lastVoice = Date.now();
       const startedAt = Date.now();
-      const SPEECH_RMS = 0.035;
       const SILENCE_MS = 1100;
       const MAX_TURN_MS = 20000;
+
+      // VAD adaptativo: los primeros ~600ms calibran el ruido ambiente del
+      // micrófono; el umbral de voz se coloca por encima de ese suelo.
+      const ambient: number[] = [];
+      let speechRms = 0.035;
 
       const vadTimer = setInterval(() => {
         if (!liveActiveRef.current || recorder.state !== 'recording') { clearInterval(vadTimer); return; }
@@ -3616,7 +3649,16 @@ export default function App() {
         let sum = 0;
         for (let i = 0; i < timeData.length; i++) { const d = (timeData[i] - 128) / 128; sum += d * d; }
         const rms = Math.sqrt(sum / timeData.length);
-        if (rms > SPEECH_RMS) { spoke = true; lastVoice = Date.now(); }
+
+        if (!spoke && ambient.length < 8) {
+          ambient.push(rms);
+          if (ambient.length === 8) {
+            const floor = ambient.reduce((a, b) => a + b, 0) / ambient.length;
+            speechRms = Math.min(0.12, Math.max(0.03, floor * 2.6));
+          }
+        }
+
+        if (rms > speechRms) { spoke = true; lastVoice = Date.now(); }
         const shouldStop = (spoke && Date.now() - lastVoice > SILENCE_MS) || (Date.now() - startedAt > MAX_TURN_MS);
         if (shouldStop) { clearInterval(vadTimer); try { recorder.stop(); } catch { } }
       }, 80);
