@@ -20,6 +20,7 @@ import {
   ArrowRight,
   MessageSquare,
   Bot,
+  Smartphone,
   Clock,
   PieChart,
   Target,
@@ -1808,7 +1809,8 @@ export default function App() {
   });
 
   // Admin Panel Navigation & User Telemetry Drawer States
-  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'users' | 'transactions' | 'plans' | 'providers' | 'logs' | 'notifications'>('dashboard');
+  const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'realtime' | 'users' | 'transactions' | 'plans' | 'providers' | 'logs' | 'notifications'>('dashboard');
+  const [realtimeData, setRealtimeData] = useState<any | null>(null);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
   const [adminDataLoading, setAdminDataLoading] = useState(true);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
@@ -4569,6 +4571,23 @@ export default function App() {
     }
   };
 
+  /** Métricas en vivo del panel: se refrescan solas cada 10s. */
+  const fetchRealtime = useCallback(async (token?: string) => {
+    const t = token || adminToken;
+    if (!t) return;
+    try {
+      const res = await fetch('/api/admin/realtime', { headers: { Authorization: `Bearer ${t}` } });
+      if (res.ok) setRealtimeData(await res.json());
+    } catch { }
+  }, [adminToken]);
+
+  useEffect(() => {
+    if (!adminToken || !showAdmin) return;
+    fetchRealtime();
+    const id = setInterval(fetchRealtime, 10000);
+    return () => clearInterval(id);
+  }, [adminToken, showAdmin, fetchRealtime]);
+
   const loadAdminData = useCallback(async (token?: string) => {
     const t = token || adminToken;
     if (!t) return;
@@ -5435,6 +5454,7 @@ export default function App() {
                     <p className="text-[10px] uppercase font-mono font-semibold text-text-dim px-3 mb-2">Módulos</p>
                     {[
                       { id: 'dashboard', label: 'General', icon: BarChart3, desc: 'Resumen de actividad' },
+                      { id: 'realtime', label: 'En vivo', icon: Activity, badge: realtimeData?.counts?.online5m || 0, desc: 'Usuarios conectados' },
                       { id: 'users', label: 'Usuarios', icon: Users, badge: adminUsers.length, desc: 'Cuentas y roles' },
                       { id: 'transactions', label: 'Pagos y Cuba', icon: CreditCard, badge: cubaRequests.filter(r => r.status === 'pending').length, desc: 'Stripe y Transfermóvil' },
                       { id: 'plans', label: 'Planes', icon: Sparkles, desc: 'Suscripciones y tokens' },
@@ -5549,6 +5569,7 @@ export default function App() {
                 <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
                   {[
                     { id: 'dashboard', label: 'General', icon: BarChart3 },
+                    { id: 'realtime', label: 'En vivo', icon: Activity, badge: realtimeData?.counts?.online5m || 0 },
                     { id: 'users', label: 'Usuarios', icon: Users, badge: adminUsers.length },
                     { id: 'transactions', label: 'Pagos y Cuba', icon: CreditCard, badge: cubaRequests.filter(r => r.status === 'pending').length },
                     { id: 'plans', label: 'Planes', icon: Sparkles },
@@ -5987,6 +6008,170 @@ export default function App() {
                       );
                     })()}
 
+                    {/* TAB EN VIVO: presencia, conexiones, tráfico y onboarding */}
+                    {adminActiveTab === 'realtime' && (
+                      <div className="space-y-4">
+                        {/* Contadores de actividad */}
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                          {[
+                            { label: 'En línea ahora', val: realtimeData?.counts?.online5m ?? 0, hint: 'Últimos 5 min', live: true },
+                            { label: 'Activos 1 h', val: realtimeData?.counts?.activeHour ?? 0, hint: 'Última hora' },
+                            { label: 'Activos hoy', val: realtimeData?.counts?.activeDay ?? 0, hint: 'Últimas 24 h' },
+                            { label: 'Activos 7 días', val: realtimeData?.counts?.activeWeek ?? 0, hint: 'Semana' },
+                            { label: 'Altas hoy', val: realtimeData?.counts?.newToday ?? 0, hint: 'Usuarios nuevos' }
+                          ].map((c, i) => (
+                            <div key={i} className="bg-surface border border-border rounded-3xl p-4 space-y-1.5">
+                              <div className="flex items-center gap-1.5">
+                                {c.live && <span className="w-2 h-2 rounded-full bg-success animate-pulse shrink-0" />}
+                                <span className="text-[10px] uppercase font-mono font-semibold text-text-secondary">{c.label}</span>
+                              </div>
+                              <p className="text-2xl font-serif font-bold text-text-primary tabular-nums">{c.val}</p>
+                              <p className="text-[10px] text-text-dim">{c.hint}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {/* Embudo de onboarding */}
+                          <div className="bg-surface border border-border rounded-3xl p-5 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-serif font-bold text-sm text-text-primary">Embudo de onboarding</h3>
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-brand/10 text-brand border border-brand/20">
+                                {realtimeData?.onboarding?.completionRate ?? 0}% completado
+                              </span>
+                            </div>
+
+                            <div className="space-y-3">
+                              {(realtimeData?.onboarding?.steps || []).map((s: any) => {
+                                const total = realtimeData?.onboarding?.totalUsers || 1;
+                                const pct = Math.round((s.count / total) * 100);
+                                return (
+                                  <div key={s.step} className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="text-text-secondary">{s.label}</span>
+                                      <span className="font-mono font-semibold text-text-primary tabular-nums">{s.count} · {pct}%</span>
+                                    </div>
+                                    <div className="h-1.5 bg-bg rounded-full overflow-hidden">
+                                      <div
+                                        className={cn('h-full rounded-full transition-[width] duration-500', s.step === 3 ? 'bg-success' : 'bg-brand')}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px]">
+                              <span className="text-text-secondary">Usuarios con al menos un movimiento</span>
+                              <span className="font-mono font-bold text-brand tabular-nums">
+                                {realtimeData?.onboarding?.withFirstTransaction ?? 0} / {realtimeData?.onboarding?.totalUsers ?? 0}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Tráfico por hora */}
+                          <div className="bg-surface border border-border rounded-3xl p-5 space-y-4">
+                            <h3 className="font-serif font-bold text-sm text-text-primary">Tráfico (últimas 24 h)</h3>
+                            {(realtimeData?.traffic || []).length === 0 ? (
+                              <p className="text-xs text-text-dim py-8 text-center">Aún no hay tráfico registrado.</p>
+                            ) : (
+                              <>
+                                <div className="flex items-end gap-1 h-32">
+                                  {(realtimeData?.traffic || []).map((t: any, i: number) => {
+                                    const max = Math.max(...(realtimeData?.traffic || []).map((x: any) => x.requests), 1);
+                                    const h = Math.max(4, (t.requests / max) * 100);
+                                    return (
+                                      <div
+                                        key={i}
+                                        className="flex-1 bg-brand/70 hover:bg-brand rounded-t-md transition-colors duration-200 min-w-[3px]"
+                                        style={{ height: `${h}%` }}
+                                        title={`${t.hour.slice(11)}:00 — ${t.requests} peticiones · ${t.users} usuarios`}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex items-center justify-between text-[10px] font-mono text-text-dim">
+                                  <span>{(realtimeData?.traffic?.[0]?.hour || '').slice(11)}:00</span>
+                                  <span>
+                                    {(realtimeData?.traffic || []).reduce((a: number, t: any) => a + t.requests, 0).toLocaleString()} peticiones
+                                  </span>
+                                  <span>{(realtimeData?.traffic?.[realtimeData.traffic.length - 1]?.hour || '').slice(11)}:00</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {/* Conectados ahora */}
+                          <div className="bg-surface border border-border rounded-3xl p-5 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                              <h3 className="font-serif font-bold text-sm text-text-primary">Conectados ahora</h3>
+                            </div>
+                            {(realtimeData?.onlineNow || []).length === 0 ? (
+                              <p className="text-xs text-text-dim py-6 text-center">Nadie conectado en los últimos 5 minutos.</p>
+                            ) : (
+                              <div className="space-y-2 max-h-72 overflow-y-auto scrollbar-none">
+                                {(realtimeData?.onlineNow || []).map((u: any) => (
+                                  <div key={u.id} className="flex items-center gap-3 p-2.5 bg-bg border border-border/60 rounded-2xl">
+                                    <img
+                                      src={u.photoURL || '/defaultuser.png'}
+                                      alt={u.displayName || 'Usuario'}
+                                      loading="lazy"
+                                      className="w-8 h-8 rounded-full object-cover border border-border shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-text-primary truncate">{u.displayName || u.phone}</p>
+                                      <p className="text-[10px] font-mono text-text-dim truncate">{u.phone}</p>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <span className={cn(
+                                        'text-[9px] font-mono px-1.5 py-0.5 rounded border',
+                                        u.onboardingStep >= 3
+                                          ? 'bg-success/10 text-success border-success/25'
+                                          : 'bg-warning/10 text-warning border-warning/25'
+                                      )}>
+                                        {u.onboardingStep >= 3 ? 'Activo' : `Onboarding ${u.onboardingStep}/3`}
+                                      </span>
+                                      <p className="text-[10px] text-text-dim mt-0.5">{formatRelativeTime(u.lastSeenAt)}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Últimas conexiones */}
+                          <div className="bg-surface border border-border rounded-3xl p-5 space-y-3">
+                            <h3 className="font-serif font-bold text-sm text-text-primary">Últimas conexiones</h3>
+                            {(realtimeData?.recentSessions || []).length === 0 ? (
+                              <p className="text-xs text-text-dim py-6 text-center">Sin inicios de sesión registrados todavía.</p>
+                            ) : (
+                              <div className="space-y-2 max-h-72 overflow-y-auto scrollbar-none">
+                                {(realtimeData?.recentSessions || []).map((s: any) => (
+                                  <div key={s.id} className="flex items-center gap-3 p-2.5 bg-bg border border-border/60 rounded-2xl">
+                                    <div className="w-8 h-8 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
+                                      <Smartphone size={14} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-text-primary truncate">{s.displayName || s.phone || 'Usuario'}</p>
+                                      <p className="text-[10px] font-mono text-text-dim truncate">{s.device} · {s.ip}</p>
+                                    </div>
+                                    <span className="text-[10px] text-text-dim shrink-0">{formatRelativeTime(s.startedAt)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-text-dim font-mono text-center">
+                          Actualización automática cada 10 s · Servidor: {realtimeData?.serverTime ? new Date(realtimeData.serverTime).toLocaleTimeString() : '—'}
+                        </p>
+                      </div>
+                    )}
                     {/* TAB 2: USUARIOS & TELEMETRÍA */}
                     {adminActiveTab === 'users' && (
                       <div className="space-y-4">

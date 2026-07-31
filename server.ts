@@ -290,6 +290,27 @@ try { db.exec(`ALTER TABLE token_transactions ADD COLUMN model TEXT;`); } catch 
 // se perdía silenciosamente al recortar el saldo a cero.
 try { db.exec(`ALTER TABLE user_subscriptions ADD COLUMN tokenDebt INTEGER DEFAULT 0;`); } catch { }
 
+// --- Telemetría de uso: sesiones, presencia y tráfico ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_sessions (
+    id TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    ip TEXT,
+    userAgent TEXT,
+    device TEXT,
+    startedAt TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(userId, startedAt);
+
+  CREATE TABLE IF NOT EXISTS traffic_hourly (
+    hour TEXT PRIMARY KEY,
+    requests INTEGER DEFAULT 0,
+    users INTEGER DEFAULT 0
+  );
+`);
+// Última actividad del usuario, para presencia en tiempo real.
+try { db.exec('ALTER TABLE users ADD COLUMN lastSeenAt TEXT'); } catch { }
+
 // Marca de hora real del registro (migración: la tabla ya existe aquí).
 // Sin ella el timeline solo podía ordenar por `date` (YYYY-MM-DD) y desempatar
 // por un id aleatorio: dentro del mismo día el orden salía arbitrario en vez
@@ -692,6 +713,58 @@ function phoneToEmail(phone: string): string {
   return phone.replace(/[^0-9]/g, '') + '@hera.app';
 }
 
+/** IP real del cliente detrás de Nginx. */
+function clientIpOf(req: any): string {
+  return (req.headers['x-real-ip'] as string)
+    || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+    || req.ip
+    || 'desconocida';
+}
+
+/** Familia de dispositivo a partir del User-Agent, sin librerías. */
+function deviceOf(userAgent: string): string {
+  const ua = (userAgent || '').toLowerCase();
+  if (/iphone|ipod/.test(ua)) return 'iPhone';
+  if (/ipad/.test(ua)) return 'iPad';
+  if (/android/.test(ua)) return /mobile/.test(ua) ? 'Android' : 'Android Tablet';
+  if (/windows/.test(ua)) return 'Windows';
+  if (/macintosh|mac os/.test(ua)) return 'Mac';
+  if (/linux/.test(ua)) return 'Linux';
+  return 'Otro';
+}
+
+// Presencia y tráfico: se acumulan en memoria y se vuelcan cada 30s para no
+// escribir en disco en cada petición.
+const presenceBuffer = new Map<string, number>();
+let trafficBuffer = 0;
+
+function flushTelemetry() {
+  try {
+    if (presenceBuffer.size > 0) {
+      const stmt = db.prepare('UPDATE users SET lastSeenAt = ? WHERE id = ?');
+      const apply = db.transaction((entries: [string, number][]) => {
+        for (const [userId, ts] of entries) stmt.run(new Date(ts).toISOString(), userId);
+      });
+      apply([...presenceBuffer.entries()]);
+      presenceBuffer.clear();
+    }
+    if (trafficBuffer > 0) {
+      const hour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
+      const activeUsers = (db.prepare(
+        "SELECT COUNT(*) as c FROM users WHERE lastSeenAt >= datetime('now', '-1 hour')"
+      ).get() as any)?.c || 0;
+      db.prepare(`
+        INSERT INTO traffic_hourly (hour, requests, users) VALUES (?, ?, ?)
+        ON CONFLICT(hour) DO UPDATE SET requests = requests + excluded.requests, users = excluded.users
+      `).run(hour, trafficBuffer, activeUsers);
+      trafficBuffer = 0;
+    }
+  } catch (e: any) {
+    console.error('[Telemetría] Error al volcar métricas:', e.message);
+  }
+}
+setInterval(flushTelemetry, 30000);
+
 function authMiddleware(req: any, res: any, next: any) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -700,6 +773,8 @@ function authMiddleware(req: any, res: any, next: any) {
   try {
     const decoded = jwt.verify(header.slice(7), JWT_SECRET) as any;
     req.userId = decoded.userId;
+    presenceBuffer.set(decoded.userId, Date.now());
+    trafficBuffer++;
     next();
   } catch {
     return res.status(401).json({ error: 'Token inválido' });
@@ -1012,6 +1087,13 @@ app.post('/api/verify-otp', (req, res) => {
       new Date().toISOString()
     );
   }
+
+  // Registro de conexión: alimenta "últimas conexiones" del panel.
+  const ua = String(req.headers['user-agent'] || '');
+  const nowIso = new Date().toISOString();
+  db.prepare('INSERT INTO user_sessions (id, userId, ip, userAgent, device, startedAt) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(randomUUID(), user.id, clientIpOf(req), ua.slice(0, 300), deviceOf(ua), nowIso);
+  db.prepare('UPDATE users SET lastSeenAt = ? WHERE id = ?').run(nowIso, user.id);
 
   logAudit(user.id, 'login', `Inicio de sesión verificado para ${phone}`);
 
@@ -2997,6 +3079,79 @@ app.post('/api/admin/login', (req, res) => {
   return res.status(401).json({ error: 'Credenciales de administrador incorrectas' });
 });
 
+/**
+ * Monitorización en vivo para el panel: quién está conectado ahora, últimas
+ * conexiones, tráfico por hora y embudo de onboarding.
+ */
+app.get('/api/admin/realtime', adminAuthMiddleware, (req, res) => {
+  // Presencia: en línea = actividad en los últimos 5 minutos.
+  flushTelemetry(); // vuelca lo pendiente para que el dato sea del momento
+
+  const onlineNow = db.prepare(`
+    SELECT id, displayName, phone, photoURL, lastSeenAt, onboardingStep, role
+    FROM users
+    WHERE lastSeenAt >= datetime('now', '-5 minutes')
+    ORDER BY lastSeenAt DESC
+  `).all() as any[];
+
+  const counts = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM users WHERE lastSeenAt >= datetime('now', '-5 minutes'))  AS online5m,
+      (SELECT COUNT(*) FROM users WHERE lastSeenAt >= datetime('now', '-1 hour'))     AS activeHour,
+      (SELECT COUNT(*) FROM users WHERE lastSeenAt >= datetime('now', '-1 day'))      AS activeDay,
+      (SELECT COUNT(*) FROM users WHERE lastSeenAt >= datetime('now', '-7 days'))     AS activeWeek,
+      (SELECT COUNT(*) FROM users WHERE createdAt  >= datetime('now', '-1 day'))      AS newToday
+  `).get() as any;
+
+  // Últimas conexiones con datos del usuario.
+  const recentSessions = db.prepare(`
+    SELECT s.id, s.userId, s.ip, s.device, s.startedAt,
+           u.displayName, u.phone, u.photoURL
+    FROM user_sessions s
+    LEFT JOIN users u ON u.id = s.userId
+    ORDER BY s.startedAt DESC
+    LIMIT 25
+  `).all();
+
+  // Tráfico de las últimas 24 horas, hora a hora.
+  const traffic = db.prepare(`
+    SELECT hour, requests, users FROM traffic_hourly
+    ORDER BY hour DESC LIMIT 24
+  `).all() as any[];
+
+  // Embudo de onboarding: cuántos usuarios se quedan en cada paso.
+  const funnelRows = db.prepare(`
+    SELECT COALESCE(onboardingStep, 0) AS step, COUNT(*) AS count
+    FROM users GROUP BY COALESCE(onboardingStep, 0)
+  `).all() as any[];
+  const stepCount = (s: number) => funnelRows.find(r => r.step === s)?.count || 0;
+  const totalUsers = funnelRows.reduce((a, r) => a + r.count, 0);
+  const completed = stepCount(3);
+  const onboarding = {
+    totalUsers,
+    steps: [
+      { step: 0, label: 'Registrados (sin completar perfil)', count: stepCount(0) },
+      { step: 1, label: 'Perfil completado', count: stepCount(1) },
+      { step: 2, label: 'Primera cuenta creada', count: stepCount(2) },
+      { step: 3, label: 'Onboarding completado', count: completed }
+    ],
+    completionRate: totalUsers > 0 ? Math.round((completed / totalUsers) * 1000) / 10 : 0,
+    // Usuarios que completaron el onboarding y además registraron algo.
+    withFirstTransaction: (db.prepare(
+      'SELECT COUNT(DISTINCT userId) AS c FROM transactions'
+    ).get() as any)?.c || 0
+  };
+
+  res.json({
+    serverTime: new Date().toISOString(),
+    counts,
+    onlineNow: onlineNow.slice(0, 20),
+    recentSessions,
+    traffic: traffic.reverse(),
+    onboarding
+  });
+});
+
 app.get('/api/admin/stats', adminAuthMiddleware, (req, res) => {
   const userCount = (db.prepare('SELECT COUNT(*) as count FROM users').get() as any)?.count || 0;
   const activeSubscriptions = (db.prepare("SELECT COUNT(*) as count FROM user_subscriptions WHERE status = 'active'").get() as any)?.count || 0;
@@ -3016,8 +3171,14 @@ app.get('/api/admin/stats', adminAuthMiddleware, (req, res) => {
   const cupExchangeRate = cubaConfig?.cupExchangeRate || 320;
   const activePlansCount = (db.prepare('SELECT COUNT(*) as count FROM subscription_plans WHERE isActive = 1').get() as any)?.count || 0;
   const txCount = (db.prepare('SELECT COUNT(*) as count FROM transactions').get() as any)?.count || 0;
-  const dailyActiveUsers = (db.prepare('SELECT COUNT(DISTINCT userId) as count FROM token_transactions').get() as any)?.count || userCount;
-  const tokenRenewalRate = 98.4;
+  // Activos de verdad en las últimas 24h (antes contaba a todo usuario que
+  // hubiera tenido alguna transacción de tokens en toda su vida).
+  const dailyActiveUsers = (db.prepare(
+    "SELECT COUNT(*) as count FROM users WHERE lastSeenAt >= datetime('now', '-1 day')"
+  ).get() as any)?.count || 0;
+  // Porcentaje real de suscripciones que siguen activas (antes: 98.4 fijo).
+  const totalSubs = (db.prepare('SELECT COUNT(*) as count FROM user_subscriptions').get() as any)?.count || 0;
+  const tokenRenewalRate = totalSubs > 0 ? Math.round((activeSubscriptions / totalSubs) * 1000) / 10 : 0;
   const providers = db.prepare('SELECT * FROM ai_providers ORDER BY createdAt ASC').all();
 
   res.json({
