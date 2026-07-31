@@ -1413,30 +1413,60 @@ export default function App() {
   }>>(() => {
     try {
       const saved = localStorage.getItem('hera_chat_history');
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 'demo-1',
-          title: '¿En qué he gastado más este mes en restaurantes?',
-          messages: [
-            { id: '1', role: 'user', content: '¿En qué he gastado más este mes en restaurantes?' },
-            { id: '2', role: 'assistant', content: 'Tus gastos en la categoría Restaurantes suman **145.50€** este mes. El mayor gasto fue de **45.00€** en *Restaurante El Patio*.' }
-          ],
-          updatedAt: new Date(Date.now() - 1000 * 60 * 25).toISOString()
-        },
-        {
-          id: 'demo-2',
-          title: '¿Cómo va mi meta del fondo de emergencia?',
-          messages: [
-            { id: '1', role: 'user', content: '¿Cómo va mi meta del fondo de emergencia?' },
-            { id: '2', role: 'assistant', content: 'Tu meta **Fondo de Emergencia** lleva un avance del **61%** (3,050€ de 5,000€). Vas según el plan proyectado.' }
-          ],
-          updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString()
-        }
-      ];
+      // Sin historial real no se inventan conversaciones de ejemplo.
+      return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
     }
   });
+
+  /**
+   * Atajos del inicio adaptados a lo que el usuario suele preguntar: se
+   * puntúan los temas por apariciones en sus últimas conversaciones (con más
+   * peso a las recientes) y los más frecuentes salen primero. Sin historial,
+   * se muestra el orden por defecto.
+   */
+  const suggestionPills = React.useMemo(() => {
+    const catalog = [
+      { key: 'gastos', label: 'Transacciones', query: '¿En qué he gastado más este mes?', icon: Receipt, words: ['gast', 'compr', 'transacc', 'movimient', 'pagu', 'pago', 'factur'] },
+      { key: 'ahorro', label: 'Ahorros', query: '¿Cuál es mi saldo de ahorro y capacidad de reserva?', icon: Coins, words: ['ahorr', 'saldo', 'reserv', 'guard'] },
+      { key: 'metas', label: 'Metas', query: '¿Cómo van mis metas de ahorro?', icon: Target, words: ['meta', 'objetiv', 'fondo de emergencia', 'plan de ahorro'] },
+      { key: 'score', label: 'Score', query: '¿Cuál es mi Score Financiero?', icon: Activity, words: ['score', 'salud financ', 'puntuaci', 'diagn'] },
+      { key: 'reportes', label: 'Reportes', query: 'Genera un informe rápido de mi patrimonio', icon: PieChart, words: ['informe', 'report', 'patrimon', 'resumen', 'balance'] },
+      { key: 'deudas', label: 'Deudas', query: '¿Cuánto debo y cuánto me deben?', icon: HandCoins, words: ['deud', 'debo', 'deben', 'prest', 'préstam', 'cobr'] },
+      { key: 'cuentas', label: 'Cuentas', query: '¿Cuánto tengo en cada cuenta?', icon: Wallet, words: ['cuenta', 'tarjet', 'efectiv', 'banco'] },
+      { key: 'ingresos', label: 'Ingresos', query: '¿Cuáles han sido mis ingresos este mes?', icon: TrendingUp, words: ['ingres', 'salari', 'nómina', 'nomina', 'cobré', 'cobre'] }
+    ];
+
+    // Mensajes propios de las últimas 8 sesiones, de la más reciente a la más antigua.
+    const sessions = [...chatHistory]
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 8);
+
+    const scores = new Map<string, number>();
+    sessions.forEach((session, sessionIdx) => {
+      const recencyWeight = 1 / (sessionIdx + 1);
+      (session.messages || [])
+        .filter((m: any) => m.role === 'user')
+        .forEach((m: any) => {
+          const text = String(m.content || '').toLowerCase();
+          catalog.forEach(topic => {
+            if (topic.words.some(w => text.includes(w))) {
+              scores.set(topic.key, (scores.get(topic.key) || 0) + recencyWeight);
+            }
+          });
+        });
+    });
+
+    if (scores.size === 0) return catalog.slice(0, 5);
+
+    // Temas usados primero (por puntuación); el resto rellena hasta cinco.
+    const used = catalog
+      .filter(t => scores.has(t.key))
+      .sort((a, b) => (scores.get(b.key) || 0) - (scores.get(a.key) || 0));
+    const rest = catalog.filter(t => !scores.has(t.key));
+    return [...used, ...rest].slice(0, 5);
+  }, [chatHistory]);
 
   const formatRelativeTime = (isoString: string) => {
     try {
@@ -6658,7 +6688,8 @@ export default function App() {
                         transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
                         className="flex flex-col items-center gap-3"
                       >
-                        <div className="w-16 h-16 rounded-3xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shadow-sm">
+                        {/* Logo suelto: sin marco ni fondo, solo una sombra suave que lo despega */}
+                        <div className="text-brand [filter:drop-shadow(0_6px_14px_rgba(217,119,87,0.28))]">
                           <HeraWalletLogo size="lg" showText={false} />
                         </div>
                         <h1 className="text-3xl sm:text-4xl font-serif font-semibold tracking-tight text-text-primary max-w-lg leading-tight mt-2">
@@ -6800,15 +6831,9 @@ export default function App() {
                         transition={{ duration: 0.28, delay: 0.16, ease: [0.23, 1, 0.32, 1] }}
                         className="flex flex-wrap items-center justify-center gap-2 max-w-xl"
                       >
-                        {[
-                          { label: 'Transacciones', query: '¿En qué he gastado más este mes?', icon: Receipt },
-                          { label: 'Ahorros', query: '¿Cuál es mi saldo de ahorro y capacidad de reserva?', icon: Coins },
-                          { label: 'Metas', query: '¿Cómo van mis metas de ahorro?', icon: Target },
-                          { label: 'Score', query: '¿Cuál es mi Score Financiero?', icon: Activity },
-                          { label: 'Reportes', query: 'Genera un informe rápido de mi patrimonio', icon: PieChart }
-                        ].map((pill, idx) => (
+                        {suggestionPills.map((pill) => (
                           <button
-                            key={idx}
+                            key={pill.key}
                             onClick={() => sendChatMessage(pill.query)}
                             className="px-4 py-2 rounded-2xl bg-surface hover:bg-surface-hover border border-border text-text-primary text-xs font-medium flex items-center gap-2 shadow-xs transition-all cursor-pointer active:scale-[0.97]"
                           >
