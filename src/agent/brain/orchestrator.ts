@@ -49,7 +49,7 @@ export class AgentOrchestrator {
   /**
    * Procesa la consulta del usuario a través de la Arquitectura Enterprise de 8 Capas
    */
-  public async processUserQuery(userId: string, userMessage: string, deepseekApiKey: string): Promise<AgentResult> {
+  public async processUserQuery(userId: string, userMessage: string, deepseekApiKey: string, options?: { voiceMode?: boolean }): Promise<AgentResult> {
     const startTime = Date.now();
     const interactionId = 'int-' + Math.random().toString(36).substring(2, 9);
     const toolsUsed: string[] = [];
@@ -112,7 +112,12 @@ REGLAS DE HERRAMIENTAS (OBLIGATORIAS):
 - PROHIBIDO afirmar que un movimiento quedó "registrado", inventar IDs de transacción o mostrar resúmenes de escrituras si en este turno no ejecutaste la herramienta y recibiste success:true. Si no la ejecutaste, dilo y ejecútala.
 - Cada movimiento se registra UNA sola vez: no repitas la misma llamada con los mismos datos.
 - Préstamos y deudas: usa create_debt con type="debt" si el usuario debe dinero, type="receivable" si le deben a él.
-- Para BORRAR una transacción o deuda: primero localízala (get_user_transactions / get_user_debts), confirma con el usuario cuál es si hay ambigüedad, y solo entonces llama a delete_transaction / delete_debt con el id exacto. Nunca borres sin id verificado.`;
+- Para BORRAR una transacción o deuda: primero localízala (get_user_transactions / get_user_debts), confirma con el usuario cuál es si hay ambigüedad, y solo entonces llama a delete_transaction / delete_debt con el id exacto. Nunca borres sin id verificado.${options?.voiceMode ? `
+
+MODO VOZ EN VIVO (prioridad máxima): tu respuesta será leída en voz alta.
+- Máximo 2-3 frases cortas y naturales, como una conversación hablada.
+- PROHIBIDO: markdown, asteriscos, listas, tablas, emojis, ids técnicos.
+- Ve directo al dato. Ejemplo bueno: "Listo, registré el gasto de 20 dólares en comida. Te quedan 80 en efectivo."` : ''}`;
 
     // Historial de conversación (Short Memory)
     const recentHistory = this.db.prepare('SELECT role, content FROM chat_messages WHERE userId = ? ORDER BY createdAt DESC LIMIT 10').all(userId).reverse() as any[];

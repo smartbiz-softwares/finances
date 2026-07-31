@@ -2322,7 +2322,7 @@ Incluye al final:
 
   if (deepseekKey && deepseekKey.trim()) {
     try {
-      const agentResult = await agentOrchestrator.processUserQuery(userId, message, deepseekKey);
+      const agentResult = await agentOrchestrator.processUserQuery(userId, message, deepseekKey, { voiceMode: req.body?.live === true });
       aiReplyText = agentResult.text;
       chatUsage = {
         promptTokens: agentResult.usage.promptTokens,

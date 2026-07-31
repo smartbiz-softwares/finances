@@ -3409,7 +3409,7 @@ export default function App() {
     }
   }, [loadUserData]);
 
-  // --- Modo Live: hablar con la IA y que responda con voz (es/en según teléfono) ---
+  // --- Modo Live: conversación de voz manos libres (VAD) con respuesta hablada ---
 
   const liveLang = useCallback((): 'es' | 'en' => {
     const p = (profile?.phone || user?.phone || '').replace(/[^0-9+]/g, '');
@@ -3417,7 +3417,7 @@ export default function App() {
     return 'es';
   }, [profile?.phone, user?.phone]);
 
-  /** Quita markdown y emojis para que la voz no lea asteriscos ni símbolos. */
+  /** Quita markdown y símbolos para que la voz no lea asteriscos. */
   const textForSpeech = (t: string) => t
     .replace(/```[\s\S]*?```/g, '')
     .replace(/<<<[A-Z_]+_START>>>[\s\S]*?<<<[A-Z_]+_END>>>/g, '')
@@ -3427,68 +3427,209 @@ export default function App() {
     .trim()
     .slice(0, 1200);
 
+  // Refs de infraestructura de audio (persisten entre turnos: pedir el
+  // micrófono una sola vez ahorra ~300-600ms por turno).
+  const liveStreamRef = useRef<MediaStream | null>(null);
+  const liveAudioCtxRef = useRef<AudioContext | null>(null);
+  const liveAnalyserRef = useRef<AnalyserNode | null>(null);
+  const liveRafRef = useRef<number | null>(null);
+  const liveSpeakAnalyserRef = useRef<AnalyserNode | null>(null);
+  const liveBarRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const liveOrbRef = useRef<HTMLDivElement | null>(null);
+  const liveStateRef = useRef<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+
+  const setLiveStateBoth = (s: 'idle' | 'listening' | 'thinking' | 'speaking') => {
+    liveStateRef.current = s;
+    setLiveState(s);
+  };
+
+  /** Bucle de animación: orbe y barras siguen el volumen real (mic o voz de Hera). */
+  const runSpectrumLoop = useCallback(() => {
+    const tick = () => {
+      if (!liveActiveRef.current) return;
+      const analyser = liveStateRef.current === 'speaking'
+        ? liveSpeakAnalyserRef.current
+        : liveAnalyserRef.current;
+
+      let level = 0;
+      const bands: number[] = [0, 0, 0, 0, 0];
+      if (analyser) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        const bandSize = Math.floor(data.length / 5) || 1;
+        for (let b = 0; b < 5; b++) {
+          let sum = 0;
+          for (let i = b * bandSize; i < (b + 1) * bandSize; i++) sum += data[i];
+          bands[b] = Math.min(1, (sum / bandSize) / 160);
+        }
+        level = bands.reduce((a, v) => a + v, 0) / 5;
+      }
+
+      // Solo transform/opacity: animación fuera del main-thread layout.
+      if (liveOrbRef.current) {
+        const scale = liveStateRef.current === 'thinking' ? 1 : 1 + level * 0.22;
+        liveOrbRef.current.style.transform = `scale(${scale})`;
+      }
+      liveBarRefs.current.forEach((bar, i) => {
+        if (!bar) return;
+        const v = liveStateRef.current === 'thinking' ? 0.15 : Math.max(0.12, bands[i]);
+        bar.style.transform = `scaleY(${v})`;
+      });
+
+      liveRafRef.current = requestAnimationFrame(tick);
+    };
+    if (liveRafRef.current) cancelAnimationFrame(liveRafRef.current);
+    liveRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  /** TTS por frases: reproduce la primera cuanto antes y pre-descarga la siguiente. */
   const speakLive = useCallback(async (text: string): Promise<void> => {
     const clean = textForSpeech(text);
-    if (!clean) return;
-    setLiveState('speaking');
-    try {
-      const token = getToken();
-      const r = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ text: clean, lang: liveLang() })
-      });
-      if (r.ok) {
-        const blob = await r.blob();
-        await new Promise<void>((resolve) => {
-          const audio = new Audio(URL.createObjectURL(blob));
-          liveAudioRef.current = audio;
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
-          audio.play().catch(() => resolve());
-        });
-        return;
-      }
-    } catch { }
-    // Fallback: voz del navegador si Piper no está configurado en el servidor.
-    await new Promise<void>((resolve) => {
+    if (!clean || !liveActiveRef.current) return;
+    setLiveStateBoth('speaking');
+
+    // Trocear en frases agrupadas (~180 chars) para bajar la latencia percibida.
+    const sentences = clean.split(/(?<=[.!?…])\s+/);
+    const chunks: string[] = [];
+    let buf = '';
+    for (const s of sentences) {
+      if ((buf + ' ' + s).trim().length > 180 && buf) { chunks.push(buf.trim()); buf = s; }
+      else buf = (buf + ' ' + s).trim();
+    }
+    if (buf) chunks.push(buf);
+
+    const token = getToken();
+    const fetchChunk = (t: string) => fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ text: t, lang: liveLang() })
+    }).then(r => r.ok ? r.blob() : null).catch(() => null);
+
+    const playBlob = (blob: Blob) => new Promise<void>((resolve) => {
+      const audio = new Audio(URL.createObjectURL(blob));
+      liveAudioRef.current = audio;
       try {
-        const utter = new SpeechSynthesisUtterance(clean);
-        utter.lang = liveLang() === 'en' ? 'en-US' : 'es-ES';
-        utter.rate = 1.02;
-        utter.onend = () => resolve();
-        utter.onerror = () => resolve();
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utter);
-      } catch { resolve(); }
+        // Analizador sobre la voz de Hera para que el espectro baile con ella.
+        const ctx = liveAudioCtxRef.current;
+        if (ctx) {
+          const src = ctx.createMediaElementSource(audio);
+          const an = ctx.createAnalyser();
+          an.fftSize = 64;
+          src.connect(an);
+          an.connect(ctx.destination);
+          liveSpeakAnalyserRef.current = an;
+        }
+      } catch { }
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      audio.play().catch(() => resolve());
     });
+
+    // Pipeline: mientras suena el chunk N ya se descarga el N+1.
+    let next: Promise<Blob | null> = fetchChunk(chunks[0]);
+    let piperOk = true;
+    for (let i = 0; i < chunks.length; i++) {
+      if (!liveActiveRef.current) return;
+      const blob = await next;
+      if (i + 1 < chunks.length) next = fetchChunk(chunks[i + 1]);
+      if (blob) {
+        await playBlob(blob);
+      } else { piperOk = false; break; }
+    }
+
+    // Fallback: voz del navegador si Piper no está disponible.
+    if (!piperOk && liveActiveRef.current) {
+      await new Promise<void>((resolve) => {
+        try {
+          const utter = new SpeechSynthesisUtterance(clean);
+          utter.lang = liveLang() === 'en' ? 'en-US' : 'es-ES';
+          utter.rate = 1.04;
+          utter.onend = () => resolve();
+          utter.onerror = () => resolve();
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utter);
+        } catch { resolve(); }
+      });
+    }
   }, [liveLang]);
 
   const stopLiveMode = useCallback(() => {
     liveActiveRef.current = false;
     setLiveMode(false);
-    setLiveState('idle');
+    setLiveStateBoth('idle');
     setLiveTranscript('');
     setLiveReply('');
+    if (liveRafRef.current) { cancelAnimationFrame(liveRafRef.current); liveRafRef.current = null; }
     try { liveRecorderRef.current?.stop(); } catch { }
-    try { liveRecorderRef.current?.stream.getTracks().forEach(t => t.stop()); } catch { }
+    try { liveStreamRef.current?.getTracks().forEach(t => t.stop()); } catch { }
+    liveStreamRef.current = null;
+    try { liveAudioCtxRef.current?.close(); } catch { }
+    liveAudioCtxRef.current = null;
+    liveAnalyserRef.current = null;
+    liveSpeakAnalyserRef.current = null;
     try { liveAudioRef.current?.pause(); } catch { }
     try { window.speechSynthesis.cancel(); } catch { }
   }, []);
 
-  /** Graba un turno de voz; al parar se transcribe, se consulta a la IA y responde hablando. */
+  /**
+   * Escucha manos libres: graba, detecta con VAD cuándo terminaste de hablar
+   * (1.1s de silencio tras voz), procesa y vuelve a escuchar sola.
+   */
   const startLiveListening = useCallback(async () => {
     if (!liveActiveRef.current) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Micrófono y analizador persistentes (primera vez solamente).
+      if (!liveStreamRef.current) {
+        liveStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true }
+        });
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioContextClass();
+        const src = ctx.createMediaStreamSource(liveStreamRef.current);
+        const an = ctx.createAnalyser();
+        an.fftSize = 256;
+        src.connect(an);
+        liveAudioCtxRef.current = ctx;
+        liveAnalyserRef.current = an;
+        runSpectrumLoop();
+      }
+      if (liveAudioCtxRef.current?.state === 'suspended') { try { await liveAudioCtxRef.current.resume(); } catch { } }
+
       liveChunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(liveStreamRef.current);
       liveRecorderRef.current = recorder;
       recorder.ondataavailable = e => { if (e.data.size > 0) liveChunksRef.current.push(e.data); };
+
+      // --- VAD: fin de turno por silencio ---
+      const analyser = liveAnalyserRef.current!;
+      const timeData = new Uint8Array(analyser.fftSize);
+      let spoke = false;
+      let lastVoice = Date.now();
+      const startedAt = Date.now();
+      const SPEECH_RMS = 0.035;
+      const SILENCE_MS = 1100;
+      const MAX_TURN_MS = 20000;
+
+      const vadTimer = setInterval(() => {
+        if (!liveActiveRef.current || recorder.state !== 'recording') { clearInterval(vadTimer); return; }
+        analyser.getByteTimeDomainData(timeData);
+        let sum = 0;
+        for (let i = 0; i < timeData.length; i++) { const d = (timeData[i] - 128) / 128; sum += d * d; }
+        const rms = Math.sqrt(sum / timeData.length);
+        if (rms > SPEECH_RMS) { spoke = true; lastVoice = Date.now(); }
+        const shouldStop = (spoke && Date.now() - lastVoice > SILENCE_MS) || (Date.now() - startedAt > MAX_TURN_MS);
+        if (shouldStop) { clearInterval(vadTimer); try { recorder.stop(); } catch { } }
+      }, 80);
+
       recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
+        clearInterval(vadTimer);
         if (!liveActiveRef.current) return;
-        setLiveState('thinking');
+        if (!spoke) {
+          // No hubo voz: vuelve a escuchar sin gastar transcripción.
+          startLiveListening();
+          return;
+        }
+        setLiveStateBoth('thinking');
         try {
           const blob = new Blob(liveChunksRef.current, { type: 'audio/wav' });
           const base64 = await new Promise<string>((resolve, reject) => {
@@ -3500,14 +3641,15 @@ export default function App() {
           const tr = await api('/transcribe', { method: 'POST', body: JSON.stringify({ audio: base64 }) });
           const heard = (tr.text || '').trim();
           if (!heard) {
-            setLiveState('idle');
+            if (liveActiveRef.current) startLiveListening();
             return;
           }
           setLiveTranscript(heard);
-          const data = await api('/chat', { method: 'POST', body: JSON.stringify({ message: heard }) });
+          setLiveReply('');
+          // live:true = el agente responde corto y hablable (menos LLM + menos TTS = menos espera).
+          const data = await api('/chat', { method: 'POST', body: JSON.stringify({ message: heard, live: true }) });
           const reply = data.reply || '';
           setLiveReply(reply);
-          // La conversación Live también queda en el hilo del chat.
           setChatMessages(prev => [...prev,
             { id: `${Date.now()}-lv-u`, role: 'user', content: heard },
             { id: `${Date.now()}-lv-a`, role: 'assistant', content: reply, type: data.widgetType, data: data.widgetData }
@@ -3518,25 +3660,31 @@ export default function App() {
         } catch (err: any) {
           showToast(err.message || 'Error en el turno de voz', 'error');
         } finally {
-          if (liveActiveRef.current) setLiveState('idle');
+          // Conversación continua: vuelve a escuchar sola.
+          if (liveActiveRef.current) {
+            setLiveStateBoth('listening');
+            startLiveListening();
+          }
         }
       };
+
       recorder.start();
-      setLiveState('listening');
+      setLiveStateBoth('listening');
     } catch {
       showToast('No se pudo acceder al micrófono', 'error');
       stopLiveMode();
     }
-  }, [speakLive, fetchUserSubscription, loadUserData, stopLiveMode]);
+  }, [runSpectrumLoop, speakLive, fetchUserSubscription, loadUserData, stopLiveMode]);
 
   const startLiveMode = useCallback(() => {
     liveActiveRef.current = true;
     setLiveMode(true);
-    setLiveState('idle');
     setLiveTranscript('');
     setLiveReply('');
-  }, []);
-
+    // Manos libres desde el primer segundo: entra escuchando.
+    setLiveStateBoth('listening');
+    setTimeout(() => startLiveListening(), 150);
+  }, [startLiveListening]);
   const handleCancelChatAction = useCallback((msgId: string) => {
     setChatMessages(prev => prev.map(m => m.id === msgId ? { ...m, actionState: 'cancelled' } : m));
     showToast('Operación cancelada', 'info');
@@ -10796,72 +10944,82 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Modo Live: conversación de voz con Hera */}
+      {/* Modo Live: conversación de voz manos libres con espectro en vivo */}
       <AnimatePresence>
         {liveMode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-              className="max-w-sm w-full bg-surface border border-border rounded-3xl p-8 text-center space-y-6"
-            >
-              <div className="space-y-1">
-                <h3 className="text-xl font-serif font-semibold text-text-primary">Hera Live</h3>
-                <p className="text-xs text-text-secondary">
-                  {liveState === 'listening' ? 'Escuchando... toca el círculo al terminar de hablar'
-                    : liveState === 'thinking' ? 'Hera está pensando...'
-                    : liveState === 'speaking' ? 'Hera está hablando...'
-                    : 'Toca el círculo y habla con Hera'}
-                </p>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-[#141413]/97 backdrop-blur-xl py-10 px-6"
+          >
+            {/* Estado superior, discreto */}
+            <div className="text-center space-y-1 pt-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] font-mono text-white/40">Hera Live</p>
+              <p className="text-sm text-white/70 font-sans min-h-[20px] transition-opacity duration-200">
+                {liveState === 'listening' ? 'Te escucho — habla con normalidad'
+                  : liveState === 'thinking' ? 'Pensando…'
+                  : liveState === 'speaking' ? 'Hablando'
+                  : ''}
+              </p>
+            </div>
+
+            {/* Orbe central + espectro: reacciona a tu voz y a la de Hera */}
+            <div className="flex flex-col items-center gap-10">
+              <div className="relative flex items-center justify-center">
+                {/* Halo exterior */}
+                <div className={cn(
+                  'absolute w-56 h-56 rounded-full transition-opacity duration-500',
+                  liveState === 'listening' ? 'bg-brand/15 opacity-100' : liveState === 'speaking' ? 'bg-brand/20 opacity-100' : 'bg-white/5 opacity-60',
+                  'blur-2xl'
+                )} />
+                {/* Orbe: escala en tiempo real con el volumen (solo transform) */}
+                <div
+                  ref={liveOrbRef}
+                  className={cn(
+                    'w-40 h-40 rounded-full transition-colors duration-500 will-change-transform',
+                    'bg-[radial-gradient(circle_at_35%_30%,#E08668_0%,#D97757_45%,#B85F42_100%)]',
+                    liveState === 'thinking' && 'animate-pulse opacity-80'
+                  )}
+                  style={{ transition: 'transform 90ms ease-out' }}
+                />
+                {/* Espectro de 5 barras dentro del orbe */}
+                <div className="absolute flex items-center gap-1.5 h-12">
+                  {[0, 1, 2, 3, 4].map(i => (
+                    <div
+                      key={i}
+                      ref={el => { liveBarRefs.current[i] = el; }}
+                      className="w-2 h-12 rounded-full bg-white/90 origin-center will-change-transform"
+                      style={{ transform: 'scaleY(0.12)', transition: 'transform 90ms ease-out' }}
+                    />
+                  ))}
+                </div>
               </div>
 
-              {/* Orbe central: micrófono con estado */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (liveState === 'listening') { try { liveRecorderRef.current?.stop(); } catch { } }
-                  else if (liveState === 'idle') startLiveListening();
-                }}
-                disabled={liveState === 'thinking' || liveState === 'speaking'}
-                className={cn(
-                  'w-28 h-28 rounded-full mx-auto flex items-center justify-center transition-all duration-200 cursor-pointer active:scale-[0.97] border-4',
-                  liveState === 'listening' ? 'bg-error text-white border-error/30 animate-pulse'
-                    : liveState === 'thinking' ? 'bg-surface-hover text-text-dim border-border'
-                    : liveState === 'speaking' ? 'bg-brand/15 text-brand border-brand/30'
-                    : 'bg-brand text-white border-brand/30 hover:bg-brand-hover'
+              {/* Transcripción sutil del turno actual */}
+              <div className="max-w-md w-full text-center space-y-2 min-h-[72px]">
+                {liveTranscript && (
+                  <p className="text-xs text-white/45 leading-relaxed line-clamp-2">{liveTranscript}</p>
                 )}
-              >
-                {liveState === 'listening' ? <MicOff size={40} />
-                  : liveState === 'speaking' ? <Volume2 size={40} className="animate-pulse" />
-                  : liveState === 'thinking' ? <Sparkles size={36} className="animate-spin" />
-                  : <Mic size={40} />}
-              </button>
+                {liveReply && (
+                  <p className="text-sm text-white/85 leading-relaxed line-clamp-3">{textForSpeech(liveReply).slice(0, 240)}</p>
+                )}
+              </div>
+            </div>
 
-              {(liveTranscript || liveReply) && (
-                <div className="space-y-2 text-left max-h-40 overflow-y-auto scrollbar-none">
-                  {liveTranscript && (
-                    <p className="text-xs text-text-secondary bg-bg border border-border rounded-2xl px-3.5 py-2.5"><span className="font-semibold text-text-primary">Tú:</span> {liveTranscript}</p>
-                  )}
-                  {liveReply && (
-                    <p className="text-xs text-text-secondary bg-brand/5 border border-brand/20 rounded-2xl px-3.5 py-2.5"><span className="font-semibold text-brand">Hera:</span> {textForSpeech(liveReply).slice(0, 280)}</p>
-                  )}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={stopLiveMode}
-                className="w-full bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors duration-200"
-              >
-                Salir del Modo Live
-              </button>
-            </motion.div>
-          </div>
+            {/* Salir */}
+            <button
+              type="button"
+              onClick={stopLiveMode}
+              className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-white flex items-center justify-center cursor-pointer transition-colors duration-200 active:scale-[0.95]"
+              title="Salir del Modo Live"
+            >
+              <MicOff size={20} />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
-
       {/* Onboarding Wizard: bienvenida → perfil → primera cuenta → primer registro */}
       <AnimatePresence>
         {showOnboarding && (
