@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { execSync } from 'child_process';
 import { AgentOrchestrator } from './src/agent/brain/orchestrator.ts';
 import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine.ts';
 import { initMySQLSchema } from './src/db/mysql.ts';
@@ -3871,6 +3872,17 @@ app.use(express.static(distPath));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// Versión desplegada: commit y hora de arranque del proceso. Permite saber al
+// instante si el VPS corre el código nuevo o un proceso sin reiniciar.
+const BOOT_TIME = new Date().toISOString();
+let GIT_COMMIT = 'desconocido';
+try {
+  GIT_COMMIT = execSync('git rev-parse --short HEAD', { cwd: path.dirname(new URL(import.meta.url).pathname) }).toString().trim();
+} catch { }
+app.get('/api/version', (req, res) => {
+  res.json({ commit: GIT_COMMIT, startedAt: BOOT_TIME });
 });
 
 const PORT = process.env.PORT || 4000;
