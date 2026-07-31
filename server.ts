@@ -41,6 +41,8 @@ const agentOrchestrator = new AgentOrchestrator(db);
 const ZDSMS_API_KEY = process.env.ZDSMS_API_KEY || '9214|I5rtSK0YQ7gpe87KywFK77cti2sX7nmjbbEN01JC5ddb3577';
 const ZDSMS_URL = process.env.ZDSMS_URL || 'https://zdsms.cu/api/v1/message/send';
 const WHISPER_URL = 'http://127.0.0.1:8080/inference';
+// Modelo Gemini configurable: gemini-1.5-flash fue retirado por Google (404).
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 const otpStore = new Map<string, { code: string; expiresAt: number }>();
 
@@ -263,7 +265,7 @@ if (providerCount === 0) {
   db.prepare(`
     INSERT INTO ai_providers (id, name, model, apiKey, isActive, createdAt)
     VALUES (?, ?, ?, ?, ?, ?)
-  `).run(randomUUID(), 'Google Gemini', 'gemini-1.5-flash', geminiEnvKey, 1, new Date().toISOString());
+  `).run(randomUUID(), 'Google Gemini', GEMINI_MODEL, geminiEnvKey, 1, new Date().toISOString());
 
   db.prepare(`
     INSERT INTO ai_providers (id, name, model, apiKey, isActive, createdAt)
@@ -1461,7 +1463,7 @@ Responde ÚNICAMENTE un JSON válido con este formato exacto, sin bloques markdo
 
     if (!resultJson && geminiKey && geminiKey.trim()) {
       try {
-        const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey.trim()}`;
+        const gUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey.trim()}`;
         const gRes = await fetch(gUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1473,7 +1475,7 @@ Responde ÚNICAMENTE un JSON válido con este formato exacto, sin bloques markdo
         if (gRes.ok) {
           const raw = await gRes.json() as any;
           reportUsage = geminiUsage(raw);
-          reportModel = 'gemini-1.5-flash';
+          reportModel = GEMINI_MODEL;
           const content = raw.candidates?.[0]?.content?.parts?.[0]?.text || '';
           const cleaned = content.replace(/```json/gi, '').replace(/```/g, '').trim();
           resultJson = JSON.parse(cleaned);
@@ -1598,7 +1600,7 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
 
     if (!parsedSuccess && geminiKey && geminiKey.trim()) {
       try {
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey.trim()}`;
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey.trim()}`;
         const geminiRes = await fetch(geminiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1610,7 +1612,7 @@ Responde ÚNICAMENTE con un JSON válido en este formato exacto, sin bloques mar
         if (geminiRes.ok) {
           const json = await geminiRes.json() as any;
           parseUsage = geminiUsage(json);
-          parseModel = 'gemini-1.5-flash';
+          parseModel = GEMINI_MODEL;
           const content = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
           const cleanedJson = content.replace(/```json/gi, '').replace(/```/g, '').trim();
           const parsed = JSON.parse(cleanedJson);
@@ -2334,7 +2336,7 @@ Incluye al final:
     }
   } else if (geminiKey && geminiKey.trim()) {
     try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey.trim()}`;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey.trim()}`;
       const geminiRes = await fetch(geminiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2348,7 +2350,7 @@ Incluye al final:
         aiReplyText = json.candidates?.[0]?.content?.parts?.[0]?.text || 'Lo sentimos, el servidor se encuentra ocupado en este momento.';
         // Gemini reporta el consumo con otros nombres que DeepSeek.
         chatUsage = geminiUsage(json);
-        chatModel = 'gemini-1.5-flash';
+        chatModel = GEMINI_MODEL;
         reasoningContent = 'Evaluando patrimonio, ingresos y liquidez disponible con modelo de análisis en tiempo real.';
       } else {
         aiReplyText = 'Lo sentimos, el servidor se encuentra ocupado en este momento. Por favor inténtalo de nuevo más tarde.';
