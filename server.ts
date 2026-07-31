@@ -47,7 +47,10 @@ const agentOrchestrator = new AgentOrchestrator(db);
 
 const ZDSMS_API_KEY = process.env.ZDSMS_API_KEY || '9214|I5rtSK0YQ7gpe87KywFK77cti2sX7nmjbbEN01JC5ddb3577';
 const ZDSMS_URL = process.env.ZDSMS_URL || 'https://zdsms.cu/api/v1/message/send';
-const WHISPER_URL = 'http://127.0.0.1:8080/inference';
+// Whisper local: URL y timeout configurables. 3.5s no alcanzaba ni para un
+// dictado corto en CPU y toda transcripción caía a los respaldos de pago.
+const WHISPER_URL = process.env.WHISPER_URL || 'http://127.0.0.1:8080/inference';
+const WHISPER_TIMEOUT_MS = Number(process.env.WHISPER_TIMEOUT_MS || 20000);
 // Modelo Gemini configurable: gemini-1.5-flash fue retirado por Google (404).
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
@@ -1750,17 +1753,17 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
 
     let transcribedText = '';
 
-    // 1. Intentar servidor Whisper.cpp local (http://127.0.0.1:8080/inference) con timeout de 3.5 segundos
+    // 1. Intentar servidor Whisper.cpp local (WHISPER_URL) antes que cualquier nube.
     try {
       const formData = new FormData();
       const blob = new Blob([buffer], { type: mimeType });
       formData.append('file', blob, 'recording.wav');
-      formData.append('language', 'es');
+      formData.append('language', req.body?.lang === 'en' ? 'en' : 'es');
       formData.append('response_format', 'json');
       formData.append('temperature', '0.0');
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), WHISPER_TIMEOUT_MS);
 
       const whisperRes = await fetch(WHISPER_URL, {
         method: 'POST',
@@ -1770,11 +1773,13 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
 
       if (whisperRes.ok) {
         const json = await whisperRes.json() as any;
-        transcribedText = json.text || json.transcription || '';
-        console.log('[transcribe] Transcribed via Local Whisper.cpp:', transcribedText);
+        transcribedText = (json.text || json.transcription || '').trim();
+        console.log('[transcribe] Transcrito con Whisper local:', transcribedText);
+      } else {
+        console.warn(`[transcribe] Whisper local respondió ${whisperRes.status} en ${WHISPER_URL}`);
       }
     } catch (localErr: any) {
-      console.log('[transcribe] Local Whisper.cpp offline or timed out, trying cloud fallbacks:', localErr.message);
+      console.warn(`[transcribe] Whisper local no disponible en ${WHISPER_URL} (timeout ${WHISPER_TIMEOUT_MS}ms): ${localErr.message}`);
     }
 
     // 2. Si falla Whisper local, usar Google Gemini Audio (gemini-2.5-flash) como respaldo principal
@@ -1849,8 +1854,11 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
     }
 
     if (!transcribedText) {
+      // El usuario final no debe leer instrucciones de servidor: el detalle
+      // técnico va al log y al panel de diagnóstico del administrador.
+      console.error(`❌ [transcribe] Ninguna vía de transcripción disponible (local: ${WHISPER_URL}). Revisa Whisper local o configura GROQ_API_KEY/OPENAI_API_KEY.`);
       return res.status(503).json({
-        error: 'Servicio de voz no disponible. Puedes ejecutar "sudo bash setup-whisper.sh" en la consola de tu VPS para compilar e iniciar Whisper local, o ingresar una API Key activa en Administración > Modelos IA.'
+        error: 'No pudimos escuchar tu audio en este momento. Inténtalo de nuevo o escribe tu mensaje.'
       });
     }
 
@@ -3999,6 +4007,81 @@ try {
 } catch { }
 app.get('/api/version', (req, res) => {
   res.json({ commit: GIT_COMMIT, startedAt: BOOT_TIME });
+});
+
+/**
+ * Diagnóstico de servicios para el administrador: dice de un vistazo qué
+ * pieza está caída (voz, IA, pagos, SMS) sin tener que leer logs.
+ */
+app.get('/api/admin/health', adminAuthMiddleware, async (req, res) => {
+  const checks: Record<string, any> = {};
+
+  // Whisper local (STT)
+  try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), 4000);
+    const r = await fetch(WHISPER_URL.replace('/inference', '/'), { signal: c.signal }).finally(() => clearTimeout(t));
+    checks.whisperLocal = { ok: r.status < 500, status: r.status, url: WHISPER_URL };
+  } catch (e: any) {
+    checks.whisperLocal = { ok: false, error: e.message, url: WHISPER_URL };
+  }
+
+  // Piper (TTS)
+  const piperBin = process.env.PIPER_BIN;
+  checks.piperTTS = {
+    ok: !!(piperBin && fs.existsSync(piperBin) && process.env.PIPER_VOICE_ES && fs.existsSync(process.env.PIPER_VOICE_ES)),
+    bin: piperBin || null,
+    voiceEs: process.env.PIPER_VOICE_ES || null,
+    voiceEn: process.env.PIPER_VOICE_EN || null
+  };
+
+  // DeepSeek (cerebro del agente) con saldo restante
+  const dsKey = process.env.DEEPSEEK_API_KEY;
+  if (dsKey) {
+    try {
+      const r = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${dsKey}` } });
+      const d = await r.json() as any;
+      checks.deepseek = { ok: r.ok, balanceUSD: d?.balance_infos?.[0]?.total_balance ?? null };
+    } catch (e: any) { checks.deepseek = { ok: false, error: e.message }; }
+  } else checks.deepseek = { ok: false, error: 'DEEPSEEK_API_KEY no configurada' };
+
+  // Respaldos de transcripción en la nube
+  checks.sttCloudFallback = {
+    ok: !!(process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY),
+    groq: !!process.env.GROQ_API_KEY,
+    openai: !!process.env.OPENAI_API_KEY
+  };
+
+  // Twilio (SMS de login)
+  const sid = process.env.TWILIO_ACCOUNT_SID, tok = process.env.TWILIO_AUTH_TOKEN;
+  if (sid && tok) {
+    try {
+      const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Balance.json`, {
+        headers: { Authorization: 'Basic ' + Buffer.from(`${sid}:${tok}`).toString('base64') }
+      });
+      const d = await r.json() as any;
+      checks.twilio = { ok: r.ok, balance: d?.balance ?? null, currency: d?.currency ?? null };
+    } catch (e: any) { checks.twilio = { ok: false, error: e.message }; }
+  } else checks.twilio = { ok: false, error: 'Credenciales Twilio no configuradas' };
+
+  // Stripe: modo y webhook
+  const sk = process.env.STRIPE_SECRET_KEY;
+  checks.stripe = {
+    ok: !!sk,
+    mode: sk?.startsWith('sk_live') ? 'LIVE' : sk?.startsWith('sk_test') ? 'TEST' : 'sin configurar',
+    webhookSecret: !!process.env.STRIPE_WEBHOOK_SECRET,
+    appUrl: process.env.APP_URL || null
+  };
+
+  // Avisos de configuración insegura
+  checks.security = {
+    jwtFromEnv: !!process.env.JWT_SECRET,
+    adminPasswordFromEnv: !!process.env.ADMIN_PASSWORD,
+    otpDebugActive: process.env.OTP_DEBUG === '1'
+  };
+
+  const allOk = Object.values(checks).every((c: any) => c.ok !== false);
+  res.json({ commit: GIT_COMMIT, startedAt: BOOT_TIME, allOk, checks });
 });
 
 const PORT = process.env.PORT || 4000;

@@ -1255,6 +1255,7 @@ export default function App() {
   const [liveState, setLiveState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [liveTranscript, setLiveTranscript] = useState('');
   const [liveReply, setLiveReply] = useState('');
+  const [liveError, setLiveError] = useState('');
   const liveRecorderRef = useRef<MediaRecorder | null>(null);
   const liveChunksRef = useRef<Blob[]>([]);
   const liveAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -3700,7 +3701,10 @@ export default function App() {
           loadUserData();
           await speakLive(reply);
         } catch (err: any) {
-          showToast(err.message || 'Error en el turno de voz', 'error');
+          // Un turno fallido no rompe la sesión: se avisa en el overlay y
+          // el bucle vuelve a escuchar automáticamente.
+          setLiveError(err.message || 'No te escuché bien. Inténtalo otra vez.');
+          setTimeout(() => setLiveError(''), 4000);
         } finally {
           // Conversación continua: vuelve a escuchar sola.
           if (liveActiveRef.current) {
@@ -11049,6 +11053,9 @@ export default function App() {
 
               {/* Transcripción sutil del turno actual */}
               <div className="max-w-md w-full text-center space-y-2 min-h-[72px]">
+                {liveError && (
+                  <p className="text-xs text-white/70 bg-white/10 border border-white/15 rounded-2xl px-4 py-2.5 inline-block">{liveError}</p>
+                )}
                 {liveTranscript && (
                   <p className="text-xs text-white/45 leading-relaxed line-clamp-2">{liveTranscript}</p>
                 )}
