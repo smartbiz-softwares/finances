@@ -654,6 +654,82 @@ function getRelativeTimeShort(dateStr: string): string {
   return `${years}y`;
 }
 
+/**
+ * Redimensiona y comprime una imagen en el navegador antes de subirla.
+ * Las fotos de perfil se guardan como data-URL en la BD: sin esto, una foto
+ * de móvil de 4MB viaja entera en cada /api/me y la app "tarda en cargar".
+ */
+function compressImageFile(file: File, maxSize = 256, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Formato de imagen no soportado'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas no disponible'));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Placeholder de carga. Bloque neutro con pulso sutil que respeta el tema;
+ * se compone por secciones (SkeletonList, SkeletonCards, SkeletonRows).
+ */
+function Skeleton({ className }: { className?: string }) {
+  return <div className={cn('bg-surface-hover rounded-xl animate-pulse motion-reduce:animate-none', className)} aria-hidden="true" />;
+}
+
+/** Filas tipo lista (timeline, deudas, notificaciones, historial). */
+function SkeletonRows({ rows = 4, avatar = true }: { rows?: number; avatar?: boolean }) {
+  return (
+    <div className="space-y-3 py-2" role="status" aria-label="Cargando contenido">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-1">
+          {avatar && <Skeleton className="w-9 h-9 rounded-full shrink-0" />}
+          <div className="flex-1 space-y-1.5 min-w-0">
+            <Skeleton className="h-3 w-full rounded-md" />
+            <Skeleton className="h-2.5 w-2/3 rounded-md" />
+          </div>
+          <Skeleton className="h-3 w-14 rounded-md shrink-0" />
+        </div>
+      ))}
+      <span className="sr-only">Cargando…</span>
+    </div>
+  );
+}
+
+/** Tarjetas (cuentas, metas, stats del panel). */
+function SkeletonCards({ count = 3, className }: { count?: number; className?: string }) {
+  return (
+    <div className={cn('grid gap-3', className || 'grid-cols-2 md:grid-cols-3')} role="status" aria-label="Cargando contenido">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="bg-surface border border-border rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Skeleton className="w-8 h-8 rounded-xl shrink-0" />
+            <Skeleton className="h-2.5 w-16 rounded-md" />
+          </div>
+          <Skeleton className="h-5 w-24 rounded-md" />
+          <Skeleton className="h-2.5 w-full rounded-md" />
+        </div>
+      ))}
+      <span className="sr-only">Cargando…</span>
+    </div>
+  );
+}
+
 function Toast() {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState('');
@@ -1094,6 +1170,9 @@ export default function App() {
   // User Finance Data State
   const [overview, setOverview] = useState<any>(null);
   const [timeline, setTimeline] = useState<any[]>([]);
+  // true solo hasta la PRIMERA carga: los refrescos posteriores no muestran
+  // skeleton para no parpadear sobre datos ya visibles.
+  const [financeLoading, setFinanceLoading] = useState(true);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [goals, setGoals] = useState<any[]>([]);
 
@@ -1508,6 +1587,7 @@ export default function App() {
     dailyUsage: any[];
   } | null>(null);
   const [tokenHistory, setTokenHistory] = useState<any[]>([]);
+  const [tokenHistoryLoading, setTokenHistoryLoading] = useState(true);
   const [tokenHistoryPage, setTokenHistoryPage] = useState(1);
   const [tokenHistoryTotalPages, setTokenHistoryTotalPages] = useState(1);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -1546,6 +1626,7 @@ export default function App() {
   // Admin Panel Navigation & User Telemetry Drawer States
   const [adminActiveTab, setAdminActiveTab] = useState<'dashboard' | 'users' | 'transactions' | 'plans' | 'providers' | 'logs' | 'notifications'>('dashboard');
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [adminDataLoading, setAdminDataLoading] = useState(true);
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [adminAllTransactions, setAdminAllTransactions] = useState<any[]>([]);
   const [selectedUserForTelemetry, setSelectedUserForTelemetry] = useState<any | null>(null);
@@ -1555,6 +1636,7 @@ export default function App() {
 
   // User Personal Notifications State
   const [userNotifications, setUserNotifications] = useState<any[]>([]);
+  const [notifLoading, setNotifLoading] = useState(true);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
   const [showNotifDrawer, setShowNotifDrawer] = useState(false);
   const [notifFilterTab, setNotifFilterTab] = useState<'all' | 'unread' | 'ai' | 'broadcast'>('all');
@@ -1678,7 +1760,9 @@ export default function App() {
         setUserNotifications(data.notifications || []);
         setUnreadNotifCount(data.unreadCount || 0);
       }
-    } catch (err) {}
+    } catch (err) { } finally {
+      setNotifLoading(false);
+    }
   }, []);
 
   const handleMarkNotifAsRead = async (id: string) => {
@@ -1945,7 +2029,9 @@ export default function App() {
       setTokenHistory(res.transactions || []);
       setTokenHistoryPage(res.page || 1);
       setTokenHistoryTotalPages(res.totalPages || 1);
-    } catch { }
+    } catch { } finally {
+      setTokenHistoryLoading(false);
+    }
   }, []);
 
   // Fetch Admin Plans
@@ -3246,7 +3332,9 @@ export default function App() {
       // Also refresh subscription tokens & token transactions history
       fetchUserSubscription();
       fetchTokenHistory(1);
-    } catch { }
+    } catch { } finally {
+      setFinanceLoading(false);
+    }
   }, [timelineStartDate, timelineEndDate, timelineCategories, timelineType, timelineMinAmount, timelineMaxAmount, fetchUserSubscription, fetchTokenHistory]);
 
   const reportStepTexts = [
@@ -3966,7 +4054,9 @@ export default function App() {
       if (Array.isArray(plansRes)) setAdminPlans(plansRes);
       if (Array.isArray(cubaRes)) setCubaRequests(cubaRes);
       if (Array.isArray(allTxsRes)) setAdminAllTransactions(allTxsRes);
-    } catch { }
+    } catch { } finally {
+      setAdminDataLoading(false);
+    }
   }, [adminToken]);
 
   const handleToggleUserRole = async (userId: string, currentRole: string) => {
@@ -5424,7 +5514,20 @@ export default function App() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-border/60 bg-surface">
-                              {filteredAdminUsers.length === 0 ? (
+                              {adminDataLoading && adminUsers.length === 0 ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                  <tr key={`sk-${i}`}>
+                                    <td className="p-3.5" colSpan={7}>
+                                      <div className="flex items-center gap-3">
+                                        <Skeleton className="w-8 h-8 rounded-full shrink-0" />
+                                        <Skeleton className="h-3 w-40 rounded-md" />
+                                        <Skeleton className="h-3 w-20 rounded-md ml-auto" />
+                                        <Skeleton className="h-3 w-24 rounded-md" />
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : filteredAdminUsers.length === 0 ? (
                                 <tr>
                                   <td colSpan={7} className="p-8 text-center text-text-dim text-xs font-mono">
                                     No se encontraron usuarios que coincidan con los filtros aplicados.
@@ -5440,7 +5543,7 @@ export default function App() {
                                     <td className="p-3.5">
                                       <div className="flex items-center gap-3">
                                         {u.photoURL ? (
-                                          <img src={u.photoURL} alt={u.displayName} className="w-8 h-8 rounded-full object-cover border border-border" />
+                                          <img src={u.photoURL} alt={u.displayName} loading="lazy" decoding="async" className="w-8 h-8 rounded-full object-cover border border-border" />
                                         ) : (
                                           <div className="w-8 h-8 rounded-full bg-brand/10 text-brand font-bold flex items-center justify-center text-xs">
                                             {u.displayName ? u.displayName.charAt(0).toUpperCase() : 'U'}
@@ -7145,7 +7248,11 @@ export default function App() {
 
                   {/* Transactions Timeline List with Group Date & Vertical Muted Connector */}
                   <div className="space-y-8">
-                    {timeline.length === 0 ? (
+                    {financeLoading ? (
+                      <div className="bg-surface border border-border rounded-3xl px-4 py-2">
+                        <SkeletonRows rows={5} />
+                      </div>
+                    ) : timeline.length === 0 ? (
                       <div className="bg-surface border border-border p-12 rounded-3xl text-center space-y-3 text-text-dim shadow-xs">
                         <Receipt size={36} className="mx-auto opacity-30" />
                         <p className="text-xs">No hay movimientos registrados en este período</p>
@@ -7269,6 +7376,9 @@ export default function App() {
                   </div>
 
                   {/* Accounts Grid (Ultra-Soft Smooth Animations) */}
+                  {financeLoading && accounts.length === 0 && (
+                    <SkeletonCards count={4} className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {accounts.map((acc, idx) => (
                       <SoftAnimatedCard
@@ -7708,6 +7818,9 @@ export default function App() {
                     </button>
                   </div>
 
+                  {financeLoading && goals.length === 0 && (
+                    <SkeletonCards count={2} className="grid-cols-1 md:grid-cols-2" />
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {goals.map((g, idx) => {
                       const pct = Math.min(100, Math.round((g.currentAmount / Math.max(1, g.targetAmount)) * 100));
@@ -8119,9 +8232,7 @@ export default function App() {
 
                     {/* Debt Cards Bento Grid */}
                     {debtsLoading ? (
-                      <div className="py-16 text-center text-xs text-text-secondary font-mono animate-pulse">
-                        Cargando registros de deudas y cobros...
-                      </div>
+                      <SkeletonCards count={4} className="grid-cols-1 md:grid-cols-2" />
                     ) : filteredDebts.length === 0 ? (
                       <div className="bg-surface border border-border p-10 rounded-3xl text-center space-y-3.5">
                         <div className="w-14 h-14 rounded-2xl bg-brand/10 border border-brand/20 text-brand flex items-center justify-center mx-auto">
@@ -8878,7 +8989,17 @@ export default function App() {
                                     </tr>
                                   ))}
 
-                                  {tokenHistory.length === 0 && (
+                                  {tokenHistoryLoading && tokenHistory.length === 0 && (
+                                    Array.from({ length: 3 }).map((_, i) => (
+                                      <tr key={`sk-${i}`}>
+                                        <td className="py-3 px-3"><Skeleton className="h-3 w-16 rounded-md" /></td>
+                                        <td className="py-3 px-3"><Skeleton className="h-3 w-40 rounded-md" /></td>
+                                        <td className="py-3 px-3"><Skeleton className="h-3 w-14 rounded-md ml-auto" /></td>
+                                        <td className="py-3 px-3"><Skeleton className="h-3 w-16 rounded-md ml-auto" /></td>
+                                      </tr>
+                                    ))
+                                  )}
+                                  {!tokenHistoryLoading && tokenHistory.length === 0 && (
                                     <tr>
                                       <td colSpan={4} className="py-6 text-center text-xs text-text-dim">Sin historial de pagos con tarjeta registrado.</td>
                                     </tr>
@@ -9125,10 +9246,8 @@ export default function App() {
                                     showToast('La imagen debe ser menor a 5MB', 'error');
                                     return;
                                   }
-                                  const reader = new FileReader();
-                                  reader.onload = async (event) => {
-                                    if (event.target?.result) {
-                                      const photoData = event.target.result as string;
+                                  compressImageFile(file)
+                                    .then(async (photoData) => {
                                       try {
                                         await api('/me', {
                                           method: 'PUT',
@@ -9139,9 +9258,8 @@ export default function App() {
                                       } catch {
                                         showToast('Error al actualizar la foto', 'error');
                                       }
-                                    }
-                                  };
-                                  reader.readAsDataURL(file);
+                                    })
+                                    .catch(() => showToast('No se pudo procesar la imagen', 'error'));
                                 }
                               }}
                             />
@@ -10390,7 +10508,7 @@ export default function App() {
 
               <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-none">
                 {paymentHistoryLoading ? (
-                  <div className="py-8 text-center text-xs text-text-secondary font-mono animate-pulse">Cargando historial de abonos...</div>
+                  <SkeletonRows rows={3} avatar={false} />
                 ) : paymentHistoryList.length === 0 ? (
                   <div className="p-6 text-center text-xs text-text-secondary space-y-2 bg-bg rounded-2xl border border-border/60">
                     <History size={28} className="mx-auto text-text-dim opacity-50" />
@@ -10599,11 +10717,9 @@ export default function App() {
                                 showToast('La imagen debe ser menor a 5MB', 'error');
                                 return;
                               }
-                              const reader = new FileReader();
-                              reader.onload = (event) => {
-                                if (event.target?.result) setOnbPhoto(event.target.result as string);
-                              };
-                              reader.readAsDataURL(file);
+                              compressImageFile(file)
+                                .then(setOnbPhoto)
+                                .catch(() => showToast('No se pudo procesar la imagen', 'error'));
                             }
                           }}
                         />
@@ -11393,7 +11509,7 @@ export default function App() {
                 <div className="p-4 bg-bg border border-border rounded-3xl space-y-3.5 text-center relative overflow-hidden">
                   <div className="relative w-16 h-16 mx-auto">
                     {selectedUserForTelemetry.photoURL ? (
-                      <img src={selectedUserForTelemetry.photoURL} alt={selectedUserForTelemetry.displayName} className="w-16 h-16 rounded-full object-cover border-2 border-brand shadow-sm" />
+                      <img src={selectedUserForTelemetry.photoURL} alt={selectedUserForTelemetry.displayName} loading="lazy" decoding="async" className="w-16 h-16 rounded-full object-cover border-2 border-brand shadow-sm" />
                     ) : (
                       <div className="w-16 h-16 rounded-full bg-brand/20 text-brand text-2xl font-bold flex items-center justify-center border border-brand/30">
                         {selectedUserForTelemetry.displayName?.charAt(0) || 'U'}
@@ -11436,13 +11552,9 @@ export default function App() {
 
                 {/* Deep Telemetry Data from API */}
                 {isLoadingTelemetry ? (
-                  <div className="py-8 text-center text-text-dim space-y-3">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-brand animate-bounce [animation-delay:-0.3s]" />
-                      <span className="w-2 h-2 rounded-full bg-brand animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-2 h-2 rounded-full bg-brand animate-bounce" />
-                    </div>
-                    <p className="text-xs">Cargando métricas de telemetría...</p>
+                  <div className="space-y-3">
+                    <SkeletonCards count={2} className="grid-cols-2" />
+                    <SkeletonRows rows={4} avatar={false} />
                   </div>
                 ) : userTelemetryData ? (
                   <div className="space-y-4">
@@ -11939,6 +12051,9 @@ export default function App() {
               {/* Notifications Scroll Area */}
               <div className="flex-1 overflow-y-auto p-5 space-y-3 scrollbar-none">
                 {(() => {
+                  if (notifLoading && userNotifications.length === 0) {
+                    return <SkeletonRows rows={4} />;
+                  }
                   const filtered = userNotifications.filter(n => {
                     if (notifFilterTab === 'unread') return n.isRead === 0;
                     if (notifFilterTab === 'ai') return n.type === 'ai' || n.type === 'info';
