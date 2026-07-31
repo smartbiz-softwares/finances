@@ -2590,6 +2590,28 @@ app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
       return res.json({ success: true, message: 'Registro creado con éxito en tus transacciones' });
     }
 
+    if (actionType === 'delete_transaction') {
+      const tx = db.prepare('SELECT * FROM transactions WHERE id = ? AND userId = ?').get(req.body.transactionId, req.userId) as any;
+      if (!tx) return res.status(404).json({ error: 'La transacción ya no existe' });
+      const revert = db.transaction(() => {
+        db.prepare('DELETE FROM transactions WHERE id = ? AND userId = ?').run(tx.id, req.userId);
+        // Un gasto borrado devuelve el dinero a la cuenta; un ingreso borrado lo quita.
+        const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount);
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, tx.accountId, req.userId);
+      });
+      revert();
+      logAudit(req.userId, 'confirm_chat_delete_tx', `Transacción eliminada con confirmación: ${tx.description || tx.category} - ${tx.amount}`);
+      return res.json({ success: true, message: 'Transacción eliminada y saldo revertido correctamente' });
+    }
+
+    if (actionType === 'delete_debt') {
+      const debt = db.prepare('SELECT * FROM debts WHERE id = ? AND userId = ?').get(req.body.debtId, req.userId) as any;
+      if (!debt) return res.status(404).json({ error: 'La deuda ya no existe' });
+      db.prepare('DELETE FROM debts WHERE id = ? AND userId = ?').run(debt.id, req.userId);
+      logAudit(req.userId, 'confirm_chat_delete_debt', `Deuda eliminada con confirmación: ${debt.personOrEntity} - ${debt.amount}`);
+      return res.json({ success: true, message: 'Registro de deuda/préstamo eliminado correctamente' });
+    }
+
     if (actionType === 'create_debt') {
       const id = randomUUID();
       const debtPerson = req.body.personOrEntity || name || 'Persona / Entidad';

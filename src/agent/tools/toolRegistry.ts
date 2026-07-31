@@ -246,13 +246,17 @@ export class ToolRegistry {
       }
     });
 
-    // 4d. Borrado de movimientos. Revierte el efecto en el saldo de la cuenta.
+    // 4d. Borrado de movimientos con CONFIRMACIÓN del usuario: la herramienta
+    // no borra nada; valida el objetivo y devuelve el bloque de acción que el
+    // modelo debe incluir al final de su respuesta. El frontend lo pinta como
+    // widget con botones Confirmar/Cancelar y solo al confirmar se ejecuta el
+    // borrado real (POST /api/finance/confirm-action).
     this.registerTool({
       definition: {
         type: 'function',
         function: {
           name: 'delete_transaction',
-          description: 'Elimina una transacción del usuario y revierte su efecto en el saldo de la cuenta. Si no conoces el id, primero usa get_user_transactions para localizarla y confirma con el usuario cuál borrar.',
+          description: 'Propone eliminar una transacción del usuario (el borrado real ocurre cuando el usuario pulsa Confirmar en el widget). Si no conoces el id, primero usa get_user_transactions.',
           parameters: {
             type: 'object',
             properties: {
@@ -266,25 +270,33 @@ export class ToolRegistry {
         const tx = db.prepare('SELECT * FROM transactions WHERE id = ? AND userId = ?').get(args.transactionId, userId) as any;
         if (!tx) return { success: false, error: 'Transacción no encontrada. Usa get_user_transactions para obtener el id correcto.' };
 
-        const revert = db.transaction(() => {
-          db.prepare('DELETE FROM transactions WHERE id = ? AND userId = ?').run(tx.id, userId);
-          // Revertir: un gasto borrado devuelve el dinero; un ingreso borrado lo quita.
-          const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount);
-          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, tx.accountId, userId);
-        });
-        revert();
+        const acc = db.prepare('SELECT name FROM accounts WHERE id = ?').get(tx.accountId) as any;
+        const block = `<<<ACTION_START>>>${JSON.stringify({
+          actionType: 'delete_transaction',
+          transactionId: tx.id,
+          type: tx.type,
+          amount: tx.amount,
+          category: tx.category,
+          description: `Eliminar: ${tx.description || tx.category} (${tx.type === 'income' ? 'ingreso' : 'gasto'} de ${tx.amount})`,
+          accountName: acc?.name || 'Cuenta'
+        })}<<<ACTION_END>>>`;
 
-        return { success: true, deleted: { id: tx.id, type: tx.type, amount: tx.amount, category: tx.category, description: tx.description }, balanceReverted: true };
+        return {
+          success: true,
+          requiresConfirmation: true,
+          pendingDeletion: { id: tx.id, type: tx.type, amount: tx.amount, category: tx.category, description: tx.description },
+          instruction: `NO está borrado todavía. Incluye este bloque EXACTO al final de tu respuesta para que el usuario confirme con un botón: ${block}`
+        };
       }
     });
 
-    // 4e. Borrado de deudas/préstamos.
+    // 4e. Borrado de deudas/préstamos, también con confirmación por widget.
     this.registerTool({
       definition: {
         type: 'function',
         function: {
           name: 'delete_debt',
-          description: 'Elimina una deuda o préstamo del usuario por su id. Si no conoces el id, usa get_user_debts primero y confirma con el usuario.',
+          description: 'Propone eliminar una deuda o préstamo (el borrado real ocurre cuando el usuario pulsa Confirmar en el widget). Si no conoces el id, usa get_user_debts primero.',
           parameters: {
             type: 'object',
             properties: {
@@ -297,8 +309,21 @@ export class ToolRegistry {
       execute: async (userId, args, db) => {
         const debt = db.prepare('SELECT * FROM debts WHERE id = ? AND userId = ?').get(args.debtId, userId) as any;
         if (!debt) return { success: false, error: 'Deuda no encontrada. Usa get_user_debts para obtener el id correcto.' };
-        db.prepare('DELETE FROM debts WHERE id = ? AND userId = ?').run(debt.id, userId);
-        return { success: true, deleted: { id: debt.id, personOrEntity: debt.personOrEntity, amount: debt.amount, type: debt.type } };
+
+        const block = `<<<ACTION_START>>>${JSON.stringify({
+          actionType: 'delete_debt',
+          debtId: debt.id,
+          amount: debt.amount,
+          description: `Eliminar ${debt.type === 'receivable' ? 'préstamo a' : 'deuda con'} ${debt.personOrEntity}: ${debt.name} (${debt.amount})`,
+          accountName: debt.personOrEntity
+        })}<<<ACTION_END>>>`;
+
+        return {
+          success: true,
+          requiresConfirmation: true,
+          pendingDeletion: { id: debt.id, personOrEntity: debt.personOrEntity, amount: debt.amount, type: debt.type },
+          instruction: `NO está borrado todavía. Incluye este bloque EXACTO al final de tu respuesta para que el usuario confirme con un botón: ${block}`
+        };
       }
     });
 

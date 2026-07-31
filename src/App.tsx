@@ -7166,6 +7166,14 @@ export default function App() {
                               >
                                 <History size={18} />
                               </button>
+                              <button
+                                type="button"
+                                onClick={startLiveMode}
+                                className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-brand transition-colors cursor-pointer"
+                                title="Modo Live: habla con Hera y te responde con voz"
+                              >
+                                <Radio size={18} />
+                              </button>
                             </div>
 
                             <button
