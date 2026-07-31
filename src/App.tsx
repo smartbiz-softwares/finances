@@ -3241,8 +3241,11 @@ export default function App() {
 
   // Timeline Filter State
   const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  // Rango del mes en UTC: las transacciones se fechan con toISOString (UTC),
+  // así que el rango debe calcularse igual o los registros nocturnos caen
+  // "fuera del mes" y desaparecen del timeline aunque descuenten saldo.
+  const firstDayOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().split('T')[0];
+  const lastDayOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().split('T')[0];
   const [timelineCategories, setTimelineCategories] = useState<string[]>([]);
   const [timelineType, setTimelineType] = useState<'all' | 'expense' | 'income'>('all');
   const [timelineCategorySearch, setTimelineCategorySearch] = useState('');
@@ -3316,7 +3319,9 @@ export default function App() {
       if (cat && cat !== 'all') queryParts.push(`category=${encodeURIComponent(cat)}`);
       if (tType && tType !== 'all') queryParts.push(`type=${encodeURIComponent(tType)}`);
       if (minAmt > 0) queryParts.push(`minAmount=${minAmt}`);
-      if (maxAmt > 0 && maxAmt < 5000) queryParts.push(`maxAmount=${maxAmt}`);
+      // El deslizador en su tope (1000) significa "Sin Límite": no se envía
+      // el filtro o cualquier movimiento de más de 1000 desaparecería.
+      if (maxAmt > 0 && maxAmt < 1000) queryParts.push(`maxAmount=${maxAmt}`);
 
       const queryStr = queryParts.length ? `?${queryParts.join('&')}` : '';
 
@@ -8077,28 +8082,28 @@ export default function App() {
                       {[
                         {
                           title: 'Aumentar Reserva de Ahorro',
-                          impact: '+6 pts en Score',
+                          impact: '+6 pts',
                           desc: 'Destinar un porcentaje constante de tus ingresos al fondo de reserva eleva tu estabilidad financiera.',
                           actionText: 'Ver Metas de Ahorro',
                           actionTab: 'goals'
                         },
                         {
                           title: 'Optimización de Deudas',
-                          impact: '+8 pts en Score',
+                          impact: '+8 pts',
                           desc: 'Mantener un control al día de tus deudas pendientes protegerá tu puntuación en el score Hera.',
                           actionText: 'Gestor de Deudas',
                           actionTab: 'debts'
                         },
                         {
                           title: 'Colchón de Liquidez en Cuentas',
-                          impact: '+5 pts en Score',
+                          impact: '+5 pts',
                           desc: 'Mantener un balance de seguridad de al menos 1.000 € en tus cuentas activas protegerá tu score ante imprevistos de caja.',
                           actionText: 'Ver Mis Cuentas',
                           actionTab: 'accounts'
                         },
                         {
                           title: 'Consistencia de Transacciones',
-                          impact: 'Registro Frecuente',
+                          impact: '+4 pts',
                           desc: 'Registrar tus movimientos diarios por voz o chat mantiene las recomendaciones de Hera AI 100% precisas y actualizadas.',
                           actionText: 'Dictar por Voz',
                           actionAction: () => setShowAddModal(true)
