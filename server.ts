@@ -1753,10 +1753,31 @@ app.post('/api/transcribe', authMiddleware, async (req: any, res) => {
 
     let transcribedText = '';
 
+    // Whisper.cpp solo decodifica WAV PCM. Si llega otro formato (cliente
+    // antiguo, app externa) se convierte con ffmpeg si está disponible; si no,
+    // se sigue con los respaldos en la nube, que sí aceptan WebM/Opus.
+    let whisperBuffer = buffer;
+    const isWav = buffer.length > 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WAVE';
+    if (!isWav) {
+      try {
+        const { execFileSync } = await import('child_process');
+        const inFile = path.join('/tmp', `hera-stt-${randomUUID()}`);
+        const outFile = `${inFile}.wav`;
+        fs.writeFileSync(inFile, buffer);
+        execFileSync('ffmpeg', ['-y', '-i', inFile, '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', outFile], { stdio: 'ignore', timeout: 20000 });
+        whisperBuffer = fs.readFileSync(outFile);
+        fs.unlink(inFile, () => { });
+        fs.unlink(outFile, () => { });
+        console.log('[transcribe] Audio convertido a WAV 16k con ffmpeg');
+      } catch {
+        console.warn('[transcribe] Audio no es WAV y ffmpeg no está disponible: Whisper local lo rechazará.');
+      }
+    }
+
     // 1. Intentar servidor Whisper.cpp local (WHISPER_URL) antes que cualquier nube.
     try {
       const formData = new FormData();
-      const blob = new Blob([buffer], { type: mimeType });
+      const blob = new Blob([whisperBuffer], { type: 'audio/wav' });
       formData.append('file', blob, 'recording.wav');
       formData.append('language', req.body?.lang === 'en' ? 'en' : 'es');
       formData.append('response_format', 'json');

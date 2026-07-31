@@ -685,6 +685,70 @@ function compressImageFile(file: File, maxSize = 256, quality = 0.82): Promise<s
 }
 
 /**
+ * Convierte la grabación del navegador (WebM/Opus en Chrome, MP4 en Safari)
+ * a WAV PCM 16 bits mono a 16 kHz, que es lo único que whisper.cpp sabe leer.
+ * Sin esto el servidor recibía un WebM etiquetado como "audio/wav" y Whisper
+ * respondía "failed to decode audio data from memory buffer".
+ * Además reduce mucho el tamaño del envío frente al audio original.
+ */
+async function blobToWav16kBase64(blob: Blob): Promise<string> {
+  const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+  const ctx = new AudioContextClass();
+  try {
+    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+
+    // Mezcla a mono y remuestrea a 16 kHz con OfflineAudioContext.
+    const targetRate = 16000;
+    const frames = Math.ceil(decoded.duration * targetRate);
+    const offline = new OfflineAudioContext(1, Math.max(1, frames), targetRate);
+    const src = offline.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offline.destination);
+    src.start();
+    const rendered = await offline.startRendering();
+    const samples = rendered.getChannelData(0);
+
+    // Cabecera WAV de 44 bytes + PCM 16 bits little-endian.
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeStr = (offset: number, s: string) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+    };
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true);          // tamaño del bloque fmt
+    view.setUint16(20, 1, true);           // PCM
+    view.setUint16(22, 1, true);           // mono
+    view.setUint32(24, targetRate, true);
+    view.setUint32(28, targetRate * 2, true); // byte rate
+    view.setUint16(32, 2, true);           // block align
+    view.setUint16(34, 16, true);          // bits por muestra
+    writeStr(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      offset += 2;
+    }
+
+    // A base64 sin desbordar la pila con audios largos.
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return `data:audio/wav;base64,${btoa(binary)}`;
+  } finally {
+    try { await ctx.close(); } catch { }
+  }
+}
+
+/**
  * Placeholder de carga. Bloque neutro con pulso sutil que respeta el tema;
  * se compone por secciones (SkeletonList, SkeletonCards, SkeletonRows).
  */
@@ -3674,14 +3738,10 @@ export default function App() {
         }
         setLiveStateBoth('thinking');
         try {
-          const blob = new Blob(liveChunksRef.current, { type: 'audio/wav' });
-          const base64 = await new Promise<string>((resolve, reject) => {
-            const rd = new FileReader();
-            rd.onloadend = () => resolve(rd.result as string);
-            rd.onerror = reject;
-            rd.readAsDataURL(blob);
-          });
-          const tr = await api('/transcribe', { method: 'POST', body: JSON.stringify({ audio: base64 }) });
+          // El navegador graba WebM/Opus: se convierte a WAV PCM 16k para Whisper.
+          const blob = new Blob(liveChunksRef.current, { type: liveRecorderRef.current?.mimeType || 'audio/webm' });
+          const base64 = await blobToWav16kBase64(blob);
+          const tr = await api('/transcribe', { method: 'POST', body: JSON.stringify({ audio: base64, lang: liveLang() }) });
           const heard = (tr.text || '').trim();
           if (!heard) {
             if (liveActiveRef.current) startLiveListening();
@@ -4042,11 +4102,19 @@ export default function App() {
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        const reader = new FileReader();
-        reader.readAsDataURL(audioBlob);
-        reader.onloadend = async () => {
-          const base64Audio = reader.result as string;
+        // WebM/Opus del navegador → WAV PCM 16k, el único formato que
+        // whisper.cpp puede decodificar.
+        const audioBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current?.mimeType || 'audio/webm' });
+        (async () => {
+          let base64Audio: string;
+          try {
+            base64Audio = await blobToWav16kBase64(audioBlob);
+          } catch {
+            showToast('No se pudo procesar el audio grabado', 'error');
+            setChatLoading(false);
+            setIsAiParsingAudio(false);
+            return;
+          }
           try {
             if (showAddModal) {
               setIsAiParsingAudio(true);
@@ -4092,7 +4160,7 @@ export default function App() {
             setChatLoading(false);
             setIsAiParsingAudio(false);
           }
-        };
+        })();
       };
 
       recorder.start();
