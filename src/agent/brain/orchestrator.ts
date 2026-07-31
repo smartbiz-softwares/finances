@@ -105,7 +105,12 @@ ${behaviorWarning ? `ALERTA PREVENTIVA RELEVANTE:\n${behaviorWarning}\n` : ''}
 REGLAS EJECUTIVAS:
 - No utilices cuadrículas o símbolos de bloques ASCII (ej. ▰▰▰ o ████).
 - Proporciona siempre análisis accionables, sobrios y bien estructurados.
-- Mantén el tono espejo indicado en las instrucciones de mimetismo.`;
+- Mantén el tono espejo indicado en las instrucciones de mimetismo.
+
+REGLAS DE HERRAMIENTAS (OBLIGATORIAS):
+- Para registrar, modificar o consultar datos reales del usuario DEBES invocar la herramienta correspondiente (create_transaction, etc.). Nunca simules el resultado.
+- PROHIBIDO afirmar que un movimiento quedó "registrado", inventar IDs de transacción o mostrar resúmenes de escrituras si en este turno no ejecutaste la herramienta y recibiste success:true. Si no la ejecutaste, dilo y ejecútala.
+- Cada movimiento se registra UNA sola vez: no repitas la misma llamada con los mismos datos.`;
 
     // Historial de conversación (Short Memory)
     const recentHistory = this.db.prepare('SELECT role, content FROM chat_messages WHERE userId = ? ORDER BY createdAt DESC LIMIT 10').all(userId).reverse() as any[];
@@ -122,6 +127,8 @@ REGLAS EJECUTIVAS:
     let finalReplyText = '';
     let iterations = 0;
     const maxIterations = 5;
+    // Firmas de escrituras ya ejecutadas en ESTA consulta (anti-duplicados).
+    const executedWriteCalls = new Set<string>();
 
     // --- CAPA 2: REASONER / TOOL CALLING LOOP ---
     while (iterations < maxIterations) {
@@ -179,6 +186,24 @@ REGLAS EJECUTIVAS:
           for (const toolCall of choiceMessage.tool_calls) {
             const toolName = toolCall.function.name;
             const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
+
+            // Guardarraíl contra duplicados: si el modelo pide DOS VECES la
+            // misma escritura con los mismos argumentos en una misma consulta
+            // (visto en producción: doble create_transaction = saldo doblado),
+            // la segunda no se ejecuta.
+            const callSignature = `${toolName}:${JSON.stringify(toolArgs)}`;
+            const isWriteTool = ['create_transaction', 'send_user_notification'].includes(toolName);
+            if (isWriteTool && executedWriteCalls.has(callSignature)) {
+              console.warn(`[AgentOrchestrator] Tool duplicada bloqueada: ${toolName} con argumentos idénticos`);
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: JSON.stringify({ success: false, skipped: true, reason: 'Operación duplicada: esta misma escritura ya se ejecutó en esta consulta. No repetir.' })
+              });
+              continue;
+            }
+            if (isWriteTool) executedWriteCalls.add(callSignature);
+
             toolsUsed.push(toolName);
 
             console.log(`[AgentOrchestrator] Ejecutando tool: ${toolName}`);

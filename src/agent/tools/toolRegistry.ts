@@ -181,12 +181,22 @@ export class ToolRegistry {
         const date = new Date().toISOString().split('T')[0];
         const { type, amount, category, description } = args;
 
-        db.prepare(`
-          INSERT INTO transactions (id, userId, type, amount, category, description, date, createdAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, userId, type, amount, category || 'General', description || '', date, new Date().toISOString());
+        // Mismo contrato que POST /api/finance/transactions: la tabla exige
+        // accountId y el saldo de la cuenta debe reflejar el movimiento.
+        const account = db.prepare('SELECT id, name FROM accounts WHERE userId = ? LIMIT 1').get(userId) as any;
+        if (!account) {
+          return { success: false, error: 'El usuario no tiene ninguna cuenta creada. Pídele que cree primero una cuenta (efectivo, banco o tarjeta) para poder registrar el movimiento.' };
+        }
 
-        return { success: true, transactionId: id, amount, type, category };
+        db.prepare(`
+          INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, userId, account.id, type, amount, category || 'General', description || '', date);
+
+        const delta = type === 'income' ? Number(amount) : -Number(amount);
+        db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, account.id, userId);
+
+        return { success: true, transactionId: id, amount, type, category, account: account.name };
       }
     });
 
