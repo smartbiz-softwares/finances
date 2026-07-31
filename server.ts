@@ -1,3 +1,6 @@
+// Carga .env ANTES de cualquier otro import: sin esto process.env.STRIPE_SECRET_KEY
+// y las credenciales de Twilio llegan vacías y las integraciones quedan mudas.
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
@@ -16,6 +19,9 @@ if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
 
 const app = express();
 app.use(cors());
+// El webhook de Stripe necesita el cuerpo crudo para poder validar la firma HMAC.
+// Debe montarse ANTES de express.json(), o el body llega ya parseado y la firma no cuadra.
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -3179,302 +3185,429 @@ app.get('/api/user/subscription', authMiddleware, (req: any, res) => {
 
 // --- Real Stripe Payment REST API Integration ---
 
-async function createStripeCheckoutSession(params: {
-  userId: string;
-  amountUSD: number;
-  planName: string;
-  planId: string;
-  frequency: string;
-  appUrl: string;
-}): Promise<{ id: string; url: string }> {
+/**
+ * Registro de pagos ya aplicados. La clave primaria es el id de la sesión de
+ * Checkout, así que da igual que el pago llegue por webhook y por la vuelta del
+ * usuario a `success_url`: solo se acreditan tokens una vez.
+ */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS stripe_payments (
+    sessionId TEXT PRIMARY KEY,
+    userId TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    planId TEXT,
+    frequency TEXT,
+    amountUSD REAL,
+    tokensGranted INTEGER,
+    source TEXT,
+    createdAt TEXT
+  );
+`);
+db.exec(`
+  CREATE TABLE IF NOT EXISTS stripe_events (
+    id TEXT PRIMARY KEY,
+    type TEXT,
+    createdAt TEXT
+  );
+`);
+
+const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || '2026-02-25.clover';
+
+/** Tokens que otorga cada importe de recarga directa. */
+const TOP_UP_TOKENS: Record<number, number> = {
+  2: 20000,
+  5: 55000,
+  15: 180000,
+  25: 320000,
+  50: 700000,
+  100: 1500000
+};
+
+function topUpTokensFor(amountUSD: number): number {
+  return TOP_UP_TOKENS[amountUSD] || Math.round(amountUSD * 10000);
+}
+
+const DEFAULT_PLANS: Record<string, any> = {
+  'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
+  'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
+  'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
+};
+
+function resolvePlan(planId: string): any {
+  const existing = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
+  if (existing) return existing;
+
+  const plan = DEFAULT_PLANS[planId] || DEFAULT_PLANS['plan-pro'];
+  try {
+    db.prepare(`
+      INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
+  } catch { }
+  return plan;
+}
+
+function planAmountUSD(plan: any, freq: string): number {
+  if (freq === 'quarterly') return plan.priceQuarterly;
+  if (freq === 'annual') return plan.priceAnnual;
+  return plan.priceMonthly;
+}
+
+/** ¿Este usuario paga desde Cuba? Entonces no va por Stripe, sino por transferencia manual. */
+function isCubaPayer(userId: string, paymentCountry: any): boolean {
+  if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
+    const cleanCountry = paymentCountry.trim().toLowerCase();
+    return cleanCountry === 'cuba' || cleanCountry === 'cu';
+  }
+  const user = db.prepare('SELECT phone FROM users WHERE id = ?').get(userId) as any;
+  const cleanPhone = (user?.phone || '').replace(/[^0-9+]/g, '');
+  return cleanPhone.startsWith('+53') || cleanPhone.startsWith('53');
+}
+
+async function stripeAPI(path: string, init?: { method?: string; body?: URLSearchParams }): Promise<any> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) throw new Error('STRIPE_SECRET_KEY no configurada');
 
-  const url = 'https://api.stripe.com/v1/checkout/sessions';
+  const res = await fetch(`https://api.stripe.com/v1${path}`, {
+    method: init?.method || 'GET',
+    headers: {
+      'Authorization': `Bearer ${secretKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': STRIPE_API_VERSION
+    },
+    body: init?.body ? init.body.toString() : undefined
+  });
+
+  const data = await res.json() as any;
+  if (!res.ok) {
+    console.error(`❌ [Stripe API Error] ${init?.method || 'GET'} ${path}:`, data?.error?.message || data);
+    throw new Error(data?.error?.message || 'Error al comunicarse con la API de Stripe');
+  }
+  return data;
+}
+
+async function createStripeCheckoutSession(params: {
+  userId: string;
+  amountUSD: number;
+  productName: string;
+  kind: 'subscription' | 'topup';
+  planId: string;
+  frequency: string;
+  tokens: number;
+  appUrl: string;
+  customerEmail?: string;
+}): Promise<{ id: string; url: string }> {
+  const appUrl = params.appUrl || 'http://localhost:3000';
   const bodyParams = new URLSearchParams();
 
   bodyParams.append('payment_method_types[0]', 'card');
   bodyParams.append('mode', 'payment');
   bodyParams.append('line_items[0][price_data][currency]', 'usd');
-  bodyParams.append('line_items[0][price_data][product_data][name]', params.planName);
+  bodyParams.append('line_items[0][price_data][product_data][name]', params.productName);
   bodyParams.append('line_items[0][price_data][unit_amount]', Math.round(params.amountUSD * 100).toString());
   bodyParams.append('line_items[0][quantity]', '1');
-  bodyParams.append('success_url', `${params.appUrl || 'http://localhost:3000'}/?stripe_success=true&session_id={CHECKOUT_SESSION_ID}&planId=${params.planId}&frequency=${params.frequency}`);
-  bodyParams.append('cancel_url', `${params.appUrl || 'http://localhost:3000'}/?stripe_cancel=true`);
+  bodyParams.append('success_url', `${appUrl}/?stripe_success=true&session_id={CHECKOUT_SESSION_ID}`);
+  bodyParams.append('cancel_url', `${appUrl}/?stripe_cancel=true`);
+  bodyParams.append('client_reference_id', params.userId);
   bodyParams.append('metadata[userId]', params.userId);
+  bodyParams.append('metadata[kind]', params.kind);
   bodyParams.append('metadata[planId]', params.planId);
   bodyParams.append('metadata[frequency]', params.frequency);
+  bodyParams.append('metadata[tokens]', String(params.tokens));
+  if (params.customerEmail) bodyParams.append('customer_email', params.customerEmail);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${secretKey}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Stripe-Version': process.env.STRIPE_API_VERSION || '2026-02-25.clover'
-    },
-    body: bodyParams.toString()
-  });
-
-  const data = await res.json() as any;
-  if (!res.ok) {
-    console.error('❌ [Stripe API Error]:', data);
-    throw new Error(data.error?.message || 'Error al comunicarse con la API de Stripe');
-  }
-
+  const data = await stripeAPI('/checkout/sessions', { method: 'POST', body: bodyParams });
   return { id: data.id, url: data.url };
 }
 
-// Process Stripe Payment for Plan Selection
-app.post('/api/stripe/create-checkout-session', authMiddleware, async (req: any, res) => {
-  try {
-    const { planId, frequency, paymentCountry } = req.body;
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
+/**
+ * Aplica un pago de Stripe ya cobrado. Es idempotente: la primera escritura en
+ * `stripe_payments` gana y las siguientes no acreditan nada.
+ * El importe y los tokens salen SIEMPRE de la sesión de Stripe, nunca del cliente.
+ */
+function applyStripePayment(session: any, source: 'webhook' | 'confirm'): { applied: boolean; tokensGranted: number; message: string } {
+  const sessionId = session.id;
+  const userId = session.metadata?.userId || session.client_reference_id;
+  const kind = session.metadata?.kind === 'topup' ? 'topup' : 'subscription';
+  const amountUSD = (session.amount_total || 0) / 100;
+  const now = new Date();
 
-    let isCubaUser = false;
-    if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
-      const cleanCountry = paymentCountry.trim().toLowerCase();
-      if (cleanCountry === 'cuba' || cleanCountry === 'cu') {
-        isCubaUser = true;
-      }
+  if (!userId) throw new Error('Sesión de Stripe sin userId en metadata');
+
+  const alreadyDone = db.prepare('SELECT 1 FROM stripe_payments WHERE sessionId = ?').get(sessionId);
+  if (alreadyDone) {
+    return { applied: false, tokensGranted: 0, message: 'Este pago ya había sido acreditado.' };
+  }
+
+  let tokensGranted = 0;
+  let planIdApplied: string | null = null;
+  let freqApplied: string | null = null;
+  let message = '';
+
+  if (kind === 'topup') {
+    tokensGranted = parseInt(session.metadata?.tokens || '0', 10) || topUpTokensFor(amountUSD);
+
+    const sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+    if (!sub) {
+      const defaultPlan = db.prepare('SELECT * FROM subscription_plans WHERE isRecommended = 1 LIMIT 1') .get() as any;
+      db.prepare(`
+        INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+        VALUES (?, ?, ?, 'monthly', 'active', ?, ?, ?, ?)
+      `).run(randomUUID(), userId, defaultPlan ? defaultPlan.id : 'plan-pro', tokensGranted, tokensGranted, now.toISOString(), new Date(now.getTime() + 720 * 3600000).toISOString());
     } else {
-      const userPhone = user?.phone || '';
-      const cleanPhone = userPhone.replace(/[^0-9+]/g, '');
-      if (cleanPhone.startsWith('+53') || cleanPhone.startsWith('53')) {
-        isCubaUser = true;
-      }
+      creditTokens(userId, tokensGranted);
     }
 
-    let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
-    if (!plan) {
-      const defaultPlansMap: Record<string, any> = {
-        'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
-        'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
-        'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
-      };
-      plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
-      try {
-        db.prepare(`
-          INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-        `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
-      } catch { }
+    db.prepare(`
+      INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), userId, 'top_up', tokensGranted, amountUSD, `Recarga Top Up de $${amountUSD} USD (Stripe)`, now.toISOString().split('T')[0], now.toISOString());
+
+    logAudit(userId, 'token_top_up', `Recarga Stripe de $${amountUSD} USD (+${tokensGranted} tokens) [${source}]`);
+    message = `¡Recarga de +${tokensGranted.toLocaleString()} tokens realizada!`;
+  } else {
+    const plan = resolvePlan(session.metadata?.planId || 'plan-pro');
+    const freq = normalizeFrequency(session.metadata?.frequency);
+    const cycle = BILLING_CYCLES[freq];
+    tokensGranted = (plan.tokensCount || 250000) * cycle.months;
+    planIdApplied = plan.id;
+    freqApplied = freq;
+    const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * cycle.months * 3600000);
+
+    const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
+    if (existingSub) {
+      db.prepare(`
+        UPDATE user_subscriptions
+        SET planId = ?, billingFrequency = ?, status = 'active', lastRenewalAt = ?, nextRenewalAt = ?
+        WHERE userId = ?
+      `).run(plan.id, freq, now.toISOString(), nextRenewal.toISOString(), userId);
+      creditTokens(userId, tokensGranted);
+    } else {
+      db.prepare(`
+        INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
+        VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
+      `).run(randomUUID(), userId, plan.id, freq, tokensGranted, tokensGranted, now.toISOString(), nextRenewal.toISOString());
     }
 
-    let amountUSD = plan.priceMonthly;
-    if (frequency === 'quarterly') amountUSD = plan.priceQuarterly;
-    if (frequency === 'annual') amountUSD = plan.priceAnnual;
+    db.prepare(`
+      INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(randomUUID(), userId, 'subscription_renewal', tokensGranted, amountUSD, `Pago Stripe: Suscripción ${plan.name} (${cycle.label})`, now.toISOString().split('T')[0], now.toISOString());
 
-    const appUrl = process.env.APP_URL || 'http://localhost:3000';
+    logAudit(userId, 'subscribe_plan', `Plan Stripe activado: ${plan.name} ($${amountUSD}) [${source}]`);
+    message = `¡Plan ${plan.name} activado con éxito!`;
+  }
 
-    if (process.env.STRIPE_SECRET_KEY) {
-      try {
-        const session = await createStripeCheckoutSession({
-          userId: req.userId,
-          amountUSD,
-          planName: plan.name,
-          planId: plan.id,
-          frequency: frequency || 'monthly',
-          appUrl
-        });
+  db.prepare(`
+    INSERT INTO stripe_payments (sessionId, userId, kind, planId, frequency, amountUSD, tokensGranted, source, createdAt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(sessionId, userId, kind, planIdApplied, freqApplied, amountUSD, tokensGranted, source, now.toISOString());
 
-        return res.json({
-          isCuba: isCubaUser,
-          sessionId: session.id,
-          amountUSD,
-          planName: plan.name,
-          checkoutUrl: session.url
-        });
-      } catch (stripeErr: any) {
-        console.error('⚠️ [Stripe Session Error]:', stripeErr.message);
-      }
+  return { applied: true, tokensGranted, message };
+}
+
+/**
+ * Crea la sesión de Checkout para un plan o para una recarga.
+ * Devuelve `checkoutUrl`: el frontend DEBE redirigir ahí. Ningún token se
+ * acredita en este punto — solo cuando Stripe confirma el cobro.
+ */
+async function handleCreateCheckout(req: any, res: any) {
+  try {
+    const { planId, frequency, paymentCountry, amountUSD: rawAmount } = req.body || {};
+    const userId = req.userId;
+    const isTopUp = String(planId || '').startsWith('top-up-') || String(frequency || '') === 'top-up' || (!planId && rawAmount);
+
+    let amountUSD: number;
+    let productName: string;
+    let tokens = 0;
+    let resolvedPlanId = planId || '';
+    let freq = 'monthly';
+
+    if (isTopUp) {
+      const parsed = Number(rawAmount ?? String(planId || '').replace('top-up-', ''));
+      if (!parsed || parsed <= 0) return res.status(400).json({ error: 'Monto inválido' });
+      amountUSD = parsed;
+      tokens = topUpTokensFor(parsed);
+      productName = `Recarga Top Up ($${parsed} USD)`;
+      resolvedPlanId = `top-up-${parsed}`;
+      freq = 'top-up';
+    } else {
+      const plan = resolvePlan(planId);
+      freq = normalizeFrequency(frequency);
+      amountUSD = planAmountUSD(plan, freq);
+      productName = `${plan.name} (${BILLING_CYCLES[freq].label})`;
+      resolvedPlanId = plan.id;
+      tokens = (plan.tokensCount || 250000) * BILLING_CYCLES[freq].months;
     }
 
-    const sessionId = 'cs_test_' + randomUUID();
-    res.json({
-      isCuba: isCubaUser,
-      sessionId,
-      amountUSD,
-      planName: plan.name,
-      checkoutUrl: `https://checkout.stripe.com/pay/${sessionId}`
-    });
+    // Cuba no pasa por Stripe: se resuelve por transferencia manual verificada por un admin.
+    if (isCubaPayer(userId, paymentCountry)) {
+      return res.json({
+        isCuba: true,
+        amountUSD,
+        planName: productName,
+        checkoutUrl: null
+      });
+    }
+
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(503).json({ error: 'Pasarela de pago no configurada. Contacta con soporte.' });
+    }
+
+    const user = db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as any;
+
+    try {
+      const session = await createStripeCheckoutSession({
+        userId,
+        amountUSD,
+        productName,
+        kind: isTopUp ? 'topup' : 'subscription',
+        planId: resolvedPlanId,
+        frequency: freq,
+        tokens,
+        appUrl: process.env.APP_URL || 'http://localhost:3000',
+        customerEmail: user?.email || undefined
+      });
+
+      return res.json({
+        isCuba: false,
+        sessionId: session.id,
+        amountUSD,
+        planName: productName,
+        checkoutUrl: session.url
+      });
+    } catch (stripeErr: any) {
+      console.error('⚠️ [Stripe Session Error]:', stripeErr.message);
+      // Sin URL real de Stripe no hay cobro posible: fallar en claro, nunca simular.
+      return res.status(502).json({ error: `No se pudo iniciar el pago con Stripe: ${stripeErr.message}` });
+    }
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Error procesando solicitud de pago en Stripe' });
   }
+}
+
+app.post('/api/stripe/create-checkout-session', authMiddleware, handleCreateCheckout);
+
+// Compatibilidad: la recarga rápida también crea una sesión de Checkout real.
+app.post('/api/user/top-up', authMiddleware, (req: any, res) => {
+  req.body = { ...(req.body || {}), frequency: 'top-up' };
+  return handleCreateCheckout(req, res);
 });
 
-// Confirm Stripe Payment & Activate Plan
-app.post('/api/stripe/confirm-payment', authMiddleware, (req: any, res) => {
-  const { planId, frequency } = req.body;
-  const userId = req.userId;
-  let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
-  if (!plan) {
-    const defaultPlansMap: Record<string, any> = {
-      'plan-basic': { id: 'plan-basic', name: 'Plan Básico', description: 'Ideal para usuarios ocasionales que buscan control financiero inteligente.', priceMonthly: 4.99, priceQuarterly: 12.99, priceAnnual: 44.99, tokensCount: 50000, renewIntervalHours: 720, isRecommended: 0 },
-      'plan-pro': { id: 'plan-pro', name: 'Plan Pro', description: 'Recomendado para un control total diario con análisis de IA ilimitados y alertas activas.', priceMonthly: 14.99, priceQuarterly: 39.99, priceAnnual: 129.99, tokensCount: 250000, renewIntervalHours: 720, isRecommended: 1 },
-      'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', description: 'Para empresas y emprendedores con múltiples cuentas, alto volumen de operaciones y firmas.', priceMonthly: 39.99, priceQuarterly: 109.99, priceAnnual: 349.99, tokensCount: 1000000, renewIntervalHours: 720, isRecommended: 0 }
-    };
-    plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
-    try {
-      db.prepare(`
-        INSERT OR IGNORE INTO subscription_plans (id, name, description, priceMonthly, priceQuarterly, priceAnnual, tokensCount, renewIntervalHours, isRecommended, isActive, createdAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-      `).run(plan.id, plan.name, plan.description, plan.priceMonthly, plan.priceQuarterly, plan.priceAnnual, plan.tokensCount, plan.renewIntervalHours, plan.isRecommended, new Date().toISOString());
-    } catch { }
-  }
-
-  const now = new Date();
-  const freq = normalizeFrequency(frequency);
-  const cycle = BILLING_CYCLES[freq];
-  const planTokens = (plan.tokensCount || 250000) * cycle.months;
-  const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * cycle.months * 3600000);
-  let amountUSD = plan.priceMonthly;
-  if (freq === 'quarterly') amountUSD = plan.priceQuarterly;
-  if (freq === 'annual') amountUSD = plan.priceAnnual;
-
-  const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
-  if (existingSub) {
-    db.prepare(`
-      UPDATE user_subscriptions 
-      SET planId = ?, billingFrequency = ?, status = 'active', lastRenewalAt = ?, nextRenewalAt = ?
-      WHERE userId = ?
-    `).run(plan.id, freq, now.toISOString(), nextRenewal.toISOString(), userId);
-    creditTokens(userId, planTokens);
-  } else {
-    db.prepare(`
-      INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
-      VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
-    `).run(randomUUID(), userId, plan.id, freq, planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
-  }
-
-  // Add transaction log
-  db.prepare(`
-    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(randomUUID(), userId, 'subscription_renewal', planTokens, amountUSD, `Pago Stripe: Suscripción ${plan.name} (${cycle.label})`, now.toISOString().split('T')[0], now.toISOString());
-
-  logAudit(userId, 'subscribe_plan', `Plan Stripe activado: ${plan.name} ($${amountUSD})`);
-  res.json({ success: true, message: `¡Plan ${plan.name} activado con éxito!` });
-});
-
-// Stripe Webhook Endpoint
-app.post('/api/stripe/webhook', async (req: any, res) => {
+/**
+ * Confirma el pago cuando el usuario vuelve de Stripe a `success_url`.
+ * Verifica contra la API de Stripe que la sesión existe, está pagada y
+ * pertenece a este usuario. Nunca confía en lo que manda el cliente.
+ */
+app.post('/api/stripe/confirm-payment', authMiddleware, async (req: any, res) => {
   try {
-    let event = req.body;
-    if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
-      try {
-        event = JSON.parse(req.body.toString());
-      } catch {}
+    const sessionId = req.body?.sessionId;
+    if (!sessionId || typeof sessionId !== 'string' || !sessionId.startsWith('cs_')) {
+      return res.status(400).json({ error: 'sessionId de Stripe requerido' });
     }
 
-    if (event?.type === 'checkout.session.completed') {
+    const session = await stripeAPI(`/checkout/sessions/${encodeURIComponent(sessionId)}`);
+
+    const sessionUserId = session.metadata?.userId || session.client_reference_id;
+    if (sessionUserId !== req.userId) {
+      logAudit(req.userId, 'stripe_confirm_denied', `Intento de confirmar sesión ajena: ${sessionId}`);
+      return res.status(403).json({ error: 'Esta sesión de pago no te pertenece' });
+    }
+
+    if (session.payment_status !== 'paid') {
+      return res.status(402).json({ error: `El pago no está completado (estado: ${session.payment_status})` });
+    }
+
+    const result = applyStripePayment(session, 'confirm');
+    res.json({ success: true, alreadyProcessed: !result.applied, tokensGranted: result.tokensGranted, message: result.message });
+  } catch (err: any) {
+    console.error('❌ [Stripe Confirm Error]:', err.message);
+    res.status(500).json({ error: err.message || 'Error confirmando el pago' });
+  }
+});
+
+/**
+ * Valida la firma `Stripe-Signature` (HMAC-SHA256 sobre `${t}.${payload}`).
+ * Sin esto cualquiera podría acreditarse tokens con un POST falso.
+ */
+function verifyStripeSignature(rawBody: Buffer, signatureHeader: string, secret: string, toleranceSec = 300): boolean {
+  if (!signatureHeader) return false;
+
+  let timestamp = '';
+  const signatures: string[] = [];
+  for (const part of signatureHeader.split(',')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    const key = part.slice(0, idx).trim();
+    const value = part.slice(idx + 1).trim();
+    if (key === 't') timestamp = value;
+    else if (key === 'v1') signatures.push(value);
+  }
+  if (!timestamp || signatures.length === 0) return false;
+
+  const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp));
+  if (!Number.isFinite(age) || age > toleranceSec) {
+    console.warn(`⚠️ [Stripe Webhook] Timestamp fuera de tolerancia (${age}s)`);
+    return false;
+  }
+
+  const expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody.toString('utf8')}`).digest('hex');
+  const expectedBuf = Buffer.from(expected, 'utf8');
+  return signatures.some(sig => {
+    const sigBuf = Buffer.from(sig, 'utf8');
+    return sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
+  });
+}
+
+// Stripe Webhook Endpoint (body crudo montado arriba con express.raw)
+app.post('/api/stripe/webhook', (req: any, res) => {
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('❌ [Stripe Webhook] STRIPE_WEBHOOK_SECRET no configurada: se rechazan todos los eventos.');
+    return res.status(503).send('Webhook secret no configurado');
+  }
+
+  const raw: Buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}));
+  const signature = req.headers['stripe-signature'] as string;
+
+  if (!verifyStripeSignature(raw, signature, secret)) {
+    console.error('❌ [Stripe Webhook] Firma inválida. Evento descartado.');
+    return res.status(400).send('Webhook Error: firma inválida');
+  }
+
+  let event: any;
+  try {
+    event = JSON.parse(raw.toString('utf8'));
+  } catch {
+    return res.status(400).send('Webhook Error: JSON inválido');
+  }
+
+  try {
+    // Idempotencia a nivel de evento: Stripe reintenta hasta recibir un 2xx.
+    const inserted = db.prepare('INSERT OR IGNORE INTO stripe_events (id, type, createdAt) VALUES (?, ?, ?)')
+      .run(event.id, event.type, new Date().toISOString());
+    if (inserted.changes === 0) {
+      return res.json({ received: true, duplicate: true });
+    }
+
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object;
-      const userId = session.metadata?.userId;
-      const planId = session.metadata?.planId;
-      const frequency = session.metadata?.frequency || 'monthly';
-
-      if (userId && planId) {
-        console.log(`💳 [Stripe Webhook] Pago confirmado para usuario ${userId}, plan ${planId}`);
-        let plan = db.prepare('SELECT * FROM subscription_plans WHERE id = ?').get(planId) as any;
-        if (!plan) {
-          const defaultPlansMap: Record<string, any> = {
-            'plan-basic': { id: 'plan-basic', name: 'Plan Básico', tokensCount: 50000, renewIntervalHours: 720 },
-            'plan-pro': { id: 'plan-pro', name: 'Plan Pro', tokensCount: 250000, renewIntervalHours: 720 },
-            'plan-enterprise': { id: 'plan-enterprise', name: 'Plan Empresarial', tokensCount: 1000000, renewIntervalHours: 720 }
-          };
-          plan = defaultPlansMap[planId] || defaultPlansMap['plan-pro'];
-        }
-
-        const now = new Date();
-        const freq = normalizeFrequency(frequency);
-        const cycle = BILLING_CYCLES[freq];
-        const planTokens = (plan.tokensCount || 250000) * cycle.months;
-        const nextRenewal = new Date(now.getTime() + (plan.renewIntervalHours || 720) * cycle.months * 3600000);
-        const amountUSD = (session.amount_total || 0) / 100;
-
-        const existingSub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(userId) as any;
-        if (existingSub) {
-          db.prepare(`
-            UPDATE user_subscriptions 
-            SET planId = ?, billingFrequency = ?, status = 'active', lastRenewalAt = ?, nextRenewalAt = ?
-            WHERE userId = ?
-          `).run(plan.id, freq, now.toISOString(), nextRenewal.toISOString(), userId);
-          creditTokens(userId, planTokens);
-        } else {
-          db.prepare(`
-            INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
-            VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)
-          `).run(randomUUID(), userId, plan.id, freq, planTokens, planTokens, now.toISOString(), nextRenewal.toISOString());
-        }
-
-        db.prepare(`
-          INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(randomUUID(), userId, 'subscription_renewal', planTokens, amountUSD, `Webhook Stripe: Suscripción ${plan.name} (${cycle.label})`, now.toISOString().split('T')[0], now.toISOString());
-
-        logAudit(userId, 'stripe_webhook_payment', `Pago Webhook Stripe: ${plan.name} ($${amountUSD})`);
+      if (session.payment_status === 'paid') {
+        const result = applyStripePayment(session, 'webhook');
+        console.log(`💳 [Stripe Webhook] ${event.type} sesión ${session.id} — ${result.applied ? `acreditado (+${result.tokensGranted} tokens)` : 'ya estaba acreditado'}`);
+      } else {
+        console.log(`ℹ️ [Stripe Webhook] Sesión ${session.id} aún sin pagar (${session.payment_status}). Se ignora.`);
       }
     }
 
     res.json({ received: true });
   } catch (err: any) {
     console.error('❌ [Stripe Webhook Error]:', err);
-    res.status(400).send(`Webhook Error: ${err.message}`);
+    // Devolver 500 hace que Stripe reintente; el registro de evento se borra
+    // para que el reintento pueda procesarse de nuevo.
+    try { db.prepare('DELETE FROM stripe_events WHERE id = ?').run(event?.id); } catch { }
+    res.status(500).send(`Webhook Error: ${err.message}`);
   }
-});
-
-// Top Up Token Purchase Endpoint ($2, $5, $15, $25, $50, $100)
-app.post('/api/user/top-up', authMiddleware, (req: any, res) => {
-  const { amountUSD, paymentCountry } = req.body;
-  const numAmount = Number(amountUSD);
-  if (!numAmount || numAmount <= 0) return res.status(400).json({ error: 'Monto inválido' });
-
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId) as any;
-
-  let isCubaUser = false;
-  if (paymentCountry && typeof paymentCountry === 'string' && paymentCountry.trim() !== '') {
-    const cleanCountry = paymentCountry.trim().toLowerCase();
-    if (cleanCountry === 'cuba' || cleanCountry === 'cu') {
-      isCubaUser = true;
-    }
-  } else {
-    const userPhone = user?.phone || '';
-    const cleanPhone = userPhone.replace(/[^0-9+]/g, '');
-    if (cleanPhone.startsWith('+53') || cleanPhone.startsWith('53')) {
-      isCubaUser = true;
-    }
-  }
-
-  const tokenMap: Record<number, number> = {
-    2: 20000,
-    5: 55000,
-    15: 180000,
-    25: 320000,
-    50: 700000,
-    100: 1500000
-  };
-  const tokensToGrant = tokenMap[numAmount] || Math.round(numAmount * 10000);
-
-  // Ensure user subscription record exists
-  let sub = db.prepare('SELECT * FROM user_subscriptions WHERE userId = ?').get(req.userId) as any;
-  if (!sub) {
-    const defaultPlan = db.prepare('SELECT * FROM subscription_plans WHERE isRecommended = 1 LIMIT 1').get() as any;
-    const planId = defaultPlan ? defaultPlan.id : 'plan-pro';
-    const now = new Date();
-    db.prepare(`
-      INSERT INTO user_subscriptions (id, userId, planId, billingFrequency, status, tokenBalance, tokensTotalPlan, lastRenewalAt, nextRenewalAt)
-      VALUES (?, ?, ?, 'monthly', 'active', ?, ?, ?, ?)
-    `).run(randomUUID(), req.userId, planId, tokensToGrant, tokensToGrant, now.toISOString(), new Date(now.getTime() + 720 * 3600000).toISOString());
-  } else {
-    db.prepare('UPDATE user_subscriptions SET tokenBalance = tokenBalance + ? WHERE userId = ?').run(tokensToGrant, req.userId);
-  }
-
-  db.prepare(`
-    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(randomUUID(), req.userId, 'top_up', tokensToGrant, numAmount, `Recarga Top Up de $${numAmount} USD`, new Date().toISOString().split('T')[0], new Date().toISOString());
-
-  logAudit(req.userId, 'token_top_up', `Recarga de $${numAmount} USD (+${tokensToGrant} tokens)`);
-  res.json({ success: true, tokensGranted: tokensToGrant, message: `¡Recarga de +${tokensToGrant.toLocaleString()} tokens realizada!` });
 });
 
 // Get Card Payment Transactions History (Plans & Token Purchases)

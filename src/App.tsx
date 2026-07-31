@@ -1959,6 +1959,47 @@ export default function App() {
     fetchUserNotifications();
   }, [fetchSubscriptionPlans, fetchUserSubscription, fetchTokenHistory, fetchUserNotifications]);
 
+  // Vuelta desde Stripe Checkout: confirmamos el pago contra el backend, que a
+  // su vez lo verifica contra la API de Stripe antes de acreditar nada.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cleanUrl = () => window.history.replaceState({}, '', window.location.pathname);
+
+    if (params.get('stripe_cancel') === 'true') {
+      cleanUrl();
+      try { sessionStorage.removeItem('hera_pending_checkout'); } catch { }
+      showToast('Pago cancelado. No se ha realizado ningún cobro.', 'info');
+      return;
+    }
+
+    if (params.get('stripe_success') !== 'true') return;
+
+    const sessionId = params.get('session_id');
+    cleanUrl();
+    if (!sessionId) return;
+
+    (async () => {
+      try {
+        const res = await api('/api/stripe/confirm-payment', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId })
+        });
+        showToast(res.message || '¡Pago procesado con éxito!', 'success');
+        setShowStripeModal(false);
+        setShowUpgradeModal(false);
+        fetchUserSubscription();
+        fetchTokenHistory(1);
+      } catch (err: any) {
+        // El webhook es la fuente de verdad: si esto falla, el pago puede
+        // acreditarse igualmente unos segundos después.
+        showToast(err.message || 'No pudimos confirmar el pago al instante. Si se cobró, se acreditará en unos segundos.', 'error');
+        fetchUserSubscription();
+      } finally {
+        try { sessionStorage.removeItem('hera_pending_checkout'); } catch { }
+      }
+    })();
+  }, [fetchUserSubscription, fetchTokenHistory]);
+
   // Handle Plan Purchase / Upgrade Click
   const handleInitiatePlanPurchase = async (plan: any) => {
     try {
@@ -1971,7 +2012,7 @@ export default function App() {
         })
       });
 
-      setSelectedPlanForCheckout({ ...plan, frequency: billingFrequency, amountUSD: res.amountUSD, isTopUp: false });
+      setSelectedPlanForCheckout({ ...plan, frequency: billingFrequency, amountUSD: res.amountUSD, isTopUp: false, checkoutUrl: res.checkoutUrl });
       if (res.isCuba || paymentDetails?.country?.toLowerCase() === 'cuba' || paymentDetails?.country?.toLowerCase() === 'cu' || profile?.phone?.startsWith('+53') || user?.phone?.startsWith('+53') || profile?.phone?.startsWith('53') || user?.phone?.startsWith('53')) {
         setCheckoutPaymentMethod('cuba');
       } else {
@@ -2134,43 +2175,51 @@ export default function App() {
     }
   };
 
-  // Confirm Payment via Stripe or Top-Up
+  // Redirige a Stripe Checkout. El cobro y la acreditación de tokens ocurren
+  // en Stripe + backend; aquí no se activa nada por cuenta propia.
   const handleConfirmStripePayment = async () => {
     if (!selectedPlanForCheckout) return;
     setIsProcessingStripe(true);
     try {
-      if (selectedPlanForCheckout.isTopUp) {
-        const res = await api('/api/user/top-up', {
+      let checkoutUrl = selectedPlanForCheckout.checkoutUrl;
+
+      // Si la sesión no se creó al abrir el modal (o caducó), se pide una nueva.
+      if (!checkoutUrl) {
+        const res = await api('/api/stripe/create-checkout-session', {
           method: 'POST',
           body: JSON.stringify({
+            planId: selectedPlanForCheckout.id,
+            frequency: selectedPlanForCheckout.frequency,
             amountUSD: selectedPlanForCheckout.amountUSD,
             paymentCountry: paymentDetails?.country || ''
           })
         });
+
         if (res.isCuba) {
           setShowStripeModal(false);
           setCubaModalMessage(res.message);
           setShowCubaDevModal(true);
           return;
         }
-        showToast(`¡Recarga realizada con éxito! +${res.tokensGranted?.toLocaleString()} tokens`, 'success');
-      } else {
-        const res = await api('/api/stripe/confirm-payment', {
-          method: 'POST',
-          body: JSON.stringify({
-            planId: selectedPlanForCheckout.id,
-            frequency: selectedPlanForCheckout.frequency
-          })
-        });
-        showToast(res.message || '¡Pago procesado con éxito!', 'success');
+        checkoutUrl = res.checkoutUrl;
       }
 
-      setShowStripeModal(false);
-      setShowUpgradeModal(false);
-      fetchUserSubscription();
-      fetchTokenHistory(1);
+      if (!checkoutUrl) {
+        showToast('No se pudo iniciar el pago con Stripe. Inténtalo de nuevo.', 'error');
+        return;
+      }
+
+      // Guardamos qué se estaba comprando para poder informar al volver.
+      try {
+        sessionStorage.setItem('hera_pending_checkout', JSON.stringify({
+          name: selectedPlanForCheckout.name,
+          isTopUp: !!selectedPlanForCheckout.isTopUp
+        }));
+      } catch { }
+
+      window.location.href = checkoutUrl;
     } catch (err: any) {
-      showToast(err.message || 'Error al confirmar el pago', 'error');
+      showToast(err.message || 'Error al iniciar el pago', 'error');
     } finally {
       setIsProcessingStripe(false);
     }
@@ -2203,7 +2252,8 @@ export default function App() {
         frequency: 'top-up',
         tokensCount: tokenMap[amountUSD] || Math.round(amountUSD * 10000),
         amountUSD: amountUSD,
-        isTopUp: true
+        isTopUp: true,
+        checkoutUrl: res.checkoutUrl
       });
 
       if (res.isCuba || paymentDetails?.country?.toLowerCase() === 'cuba' || paymentDetails?.country?.toLowerCase() === 'cu' || profile?.phone?.startsWith('+53') || user?.phone?.startsWith('+53') || profile?.phone?.startsWith('53') || user?.phone?.startsWith('53')) {
@@ -2295,7 +2345,10 @@ export default function App() {
   }>(() => {
     try {
       const saved = localStorage.getItem('hera_payment_details');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        // Se descartan datos de tarjeta guardados por versiones anteriores.
+        return { ...JSON.parse(saved), cardNumber: '', cardExp: '', cardCvc: '' };
+      }
     } catch { }
 
     const userPhone = (localStorage.getItem('hera_user_phone') || '+5359079144').trim();
@@ -2344,18 +2397,6 @@ export default function App() {
 
   const handleSavePaymentDetails = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!paymentDetails.cardNumber.trim()) {
-      showToast('Ingresa el número de tarjeta', 'error');
-      return;
-    }
-    if (!paymentDetails.cardExp.trim()) {
-      showToast('Ingresa la fecha de expiración', 'error');
-      return;
-    }
-    if (!paymentDetails.cardCvc.trim()) {
-      showToast('Ingresa el código CVC / CSV', 'error');
-      return;
-    }
     if (!paymentDetails.firstName.trim() || !paymentDetails.lastName.trim()) {
       showToast('Ingresa tu nombre y apellidos', 'error');
       return;
@@ -2365,8 +2406,10 @@ export default function App() {
       return;
     }
 
-    localStorage.setItem('hera_payment_details', JSON.stringify(paymentDetails));
-    showToast('Método de pago e información de facturación guardados correctamente', 'success');
+    // Nunca se persisten datos de tarjeta: los recoge Stripe Checkout (PCI).
+    const { cardNumber, cardExp, cardCvc, ...billingOnly } = paymentDetails;
+    localStorage.setItem('hera_payment_details', JSON.stringify({ ...billingOnly, cardNumber: '', cardExp: '', cardCvc: '' }));
+    showToast('Información de facturación guardada correctamente', 'success');
     setSettingsSubView('main');
   };
 
