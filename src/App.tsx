@@ -7892,11 +7892,11 @@ export default function App() {
                                       </span>
                                     </div>
 
-                                    {/* Eliminar movimiento (pide confirmación) */}
+                                    {/* Eliminar movimiento (siempre visible) */}
                                     <button
                                       type="button"
                                       onClick={() => setTxToDelete(item)}
-                                      className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-colors duration-200 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 active:scale-[0.95]"
+                                      className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-colors duration-200 cursor-pointer active:scale-[0.95]"
                                       title="Eliminar movimiento"
                                       aria-label={`Eliminar ${item.description || item.category}`}
                                     >

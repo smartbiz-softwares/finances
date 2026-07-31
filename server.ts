@@ -98,6 +98,7 @@ try { db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'standard'"); } ca
 // Paso del onboarding: 0=perfil, 1=cuenta, 2=primer movimiento, 3=completado.
 try { db.exec("ALTER TABLE users ADD COLUMN onboardingStep INTEGER DEFAULT 0"); } catch { }
 
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS accounts (
     id TEXT PRIMARY KEY,
@@ -288,6 +289,15 @@ try { db.exec(`ALTER TABLE token_transactions ADD COLUMN model TEXT;`); } catch 
 // Deuda: consumo que excedió el saldo disponible. Sin esto el descubierto
 // se perdía silenciosamente al recortar el saldo a cero.
 try { db.exec(`ALTER TABLE user_subscriptions ADD COLUMN tokenDebt INTEGER DEFAULT 0;`); } catch { }
+
+// Marca de hora real del registro (migración: la tabla ya existe aquí).
+// Sin ella el timeline solo podía ordenar por `date` (YYYY-MM-DD) y desempatar
+// por un id aleatorio: dentro del mismo día el orden salía arbitrario en vez
+// de "lo más nuevo primero".
+try { db.exec("ALTER TABLE transactions ADD COLUMN createdAt TEXT"); } catch { }
+// Los movimientos anteriores a esta columna se ordenan por su fecha.
+try { db.exec("UPDATE transactions SET createdAt = date || 'T12:00:00.000Z' WHERE createdAt IS NULL OR createdAt = ''"); } catch { }
+try { db.exec("CREATE INDEX IF NOT EXISTS idx_tx_userId_created ON transactions(userId, createdAt)"); } catch { }
 
 // Try adding default AI provider if empty
 const providerCount = (db.prepare('SELECT COUNT(*) as count FROM ai_providers').get() as any).count;
@@ -845,8 +855,8 @@ function getDBTransactions(userId: string, limit = 20) {
     SELECT t.*, a.name as accountName 
     FROM transactions t 
     LEFT JOIN accounts a ON t.accountId = a.id 
-    WHERE t.userId = ? 
-    ORDER BY t.date DESC 
+    WHERE t.userId = ?
+    ORDER BY COALESCE(t.createdAt, t.date) DESC, t.rowid DESC
     LIMIT ?
   `).all(userId, limit);
 }
@@ -1352,8 +1362,8 @@ app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
   const id = randomUUID();
   const txDate = date || new Date().toISOString().split('T')[0];
 
-  db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, receiptUrl) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    id, req.userId, targetAccountId, type, amount, category, description || '', txDate, receiptUrl || null
+  db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, receiptUrl, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    id, req.userId, targetAccountId, type, amount, category, description || '', txDate, receiptUrl || null, new Date().toISOString()
   );
 
   // Update account balance
@@ -1427,7 +1437,9 @@ app.get('/api/finance/timeline', authMiddleware, (req: any, res) => {
     params.push(Number(maxAmount));
   }
 
-  sql += ` ORDER BY t.date DESC, t.id DESC LIMIT 200`;
+  // Lo más nuevo primero: por marca de hora real y, a igualdad, por orden de
+  // inserción (rowid). El id es un UUID aleatorio y no sirve para desempatar.
+  sql += ` ORDER BY t.date DESC, COALESCE(t.createdAt, t.date) DESC, t.rowid DESC LIMIT 200`;
 
   const txs = db.prepare(sql).all(...params) as any[];
 
@@ -2669,8 +2681,8 @@ app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
       const id = randomUUID();
       const txDate = new Date().toISOString().split('T')[0];
 
-      db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
-        id, req.userId, targetAccountId, type || 'expense', Number(amount) || 0, category || 'General', description || category || 'Transacción desde Chat', txDate
+      db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        id, req.userId, targetAccountId, type || 'expense', Number(amount) || 0, category || 'General', description || category || 'Transacción desde Chat', txDate, new Date().toISOString()
       );
 
       const delta = (type || 'expense') === 'income' ? Number(amount) : -Number(amount);

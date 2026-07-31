@@ -189,9 +189,9 @@ export class ToolRegistry {
         }
 
         db.prepare(`
-          INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(id, userId, account.id, type, amount, category || 'General', description || '', date);
+          INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, createdAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(id, userId, account.id, type, amount, category || 'General', description || '', date, new Date().toISOString());
 
         const delta = type === 'income' ? Number(amount) : -Number(amount);
         db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, account.id, userId);
