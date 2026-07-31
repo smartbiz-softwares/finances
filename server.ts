@@ -3874,6 +3874,60 @@ app.get('*', (req, res, next) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
+// --- Modo Live: síntesis de voz (TTS) con Piper local ---
+// Whisper transcribe (voz -> texto); Piper hace el camino inverso con voces
+// neuronales locales. Se configura con PIPER_BIN, PIPER_VOICE_ES y
+// PIPER_VOICE_EN en el .env. Sin Piper instalado responde 501 y el frontend
+// cae a la voz del navegador (speechSynthesis).
+
+/** Idioma hablado según el prefijo telefónico del usuario. */
+function langFromPhone(phone: string): 'es' | 'en' {
+  const p = (phone || '').replace(/[^0-9+]/g, '');
+  // Prefijos hispanohablantes más comunes de la base de usuarios.
+  const spanish = ['+53', '+34', '+52', '+54', '+57', '+56', '+58', '+51', '+593', '+591', '+595', '+598', '+506', '+507', '+503', '+502', '+504', '+505', '+809', '+829'];
+  if (spanish.some(pre => p.startsWith(pre))) return 'es';
+  if (p.startsWith('+1') || p.startsWith('+44')) return 'en';
+  return 'es';
+}
+
+app.post('/api/tts', authMiddleware, async (req: any, res) => {
+  try {
+    const text = String(req.body?.text || '').slice(0, 1200);
+    if (!text.trim()) return res.status(400).json({ error: 'Texto requerido' });
+
+    const user = db.prepare('SELECT phone FROM users WHERE id = ?').get(req.userId) as any;
+    const lang: 'es' | 'en' = (req.body?.lang === 'en' || req.body?.lang === 'es') ? req.body.lang : langFromPhone(user?.phone || '');
+
+    const piperBin = process.env.PIPER_BIN;
+    const voice = lang === 'en' ? process.env.PIPER_VOICE_EN : process.env.PIPER_VOICE_ES;
+    if (!piperBin || !voice || !fs.existsSync(piperBin) || !fs.existsSync(voice)) {
+      return res.status(501).json({ error: 'TTS no configurado en el servidor', lang });
+    }
+
+    // El texto va por stdin; el WAV sale a un archivo temporal por petición.
+    const outFile = path.join('/tmp', `hera-tts-${randomUUID()}.wav`);
+    const { spawn } = await import('child_process');
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn(piperBin, ['--model', voice, '--output_file', outFile], { stdio: ['pipe', 'ignore', 'pipe'] });
+      let stderr = '';
+      proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+      proc.on('error', reject);
+      proc.on('close', (code: number) => code === 0 ? resolve() : reject(new Error(`Piper exit ${code}: ${stderr.slice(-200)}`)));
+      proc.stdin.write(text);
+      proc.stdin.end();
+    });
+
+    const audio = fs.readFileSync(outFile);
+    fs.unlink(outFile, () => { });
+    res.setHeader('Content-Type', 'audio/wav');
+    res.setHeader('X-TTS-Lang', lang);
+    res.send(audio);
+  } catch (err: any) {
+    console.error('❌ [TTS Error]:', err.message);
+    res.status(500).json({ error: 'Error generando la voz' });
+  }
+});
+
 // Versión desplegada: commit y hora de arranque del proceso. Permite saber al
 // instante si el VPS corre el código nuevo o un proceso sin reiniciar.
 const BOOT_TIME = new Date().toISOString();

@@ -200,6 +200,108 @@ export class ToolRegistry {
       }
     });
 
+    // 4b. Préstamos y deudas: tanto lo que el usuario debe como lo que le deben.
+    this.registerTool({
+      definition: {
+        type: 'function',
+        function: {
+          name: 'create_debt',
+          description: 'Registra un préstamo o deuda. type="debt" si el usuario DEBE dinero a alguien; type="receivable" si ALGUIEN LE DEBE dinero al usuario (préstamo que él hizo, cobro pendiente).',
+          parameters: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['debt', 'receivable'] },
+              personOrEntity: { type: 'string', description: 'Persona o entidad de la deuda/préstamo (ej. "Carlos", "Banco X")' },
+              name: { type: 'string', description: 'Concepto corto (ej. "Préstamo para el móvil")' },
+              amount: { type: 'number' },
+              dueDate: { type: 'string', description: 'Fecha límite YYYY-MM-DD (opcional)' }
+            },
+            required: ['type', 'personOrEntity', 'amount']
+          }
+        }
+      },
+      execute: async (userId, args, db) => {
+        const id = 'debt-' + Math.random().toString(36).substring(2, 9);
+        const { type, personOrEntity, name, amount, dueDate } = args;
+        db.prepare(`
+          INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status)
+          VALUES (?, ?, ?, ?, ?, ?, 0, ?, 'pending')
+        `).run(id, userId, name || (type === 'receivable' ? `Préstamo a ${personOrEntity}` : `Deuda con ${personOrEntity}`), personOrEntity, type, amount, dueDate || '');
+        return { success: true, debtId: id, type, personOrEntity, amount };
+      }
+    });
+
+    // 4c. Listado de deudas/préstamos del usuario.
+    this.registerTool({
+      definition: {
+        type: 'function',
+        function: {
+          name: 'get_user_debts',
+          description: 'Lista las deudas y préstamos del usuario (lo que debe y lo que le deben), con sus ids',
+          parameters: { type: 'object', properties: {} }
+        }
+      },
+      execute: async (userId, args, db) => {
+        return db.prepare('SELECT id, name, personOrEntity, type, amount, paidAmount, dueDate, status FROM debts WHERE userId = ? ORDER BY dueDate ASC').all(userId);
+      }
+    });
+
+    // 4d. Borrado de movimientos. Revierte el efecto en el saldo de la cuenta.
+    this.registerTool({
+      definition: {
+        type: 'function',
+        function: {
+          name: 'delete_transaction',
+          description: 'Elimina una transacción del usuario y revierte su efecto en el saldo de la cuenta. Si no conoces el id, primero usa get_user_transactions para localizarla y confirma con el usuario cuál borrar.',
+          parameters: {
+            type: 'object',
+            properties: {
+              transactionId: { type: 'string', description: 'Id exacto de la transacción a eliminar' }
+            },
+            required: ['transactionId']
+          }
+        }
+      },
+      execute: async (userId, args, db) => {
+        const tx = db.prepare('SELECT * FROM transactions WHERE id = ? AND userId = ?').get(args.transactionId, userId) as any;
+        if (!tx) return { success: false, error: 'Transacción no encontrada. Usa get_user_transactions para obtener el id correcto.' };
+
+        const revert = db.transaction(() => {
+          db.prepare('DELETE FROM transactions WHERE id = ? AND userId = ?').run(tx.id, userId);
+          // Revertir: un gasto borrado devuelve el dinero; un ingreso borrado lo quita.
+          const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount);
+          db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, tx.accountId, userId);
+        });
+        revert();
+
+        return { success: true, deleted: { id: tx.id, type: tx.type, amount: tx.amount, category: tx.category, description: tx.description }, balanceReverted: true };
+      }
+    });
+
+    // 4e. Borrado de deudas/préstamos.
+    this.registerTool({
+      definition: {
+        type: 'function',
+        function: {
+          name: 'delete_debt',
+          description: 'Elimina una deuda o préstamo del usuario por su id. Si no conoces el id, usa get_user_debts primero y confirma con el usuario.',
+          parameters: {
+            type: 'object',
+            properties: {
+              debtId: { type: 'string', description: 'Id exacto de la deuda/préstamo a eliminar' }
+            },
+            required: ['debtId']
+          }
+        }
+      },
+      execute: async (userId, args, db) => {
+        const debt = db.prepare('SELECT * FROM debts WHERE id = ? AND userId = ?').get(args.debtId, userId) as any;
+        if (!debt) return { success: false, error: 'Deuda no encontrada. Usa get_user_debts para obtener el id correcto.' };
+        db.prepare('DELETE FROM debts WHERE id = ? AND userId = ?').run(debt.id, userId);
+        return { success: true, deleted: { id: debt.id, personOrEntity: debt.personOrEntity, amount: debt.amount, type: debt.type } };
+      }
+    });
+
     // 5. Herramienta de Envío de Notificación Personal (Notification Tool)
     this.registerTool({
       definition: {

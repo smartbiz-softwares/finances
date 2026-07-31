@@ -110,7 +110,9 @@ REGLAS EJECUTIVAS:
 REGLAS DE HERRAMIENTAS (OBLIGATORIAS):
 - Para registrar, modificar o consultar datos reales del usuario DEBES invocar la herramienta correspondiente (create_transaction, etc.). Nunca simules el resultado.
 - PROHIBIDO afirmar que un movimiento quedó "registrado", inventar IDs de transacción o mostrar resúmenes de escrituras si en este turno no ejecutaste la herramienta y recibiste success:true. Si no la ejecutaste, dilo y ejecútala.
-- Cada movimiento se registra UNA sola vez: no repitas la misma llamada con los mismos datos.`;
+- Cada movimiento se registra UNA sola vez: no repitas la misma llamada con los mismos datos.
+- Préstamos y deudas: usa create_debt con type="debt" si el usuario debe dinero, type="receivable" si le deben a él.
+- Para BORRAR una transacción o deuda: primero localízala (get_user_transactions / get_user_debts), confirma con el usuario cuál es si hay ambigüedad, y solo entonces llama a delete_transaction / delete_debt con el id exacto. Nunca borres sin id verificado.`;
 
     // Historial de conversación (Short Memory)
     const recentHistory = this.db.prepare('SELECT role, content FROM chat_messages WHERE userId = ? ORDER BY createdAt DESC LIMIT 10').all(userId).reverse() as any[];
@@ -192,7 +194,7 @@ REGLAS DE HERRAMIENTAS (OBLIGATORIAS):
             // (visto en producción: doble create_transaction = saldo doblado),
             // la segunda no se ejecuta.
             const callSignature = `${toolName}:${JSON.stringify(toolArgs)}`;
-            const isWriteTool = ['create_transaction', 'send_user_notification'].includes(toolName);
+            const isWriteTool = ['create_transaction', 'send_user_notification', 'create_debt', 'delete_transaction', 'delete_debt'].includes(toolName);
             if (isWriteTool && executedWriteCalls.has(callSignature)) {
               console.warn(`[AgentOrchestrator] Tool duplicada bloqueada: ${toolName} con argumentos idénticos`);
               messages.push({

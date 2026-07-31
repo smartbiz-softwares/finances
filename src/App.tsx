@@ -1249,6 +1249,16 @@ export default function App() {
 
   // Chat History & Bottom Sheet Modal State
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // --- Modo Live: conversación de voz continua con la IA ---
+  const [liveMode, setLiveMode] = useState(false);
+  const [liveState, setLiveState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [liveReply, setLiveReply] = useState('');
+  const liveRecorderRef = useRef<MediaRecorder | null>(null);
+  const liveChunksRef = useRef<Blob[]>([]);
+  const liveAudioRef = useRef<HTMLAudioElement | null>(null);
+  const liveActiveRef = useRef(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<Array<{
@@ -3398,6 +3408,134 @@ export default function App() {
       setActionProcessing(null);
     }
   }, [loadUserData]);
+
+  // --- Modo Live: hablar con la IA y que responda con voz (es/en según teléfono) ---
+
+  const liveLang = useCallback((): 'es' | 'en' => {
+    const p = (profile?.phone || user?.phone || '').replace(/[^0-9+]/g, '');
+    if (p.startsWith('+1') || p.startsWith('+44')) return 'en';
+    return 'es';
+  }, [profile?.phone, user?.phone]);
+
+  /** Quita markdown y emojis para que la voz no lea asteriscos ni símbolos. */
+  const textForSpeech = (t: string) => t
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/<<<[A-Z_]+_START>>>[\s\S]*?<<<[A-Z_]+_END>>>/g, '')
+    .replace(/[*_#`>|]/g, '')
+    .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .slice(0, 1200);
+
+  const speakLive = useCallback(async (text: string): Promise<void> => {
+    const clean = textForSpeech(text);
+    if (!clean) return;
+    setLiveState('speaking');
+    try {
+      const token = getToken();
+      const r = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ text: clean, lang: liveLang() })
+      });
+      if (r.ok) {
+        const blob = await r.blob();
+        await new Promise<void>((resolve) => {
+          const audio = new Audio(URL.createObjectURL(blob));
+          liveAudioRef.current = audio;
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          audio.play().catch(() => resolve());
+        });
+        return;
+      }
+    } catch { }
+    // Fallback: voz del navegador si Piper no está configurado en el servidor.
+    await new Promise<void>((resolve) => {
+      try {
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = liveLang() === 'en' ? 'en-US' : 'es-ES';
+        utter.rate = 1.02;
+        utter.onend = () => resolve();
+        utter.onerror = () => resolve();
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utter);
+      } catch { resolve(); }
+    });
+  }, [liveLang]);
+
+  const stopLiveMode = useCallback(() => {
+    liveActiveRef.current = false;
+    setLiveMode(false);
+    setLiveState('idle');
+    setLiveTranscript('');
+    setLiveReply('');
+    try { liveRecorderRef.current?.stop(); } catch { }
+    try { liveRecorderRef.current?.stream.getTracks().forEach(t => t.stop()); } catch { }
+    try { liveAudioRef.current?.pause(); } catch { }
+    try { window.speechSynthesis.cancel(); } catch { }
+  }, []);
+
+  /** Graba un turno de voz; al parar se transcribe, se consulta a la IA y responde hablando. */
+  const startLiveListening = useCallback(async () => {
+    if (!liveActiveRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      liveChunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      liveRecorderRef.current = recorder;
+      recorder.ondataavailable = e => { if (e.data.size > 0) liveChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (!liveActiveRef.current) return;
+        setLiveState('thinking');
+        try {
+          const blob = new Blob(liveChunksRef.current, { type: 'audio/wav' });
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const rd = new FileReader();
+            rd.onloadend = () => resolve(rd.result as string);
+            rd.onerror = reject;
+            rd.readAsDataURL(blob);
+          });
+          const tr = await api('/transcribe', { method: 'POST', body: JSON.stringify({ audio: base64 }) });
+          const heard = (tr.text || '').trim();
+          if (!heard) {
+            setLiveState('idle');
+            return;
+          }
+          setLiveTranscript(heard);
+          const data = await api('/chat', { method: 'POST', body: JSON.stringify({ message: heard }) });
+          const reply = data.reply || '';
+          setLiveReply(reply);
+          // La conversación Live también queda en el hilo del chat.
+          setChatMessages(prev => [...prev,
+            { id: `${Date.now()}-lv-u`, role: 'user', content: heard },
+            { id: `${Date.now()}-lv-a`, role: 'assistant', content: reply, type: data.widgetType, data: data.widgetData }
+          ]);
+          fetchUserSubscription();
+          loadUserData();
+          await speakLive(reply);
+        } catch (err: any) {
+          showToast(err.message || 'Error en el turno de voz', 'error');
+        } finally {
+          if (liveActiveRef.current) setLiveState('idle');
+        }
+      };
+      recorder.start();
+      setLiveState('listening');
+    } catch {
+      showToast('No se pudo acceder al micrófono', 'error');
+      stopLiveMode();
+    }
+  }, [speakLive, fetchUserSubscription, loadUserData, stopLiveMode]);
+
+  const startLiveMode = useCallback(() => {
+    liveActiveRef.current = true;
+    setLiveMode(true);
+    setLiveState('idle');
+    setLiveTranscript('');
+    setLiveReply('');
+  }, []);
 
   const handleCancelChatAction = useCallback((msgId: string) => {
     setChatMessages(prev => prev.map(m => m.id === msgId ? { ...m, actionState: 'cancelled' } : m));
@@ -6258,6 +6396,14 @@ export default function App() {
                               title="Historial de consultas"
                             >
                               <History size={18} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={startLiveMode}
+                              className="p-2.5 rounded-xl hover:bg-surface-hover text-text-secondary hover:text-brand transition-colors cursor-pointer"
+                              title="Modo Live: habla con Hera y te responde con voz"
+                            >
+                              <Radio size={18} />
                             </button>
                           </div>
 
@@ -10645,6 +10791,72 @@ export default function App() {
                   </div>
                 )}
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modo Live: conversación de voz con Hera */}
+      <AnimatePresence>
+        {liveMode && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-sm w-full bg-surface border border-border rounded-3xl p-8 text-center space-y-6"
+            >
+              <div className="space-y-1">
+                <h3 className="text-xl font-serif font-semibold text-text-primary">Hera Live</h3>
+                <p className="text-xs text-text-secondary">
+                  {liveState === 'listening' ? 'Escuchando... toca el círculo al terminar de hablar'
+                    : liveState === 'thinking' ? 'Hera está pensando...'
+                    : liveState === 'speaking' ? 'Hera está hablando...'
+                    : 'Toca el círculo y habla con Hera'}
+                </p>
+              </div>
+
+              {/* Orbe central: micrófono con estado */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (liveState === 'listening') { try { liveRecorderRef.current?.stop(); } catch { } }
+                  else if (liveState === 'idle') startLiveListening();
+                }}
+                disabled={liveState === 'thinking' || liveState === 'speaking'}
+                className={cn(
+                  'w-28 h-28 rounded-full mx-auto flex items-center justify-center transition-all duration-200 cursor-pointer active:scale-[0.97] border-4',
+                  liveState === 'listening' ? 'bg-error text-white border-error/30 animate-pulse'
+                    : liveState === 'thinking' ? 'bg-surface-hover text-text-dim border-border'
+                    : liveState === 'speaking' ? 'bg-brand/15 text-brand border-brand/30'
+                    : 'bg-brand text-white border-brand/30 hover:bg-brand-hover'
+                )}
+              >
+                {liveState === 'listening' ? <MicOff size={40} />
+                  : liveState === 'speaking' ? <Volume2 size={40} className="animate-pulse" />
+                  : liveState === 'thinking' ? <Sparkles size={36} className="animate-spin" />
+                  : <Mic size={40} />}
+              </button>
+
+              {(liveTranscript || liveReply) && (
+                <div className="space-y-2 text-left max-h-40 overflow-y-auto scrollbar-none">
+                  {liveTranscript && (
+                    <p className="text-xs text-text-secondary bg-bg border border-border rounded-2xl px-3.5 py-2.5"><span className="font-semibold text-text-primary">Tú:</span> {liveTranscript}</p>
+                  )}
+                  {liveReply && (
+                    <p className="text-xs text-text-secondary bg-brand/5 border border-brand/20 rounded-2xl px-3.5 py-2.5"><span className="font-semibold text-brand">Hera:</span> {textForSpeech(liveReply).slice(0, 280)}</p>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={stopLiveMode}
+                className="w-full bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors duration-200"
+              >
+                Salir del Modo Live
+              </button>
             </motion.div>
           </div>
         )}
