@@ -3501,6 +3501,7 @@ export default function App() {
   const liveSpeakAnalyserRef = useRef<AnalyserNode | null>(null);
   const liveBarRefs = useRef<(HTMLDivElement | null)[]>([]);
   const liveOrbRef = useRef<HTMLDivElement | null>(null);
+  const liveRingRef = useRef<SVGCircleElement | null>(null);
   const liveStateRef = useRef<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
 
   const setLiveStateBoth = (s: 'idle' | 'listening' | 'thinking' | 'speaking') => {
@@ -3700,8 +3701,11 @@ export default function App() {
       let spoke = false;
       let lastVoice = Date.now();
       const startedAt = Date.now();
-      const SILENCE_MS = 1100;
-      const MAX_TURN_MS = 20000;
+      // Pausa antes de responder: 3.2s deja pensar y respirar a mitad de
+      // frase sin que Hera interrumpa. Con pausas más largas permitidas, el
+      // turno máximo también sube.
+      const SILENCE_MS = 3200;
+      const MAX_TURN_MS = 45000;
 
       // VAD adaptativo: los primeros ~600ms calibran el ruido ambiente del
       // micrófono; el umbral de voz se coloca por encima de ese suelo.
@@ -3724,8 +3728,22 @@ export default function App() {
         }
 
         if (rms > speechRms) { spoke = true; lastVoice = Date.now(); }
+
+        // Anillo de espera: se llena durante el silencio para que se vea que
+        // el turno sigue abierto y no parezca que la app se colgó.
+        if (liveRingRef.current) {
+          const progress = spoke ? Math.min(1, (Date.now() - lastVoice) / SILENCE_MS) : 0;
+          const circumference = 2 * Math.PI * 86;
+          liveRingRef.current.style.strokeDashoffset = String(circumference * (1 - progress));
+          liveRingRef.current.style.opacity = progress > 0.05 ? '1' : '0';
+        }
+
         const shouldStop = (spoke && Date.now() - lastVoice > SILENCE_MS) || (Date.now() - startedAt > MAX_TURN_MS);
-        if (shouldStop) { clearInterval(vadTimer); try { recorder.stop(); } catch { } }
+        if (shouldStop) {
+          clearInterval(vadTimer);
+          if (liveRingRef.current) liveRingRef.current.style.opacity = '0';
+          try { recorder.stop(); } catch { }
+        }
       }, 80);
 
       recorder.onstop = async () => {
@@ -11096,6 +11114,23 @@ export default function App() {
                   liveState === 'listening' ? 'bg-brand/15 opacity-100' : liveState === 'speaking' ? 'bg-brand/20 opacity-100' : 'bg-white/5 opacity-60',
                   'blur-2xl'
                 )} />
+                {/* Anillo de espera: se llena durante la pausa antes de responder */}
+                <svg className="absolute w-[188px] h-[188px] -rotate-90 pointer-events-none" viewBox="0 0 188 188">
+                  <circle
+                    ref={liveRingRef}
+                    cx="94"
+                    cy="94"
+                    r="86"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.55)"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 86}
+                    strokeDashoffset={2 * Math.PI * 86}
+                    style={{ opacity: 0, transition: 'opacity 200ms ease-out' }}
+                  />
+                </svg>
+
                 {/* Orbe: escala en tiempo real con el volumen (solo transform) */}
                 <div
                   ref={liveOrbRef}
