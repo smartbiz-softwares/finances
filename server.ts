@@ -1163,6 +1163,27 @@ app.delete('/api/finance/accounts/:id', authMiddleware, (req: any, res) => {
   res.json({ success: true });
 });
 
+/**
+ * Elimina un movimiento del usuario y revierte su efecto en el saldo de la
+ * cuenta, todo en la misma transacción SQL para que no quede a medias.
+ */
+app.delete('/api/finance/transactions/:id', authMiddleware, (req: any, res) => {
+  const { id } = req.params;
+  const tx = db.prepare('SELECT * FROM transactions WHERE id = ? AND userId = ?').get(id, req.userId) as any;
+  if (!tx) return res.status(404).json({ error: 'Movimiento no encontrado' });
+
+  const revert = db.transaction(() => {
+    db.prepare('DELETE FROM transactions WHERE id = ? AND userId = ?').run(id, req.userId);
+    // Borrar un gasto devuelve el dinero; borrar un ingreso lo retira.
+    const delta = tx.type === 'income' ? -Number(tx.amount) : Number(tx.amount);
+    db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, tx.accountId, req.userId);
+  });
+  revert();
+
+  logAudit(req.userId, 'delete_transaction', `Movimiento eliminado: ${tx.description || tx.category} - ${tx.amount}`);
+  res.json({ success: true, message: 'Movimiento eliminado y saldo actualizado' });
+});
+
 // --- Debts & Loans API ---
 
 app.get('/api/finance/debts', authMiddleware, (req: any, res) => {

@@ -685,6 +685,89 @@ function compressImageFile(file: File, maxSize = 256, quality = 0.82): Promise<s
 }
 
 /**
+ * Cuenta atrás en formato compacto "1d 2h 24min". Omite las unidades a cero
+ * por la izquierda y baja a segundos en el último minuto.
+ */
+function formatCountdown(msRemaining: number): string {
+  if (msRemaining <= 0) return 'Renovando…';
+  const totalMin = Math.floor(msRemaining / 60000);
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days}d ${hours}h ${mins}min`;
+  if (hours > 0) return `${hours}h ${mins}min`;
+  if (totalMin > 0) return `${mins}min`;
+  return `${Math.floor(msRemaining / 1000)}s`;
+}
+
+/**
+ * Barra de consumo de tokens con cuenta atrás viva hasta la renovación.
+ * El tick es local (1s): no golpea la API para actualizar el reloj.
+ */
+function TokenUsageMeter({ subscription, onUpgrade }: { subscription: any; onUpgrade: () => void }) {
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!subscription) return null;
+
+  const balance = Number(subscription.tokenBalance || 0);
+  const total = Number(subscription.tokensTotalPlan || 0);
+  const isUnlimited = balance >= 999999999;
+  const usedPct = isUnlimited || total <= 0 ? 0 : Math.min(100, Math.max(0, ((total - balance) / total) * 100));
+  const remainingPct = 100 - usedPct;
+
+  const renewalMs = subscription.nextRenewalAt ? new Date(subscription.nextRenewalAt).getTime() - now : 0;
+
+  // Verde con holgura, ámbar por debajo del 25%, rojo por debajo del 10%.
+  const barColor = remainingPct <= 10 ? 'bg-error' : remainingPct <= 25 ? 'bg-warning' : 'bg-brand';
+
+  return (
+    <div className="p-3 bg-bg border border-border/60 rounded-2xl space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase font-mono font-bold tracking-wide text-text-secondary">
+          {subscription.planName || 'Tu plan'}
+        </span>
+        <span className="text-[10px] font-mono text-text-dim">
+          {isUnlimited ? '∞' : `${balance.toLocaleString()} / ${total.toLocaleString()}`}
+        </span>
+      </div>
+
+      <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(remainingPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Tokens restantes">
+        <div
+          className={cn('h-full rounded-full transition-[width] duration-500 ease-out', isUnlimited ? 'bg-success' : barColor)}
+          style={{ width: `${isUnlimited ? 100 : remainingPct}%` }}
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-text-secondary">
+          {isUnlimited ? 'Tokens ilimitados' : `${Math.round(remainingPct)}% disponible`}
+        </span>
+        {subscription.nextRenewalAt && !isUnlimited && (
+          <span className="text-[10px] font-mono text-text-dim tabular-nums" title="Tiempo hasta la próxima renovación">
+            ↻ {formatCountdown(renewalMs)}
+          </span>
+        )}
+      </div>
+
+      {!isUnlimited && remainingPct <= 25 && (
+        <button
+          type="button"
+          onClick={onUpgrade}
+          className="w-full mt-0.5 py-1.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-[11px] font-medium cursor-pointer transition-colors duration-200"
+        >
+          Recargar tokens
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
  * Convierte la grabación del navegador (WebM/Opus en Chrome, MP4 en Safari)
  * a WAV PCM 16 bits mono a 16 kHz, que es lo único que whisper.cpp sabe leer.
  * Sin esto el servidor recibía un WebM etiquetado como "audio/wav" y Whisper
@@ -1320,6 +1403,10 @@ export default function App() {
   const [liveTranscript, setLiveTranscript] = useState('');
   const [liveReply, setLiveReply] = useState('');
   const [liveError, setLiveError] = useState('');
+
+  // Movimiento pendiente de confirmar borrado (null = sin diálogo abierto)
+  const [txToDelete, setTxToDelete] = useState<any | null>(null);
+  const [deletingTx, setDeletingTx] = useState(false);
   const liveRecorderRef = useRef<MediaRecorder | null>(null);
   const liveChunksRef = useRef<Blob[]>([]);
   const liveAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -5122,6 +5209,15 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* Consumo de tokens y cuenta atrás hasta la renovación */}
+                      <TokenUsageMeter
+                        subscription={userSubscriptionData?.subscription}
+                        onUpgrade={() => {
+                          setIsProfileMenuOpen(false);
+                          setShowUpgradeModal(true);
+                        }}
+                      />
+
                       <button
                         type="button"
                         onClick={(e) => {
@@ -7795,6 +7891,17 @@ export default function App() {
                                         {isIncome ? 'Ingreso ↗' : 'Gasto ↘'}
                                       </span>
                                     </div>
+
+                                    {/* Eliminar movimiento (pide confirmación) */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setTxToDelete(item)}
+                                      className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-colors duration-200 cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100 active:scale-[0.95]"
+                                      title="Eliminar movimiento"
+                                      aria-label={`Eliminar ${item.description || item.category}`}
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
                                   </div>
                                 </motion.div>
                               );
@@ -11078,6 +11185,66 @@ export default function App() {
                     <p>No hay transacciones registradas aún para esta cuenta.</p>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirmación de borrado de un movimiento */}
+      <AnimatePresence>
+        {txToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+              className="max-w-sm w-full bg-surface border border-border rounded-3xl p-6 space-y-5"
+            >
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-error/10 border border-error/25 text-error flex items-center justify-center shrink-0">
+                  <Trash2 size={18} />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <h3 className="font-serif font-semibold text-base text-text-primary">Eliminar movimiento</h3>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Se eliminará <strong className="text-text-primary">{txToDelete.description || txToDelete.category}</strong> por{' '}
+                    <strong className="text-text-primary">{Number(txToDelete.amount).toFixed(2)}{currencySymbol}</strong> y el saldo de tu cuenta
+                    {txToDelete.type === 'income' ? ' bajará' : ' subirá'} en ese importe. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTxToDelete(null)}
+                  disabled={deletingTx}
+                  className="flex-1 bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors duration-200 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setDeletingTx(true);
+                    try {
+                      await api(`/finance/transactions/${txToDelete.id}`, { method: 'DELETE' });
+                      showToast('Movimiento eliminado y saldo actualizado', 'success');
+                      setTxToDelete(null);
+                      loadUserData();
+                    } catch (err: any) {
+                      showToast(err.message || 'No se pudo eliminar el movimiento', 'error');
+                    } finally {
+                      setDeletingTx(false);
+                    }
+                  }}
+                  disabled={deletingTx}
+                  className="flex-1 bg-error hover:brightness-110 text-white py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-all duration-200 disabled:opacity-50"
+                >
+                  {deletingTx ? 'Eliminando…' : 'Eliminar'}
+                </button>
               </div>
             </motion.div>
           </div>
