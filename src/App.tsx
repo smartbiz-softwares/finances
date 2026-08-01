@@ -707,6 +707,22 @@ function formatCountdown(msRemaining: number): string {
  * Barra de consumo de tokens con cuenta atrás viva hasta la renovación.
  * El tick es local (1s): no golpea la API para actualizar el reloj.
  */
+/**
+ * Cálculo del consumo de tokens. Vive en un solo sitio a propósito: había dos
+ * versiones —el widget del menú y la pestaña del plan— y divergían en el
+ * denominador y hasta en el sentido de la barra, así que mostraban cifras
+ * distintas para lo mismo.
+ */
+export function computeTokenUsage(subscription: any) {
+  const balance = Number(subscription?.tokenBalance || 0);
+  // El total incluye las recargas: si alguien recarga, su saldo supera la
+  // cuota del plan y un denominador fijo daría porcentajes imposibles.
+  const total = Math.max(Number(subscription?.tokensTotalPlan || 0), balance);
+  const isUnlimited = balance >= 999999999;
+  const remainingPct = isUnlimited ? 100 : total <= 0 ? 0 : Math.min(100, Math.max(0, (balance / total) * 100));
+  return { balance, total, isUnlimited, remainingPct, usedPct: 100 - remainingPct };
+}
+
 function TokenUsageMeter({ subscription, onUpgrade }: { subscription: any; onUpgrade: () => void }) {
   const [now, setNow] = useState(Date.now());
 
@@ -717,11 +733,7 @@ function TokenUsageMeter({ subscription, onUpgrade }: { subscription: any; onUpg
 
   if (!subscription) return null;
 
-  const balance = Number(subscription.tokenBalance || 0);
-  const total = Number(subscription.tokensTotalPlan || 0);
-  const isUnlimited = balance >= 999999999;
-  const usedPct = isUnlimited || total <= 0 ? 0 : Math.min(100, Math.max(0, ((total - balance) / total) * 100));
-  const remainingPct = 100 - usedPct;
+  const { balance, total, isUnlimited, remainingPct } = computeTokenUsage(subscription);
 
   const renewalMs = subscription.nextRenewalAt ? new Date(subscription.nextRenewalAt).getTime() - now : 0;
 
@@ -9744,15 +9756,10 @@ export default function App() {
                                 <div
                                   className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full transition-all duration-500"
                                   style={{
-                                    width: `${(() => {
-                                      const balance = userSubscriptionData.subscription.tokenBalance || 0;
-                                      const total = Math.max(
-                                        userSubscriptionData.subscription.tokensTotalPlan || 0,
-                                        balance
-                                      );
-                                      if (total <= 0) return 0;
-                                      return Math.min(100, Math.max(0, Math.round(((total - balance) / total) * 100)));
-                                    })()}%`
+                                    // Muestra lo que QUEDA, igual que el widget del
+                                    // menú: antes esta barra crecía al gastar y la
+                                    // otra decrecía, con el mismo dato detrás.
+                                    width: `${Math.round(computeTokenUsage(userSubscriptionData.subscription).remainingPct)}%`
                                   }}
                                 />
                               </div>
@@ -9762,7 +9769,7 @@ export default function App() {
                                   Próxima renovación: {userSubscriptionData.subscription.nextRenewalAt ? new Date(userSubscriptionData.subscription.nextRenewalAt).toLocaleDateString() : 'Próximamente'}
                                 </span>
                                 <span className="font-mono text-text-secondary">
-                                  Total del plan: {(userSubscriptionData.subscription.tokensTotalPlan || 0).toLocaleString()}
+                                  Total del plan: {computeTokenUsage(userSubscriptionData.subscription).total.toLocaleString()}
                                 </span>
                               </div>
                             </div>
