@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Bot,
   Smartphone,
+  Mail,
   Clock,
   PieChart,
   Target,
@@ -1214,6 +1215,9 @@ export default function App() {
 
   // OTP Login State
   const [phone, setPhone] = useState('');
+  // Canal de verificación elegido por la persona: SMS o correo.
+  const [authChannel, setAuthChannel] = useState<'phone' | 'email'>('phone');
+  const [authEmail, setAuthEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
@@ -4083,12 +4087,21 @@ export default function App() {
     return () => media.removeEventListener('change', listener);
   }, [theme, updateThemeMode]);
 
-  const handleSendOTP = async () => {
+  /** Identificador con el que se pide y se verifica el código. */
+  const authIdentifier = () => {
+    if (authChannel === 'email') return authEmail.trim().toLowerCase();
     const rawPhone = phone.trim();
     const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${phonePrefix}${rawPhone}`;
-    const cleanFullPhone = '+' + fullPhone.replace(/[^0-9]/g, '');
+    return '+' + fullPhone.replace(/[^0-9]/g, '');
+  };
 
-    if (rawPhone.length < 3) {
+  const handleSendOTP = async () => {
+    if (authChannel === 'email') {
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(authEmail.trim())) {
+        setOtpError('Escribe un correo electrónico válido');
+        return;
+      }
+    } else if (phone.trim().length < 3) {
       setOtpError('Por favor ingresa tu número de teléfono');
       return;
     }
@@ -4101,7 +4114,11 @@ export default function App() {
     try {
       const data = await api('/send-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: cleanFullPhone })
+        body: JSON.stringify(
+          authChannel === 'email'
+            ? { email: authIdentifier() }
+            : { phone: authIdentifier() }
+        )
       });
       if (data.code) {
         console.log(`🔑 [OTP CÓDIGO REAL ENVIADO]: ${data.code}`);
@@ -4122,13 +4139,13 @@ export default function App() {
 
     setOtpLoading(true);
     setOtpError('');
-    const rawPhone = phone.trim();
-    const fullPhone = rawPhone.startsWith('+') ? rawPhone : `${phonePrefix}${rawPhone}`;
-    const cleanFullPhone = '+' + fullPhone.replace(/[^0-9]/g, '');
+    const identifier = authIdentifier();
     try {
       const data = await api('/verify-otp', {
         method: 'POST',
-        body: JSON.stringify({ phone: cleanFullPhone, code })
+        body: JSON.stringify(
+          authChannel === 'email' ? { email: identifier, code } : { phone: identifier, code }
+        )
       });
 
       setToken(data.token);
@@ -4158,7 +4175,8 @@ export default function App() {
           birthDate: data.user.birthDate,
           email: data.user.email,
           address: data.user.address,
-          phone: fullPhone,
+          // El servidor manda el teléfono real (null si entró por correo).
+          phone: data.user.phone || '',
           photoURL: data.user.photoURL,
           // Usuario nuevo ve la bienvenida; uno a medias retoma donde quedó.
           // Progreso servidor: 0=perfil, 1=cuenta, 2=primer movimiento.
@@ -4801,7 +4819,47 @@ export default function App() {
 
           {!otpSent ? (
             <div className="space-y-4 text-left">
-              {/* Phone Input Group */}
+              {/* Elección del canal: cada persona recibe el código donde le
+                  resulta fiable. En zonas con SMS caro o poco fiable, el
+                  correo es la diferencia entre entrar y no entrar. */}
+              <div className="flex gap-1.5 p-1 bg-bg border border-border rounded-2xl">
+                {([
+                  { id: 'phone' as const, label: 'Teléfono', icon: Smartphone },
+                  { id: 'email' as const, label: 'Correo', icon: Mail },
+                ]).map(opt => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => { setAuthChannel(opt.id); setOtpError(''); }}
+                    className={cn(
+                      'flex-1 h-9 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors duration-200 cursor-pointer active:scale-[0.97]',
+                      authChannel === opt.id
+                        ? 'bg-brand text-white shadow-sm'
+                        : 'text-text-secondary hover:text-text-primary hover:bg-surface-hover'
+                    )}
+                  >
+                    <opt.icon size={14} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {authChannel === 'email' ? (
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-mono font-medium uppercase tracking-wider text-text-secondary">Correo electrónico</label>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={authEmail}
+                    onChange={e => { setAuthEmail(e.target.value); setOtpError(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && acceptedTerms) handleSendOTP(); }}
+                    placeholder="tucorreo@ejemplo.com"
+                    className="w-full h-11 bg-bg border border-border hover:border-brand/60 focus:border-brand focus:ring-2 focus:ring-brand/10 rounded-2xl px-3 text-sm font-sans font-medium text-text-primary placeholder:text-text-dim transition-all focus:outline-none"
+                  />
+                </div>
+              ) : (
+              /* Phone Input Group */
               <div className="space-y-1.5">
                 <label className="text-[11px] font-mono font-medium uppercase tracking-wider text-text-secondary">Número de teléfono</label>
                 <div className="flex gap-2 w-full min-w-0">
@@ -4882,6 +4940,10 @@ export default function App() {
                     autoFocus
                   />
                 </div>
+              </div>
+              )}
+
+              <div>
                 {otpError && <p className="text-xs text-error mt-1">{otpError}</p>}
 
                 {/* Terms and Conditions Required Checkbox */}
@@ -4914,7 +4976,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSendOTP(); }}
-                disabled={otpLoading || !phone || !acceptedTerms}
+                disabled={otpLoading || !acceptedTerms || (authChannel === 'email' ? !authEmail.trim() : !phone)}
                 className="w-full h-11 bg-brand hover:bg-brand-hover text-white font-semibold rounded-2xl transition-all shadow-md active:scale-[0.98] disabled:bg-surface-hover disabled:text-text-dim disabled:border disabled:border-border disabled:shadow-none cursor-pointer flex items-center justify-center gap-2 text-sm"
               >
                 {otpLoading ? (
@@ -4930,6 +4992,12 @@ export default function App() {
             <div className="space-y-6 text-left">
               <div className="space-y-3">
                 <label className="text-xs font-medium uppercase tracking-wider text-text-secondary">Código de verificación</label>
+                {/* Saber a dónde se envió evita el error más común: mirar el
+                    buzón equivocado y pensar que no llegó. */}
+                <p className="text-xs text-text-secondary -mt-1">
+                  Enviado {authChannel === 'email' ? 'a ' : 'por SMS a '}
+                  <span className="font-medium text-text-primary">{authIdentifier()}</span>
+                </p>
 
                 <motion.div
                   className="grid grid-cols-6 gap-2 sm:gap-2.5 w-full"

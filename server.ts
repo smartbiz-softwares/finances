@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
+import nodemailer from 'nodemailer';
 import { AgentOrchestrator } from './src/agent/brain/orchestrator.ts';
 import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine.ts';
 import { initMySQLSchema } from './src/db/mysql.ts';
@@ -724,6 +725,72 @@ function generateOTP(): string {
   return crypto.randomInt(100000, 999999).toString();
 }
 
+// --- Envío del código por correo ---
+
+/** Normaliza y valida una dirección de correo. */
+function normalizeEmail(raw: string): string | null {
+  const email = String(raw || '').trim().toLowerCase();
+  // Validación deliberadamente simple: lo que importa es que exista un buzón
+  // al otro lado, y eso solo lo demuestra el propio código de verificación.
+  if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return null;
+  return email;
+}
+
+let mailTransport: nodemailer.Transporter | null = null;
+function getMailTransport(): nodemailer.Transporter | null {
+  if (mailTransport) return mailTransport;
+  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+
+  mailTransport = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: Number(SMTP_PORT || 587),
+    // 465 es SSL directo; el resto de puertos negocian TLS con STARTTLS.
+    secure: Number(SMTP_PORT || 587) === 465,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  return mailTransport;
+}
+
+/** Envía el código de verificación por correo. Devuelve si se entregó. */
+async function sendOtpEmail(to: string, code: string): Promise<boolean> {
+  const transport = getMailTransport();
+  if (!transport) {
+    console.warn('⚠️ [Correo] SMTP no configurado (SMTP_HOST, SMTP_USER, SMTP_PASS). El código queda solo en consola.');
+    return false;
+  }
+
+  const from = process.env.SMTP_FROM || `HeraWallet <${process.env.SMTP_USER}>`;
+
+  try {
+    await transport.sendMail({
+      from,
+      to,
+      subject: `${code} es tu código de HeraWallet`,
+      text: `Tu código de verificación para HeraWallet es: ${code}\n\nCaduca en 10 minutos. Si no has solicitado este código, ignora este mensaje.`,
+      // Estilos en línea: los clientes de correo ignoran las hojas de estilo.
+      html: `
+        <div style="background:#20201F;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+          <div style="max-width:440px;margin:0 auto;background:#2C2C2A;border:1px solid #3A3A38;border-radius:20px;padding:36px;text-align:center">
+            <p style="margin:0 0 6px;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:#D97757;font-weight:700">HeraWallet</p>
+            <h1 style="margin:0 0 22px;font-family:Georgia,serif;font-size:23px;font-weight:600;color:#ECE7E1">Tu código de acceso</h1>
+            <div style="background:#20201F;border:1px solid #D97757;border-radius:14px;padding:20px;margin-bottom:22px">
+              <span style="font-family:'SF Mono',monospace;font-size:38px;font-weight:700;letter-spacing:.22em;color:#D97757">${code}</span>
+            </div>
+            <p style="margin:0 0 8px;font-size:14px;color:#B4AEA8;line-height:1.6">Caduca en 10 minutos.</p>
+            <p style="margin:0;font-size:12px;color:#8B857E;line-height:1.6">Si no has pedido este código, ignora este mensaje. Nadie puede entrar en tu cuenta sin él.</p>
+          </div>
+          <p style="max-width:440px;margin:18px auto 0;text-align:center;font-size:11px;color:#8B857E">Tus metas empiezan con un mejor control.</p>
+        </div>`,
+    });
+    console.log(`✅ [Correo] Código enviado a ${to}`);
+    return true;
+  } catch (err: any) {
+    console.error(`❌ [Correo] No se pudo enviar a ${to}:`, err.message);
+    return false;
+  }
+}
+
 function phoneToEmail(phone: string): string {
   return phone.replace(/[^0-9]/g, '') + '@hera.app';
 }
@@ -990,46 +1057,73 @@ function calculateLostMoney(userId: string) {
 
 // --- Auth Routes ---
 
+/**
+ * Envía el código de verificación por el canal que elija la persona.
+ *
+ * Acepta { phone } o { email }. El resto del flujo es idéntico: mismo código
+ * de seis dígitos, mismo almacén, mismos límites y misma verificación. Solo
+ * cambia por dónde viaja.
+ */
 app.post('/api/send-otp', async (req, res) => {
-  let { phone } = req.body;
-  if (!phone || typeof phone !== 'string') {
-    return res.status(400).json({ error: 'Número telefónico inválido' });
+  const { phone, email } = req.body || {};
+
+  // El canal se deduce de lo que llega, no de un campo aparte: menos formas
+  // de que cliente y servidor se contradigan.
+  let channel: 'phone' | 'email';
+  let identifier: string;
+
+  if (email) {
+    const clean = normalizeEmail(email);
+    if (!clean) return res.status(400).json({ error: 'Correo electrónico inválido' });
+    channel = 'email';
+    identifier = clean;
+  } else if (phone) {
+    if (typeof phone !== 'string') return res.status(400).json({ error: 'Número telefónico inválido' });
+    let cleanPhone = phone.replace(/^\++/, '+').trim().replace(/\s+/g, '');
+    if (!cleanPhone.startsWith('+')) cleanPhone = '+' + cleanPhone;
+    if (!cleanPhone.match(/^\+[0-9]{7,15}$/)) {
+      return res.status(400).json({ error: 'Número telefónico inválido' });
+    }
+    channel = 'phone';
+    identifier = cleanPhone;
+  } else {
+    return res.status(400).json({ error: 'Indica un teléfono o un correo electrónico' });
   }
 
-  // Sanitizar número telefónico eliminando signos + duplicados
-  let cleanPhone = phone.replace(/^\++/, '+').trim().replace(/\s+/g, '');
-  if (!cleanPhone.startsWith('+')) {
-    cleanPhone = '+' + cleanPhone;
-  }
-
-  if (!cleanPhone.match(/^\+[0-9]{7,15}$/)) {
-    return res.status(400).json({ error: 'Número telefónico inválido' });
-  }
-
-  const clientIp = (req.headers['x-real-ip'] as string) || (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
-  if (otpRateExceeded(`phone:${cleanPhone}`, 3) || otpRateExceeded(`ip:${clientIp}`, 10)) {
-    logAudit(null, 'otp_rate_limited', `Bloqueado envío de OTP: ${cleanPhone} desde ${clientIp}`);
+  const clientIp = clientIpOf(req);
+  if (otpRateExceeded(`${channel}:${identifier}`, 3) || otpRateExceeded(`ip:${clientIp}`, 10)) {
+    logAudit(null, 'otp_rate_limited', `Bloqueado envío de OTP: ${identifier} desde ${clientIp}`);
     return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos antes de pedir otro código.' });
   }
 
-  // Generar código OTP real de 6 dígitos aleatorios
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(cleanPhone, { code, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
+  const code = generateOTP();
+  otpStore.set(identifier, { code, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
 
-  logAudit(null, 'send_otp', `OTP real (${code}) generado para ${cleanPhone}`);
-  console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${cleanPhone}`);
+  logAudit(null, 'send_otp', `OTP generado para ${identifier} (${channel})`);
+  console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${identifier} (${channel})`);
 
-  // Enviar el SMS real según el país (ZDSMS para Cuba, Twilio para internacional)
-  const smsSent = await sendSMS(cleanPhone, `Tu codigo de verificacion para HeraWallet es: ${code}`);
+  const delivered = channel === 'email'
+    ? await sendOtpEmail(identifier, code)
+    : await sendSMS(identifier, `Tu codigo de verificacion para HeraWallet es: ${code}`);
 
-  if (!smsSent) {
-    console.warn(`⚠️ [SMS WARN] No se pudo entregar el SMS a ${cleanPhone}. El código sigue activo en consola.`);
+  if (!delivered) {
+    console.warn(`⚠️ [OTP WARN] No se pudo entregar a ${identifier}. El código sigue activo en consola.`);
   }
 
   // El código JAMÁS viaja en la respuesta en producción: eso permitiría
-  // iniciar sesión con cualquier número sin recibir el SMS. Solo se expone
+  // entrar con cualquier identidad sin recibir el mensaje. Solo se expone
   // con OTP_DEBUG=1 para desarrollo local.
-  const payload: any = { success: true, phone: cleanPhone, message: 'Código de verificación enviado exitosamente' };
+  const payload: any = {
+    success: true,
+    channel,
+    identifier,
+    // Se mantiene `phone` por compatibilidad con clientes antiguos.
+    phone: channel === 'phone' ? identifier : undefined,
+    email: channel === 'email' ? identifier : undefined,
+    message: channel === 'email'
+      ? 'Código enviado a tu correo'
+      : 'Código de verificación enviado exitosamente',
+  };
   if (process.env.OTP_DEBUG === '1') payload.code = code;
   res.json(payload);
 });
@@ -1048,16 +1142,24 @@ function getCurrencyFromPhone(phone: string): string {
 }
 
 app.post('/api/verify-otp', (req, res) => {
-  const { phone, code } = req.body;
-  if (!phone || !code) return res.status(400).json({ error: 'Datos requeridos' });
+  const { phone, email: emailInput, code } = req.body || {};
 
-  const stored = otpStore.get(phone);
+  // El identificador es el mismo con el que se pidió el código.
+  const identifier = emailInput ? normalizeEmail(emailInput) : phone;
+  const channel: 'phone' | 'email' = emailInput ? 'email' : 'phone';
+  if (!identifier || !code) return res.status(400).json({ error: 'Datos requeridos' });
+
+  const stored = otpStore.get(identifier);
   if (!stored) {
-    return res.status(400).json({ error: 'Sin código pendiente para este número. Solicita uno nuevo.' });
+    return res.status(400).json({
+      error: channel === 'email'
+        ? 'Sin código pendiente para este correo. Solicita uno nuevo.'
+        : 'Sin código pendiente para este número. Solicita uno nuevo.',
+    });
   }
 
   if (Date.now() > stored.expiresAt) {
-    otpStore.delete(phone);
+    otpStore.delete(identifier);
     return res.status(400).json({ error: 'Código expirado. Solicita uno nuevo.' });
   }
 
@@ -1065,26 +1167,40 @@ app.post('/api/verify-otp', (req, res) => {
     // 5 fallos invalidan el código: 6 dígitos sin tope de intentos serían adivinables.
     stored.attempts = (stored.attempts || 0) + 1;
     if (stored.attempts >= 5) {
-      otpStore.delete(phone);
-      logAudit(null, 'otp_bruteforce_blocked', `Código invalidado por intentos fallidos: ${phone}`);
+      otpStore.delete(identifier);
+      logAudit(null, 'otp_bruteforce_blocked', `Código invalidado por intentos fallidos: ${identifier}`);
       return res.status(429).json({ error: 'Demasiados intentos fallidos. Solicita un código nuevo.' });
     }
     return res.status(400).json({ error: 'Código de verificación incorrecto' });
   }
 
-  otpStore.delete(phone);
+  otpStore.delete(identifier);
 
-  const email = phoneToEmail(phone);
-  let user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone) as any;
+  // Se busca por el canal usado. Quien entra por correo y ya tenía cuenta con
+  // ese mismo correo recupera la suya en vez de crear una duplicada.
+  let user = channel === 'email'
+    ? db.prepare('SELECT * FROM users WHERE LOWER(email) = ?').get(identifier) as any
+    : db.prepare('SELECT * FROM users WHERE phone = ?').get(identifier) as any;
+
+  const email = channel === 'email' ? identifier : phoneToEmail(identifier);
   let isNewUser = false;
 
   if (!user) {
     const id = randomUUID();
-    const currency = getCurrencyFromPhone(phone);
+    // Sin teléfono no hay prefijo del que deducir la moneda.
+    const currency = channel === 'phone' ? getCurrencyFromPhone(identifier) : 'USD';
     db.prepare('INSERT INTO users (id, email, displayName, phone, theme, currency, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-      id, email, phone, phone, 'dark', currency, new Date().toISOString()
+      id, email, identifier, channel === 'phone' ? identifier : null, 'dark', currency, new Date().toISOString()
     );
-    user = { id, email, displayName: phone, phone, theme: 'dark', currency, createdAt: new Date().toISOString() };
+    user = {
+      id,
+      email,
+      displayName: identifier,
+      phone: channel === 'phone' ? identifier : null,
+      theme: 'dark',
+      currency,
+      createdAt: new Date().toISOString(),
+    };
     isNewUser = true;
 
     // Todo usuario nuevo arranca con el Plan Gratuito (renovación automática cada 720h).
@@ -1110,9 +1226,11 @@ app.post('/api/verify-otp', (req, res) => {
     .run(randomUUID(), user.id, clientIpOf(req), ua.slice(0, 300), deviceOf(ua), nowIso);
   db.prepare('UPDATE users SET lastSeenAt = ? WHERE id = ?').run(nowIso, user.id);
 
-  logAudit(user.id, 'login', `Inicio de sesión verificado para ${phone}`);
+  logAudit(user.id, 'login', `Inicio de sesión verificado para ${identifier} (${channel})`);
 
-  const token = jwt.sign({ userId: user.id, phone: user.phone }, JWT_SECRET, { expiresIn: '30d' });
+  // 30 días de sesión: entrar es costoso (hay que recibir un código), así
+  // que forzar el login a diario penalizaría el uso diario de la app.
+  const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '30d' });
 
   res.json({
     success: true,
