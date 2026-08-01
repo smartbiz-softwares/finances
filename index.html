@@ -59,33 +59,36 @@
     </script>
   </head>
   <body>
-    <!-- H1 visible para crawlers, oculto visualmente -->
-    <h1 style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;">HeraWallet - Control Financiero Inteligente con IA</h1>
-
-    <div id="root"></div>
-
-    <!-- Contenido estático para crawlers que no ejecutan JavaScript -->
-    <noscript>
-      <main style="font-family:sans-serif;max-width:800px;margin:40px auto;padding:20px;">
+    <div id="root">
+      <main style="font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; color: #20201F;">
         <h1>HeraWallet — Control Financiero Inteligente con IA</h1>
-        <p>HeraWallet es tu asistente de finanzas personales impulsado por Inteligencia Artificial. Registra gastos por voz o foto, controla deudas, alcanza tus metas de ahorro y predice tu comportamiento financiero — sin conectar tu banco, gratis y sin anuncios.</p>
-        <h2>¿Por qué HeraWallet?</h2>
+        <p>HeraWallet es tu asistente de finanzas personales impulsado por Inteligencia Artificial. Registra tus gastos por voz o fotografiando facturas, controla tus deudas, alcanza tus metas de ahorro y predice tu comportamiento financiero — sin necesidad de conectar tu cuenta bancaria, totalmente gratis y sin anuncios.</p>
+
+        <h2>¿Por qué elegir HeraWallet?</h2>
         <ul>
-          <li>Registra gastos por voz o fotografiando facturas</li>
-          <li>Score financiero dinámico que mejora con tus decisiones</li>
-          <li>Metas de ahorro con plan de pasos verificables</li>
-          <li>Predicciones y proyecciones de balance mensual</li>
-          <li>Diagnósticos y reportes generados por IA</li>
-          <li>Privacidad primero: tus datos son tuyos</li>
+          <li><strong>Registro Inteligente:</strong> Dicta tus gastos por voz o sube fotos de tus recibos. Hera comprende los detalles y categoriza automáticamente.</li>
+          <li><strong>Salud Financiera en Tiempo Real:</strong> Score dinámico que evalúa tu comportamiento y te da consejos personalizados.</li>
+          <li><strong>Metas y Objetivos de Ahorro:</strong> Define metas reales con planes paso a paso y verificación de progreso.</li>
+          <li><strong>Predicción de Gastos:</strong> Algoritmos avanzados que proyectan tu saldo a fin de mes y te advierten antes de sobrepasarte.</li>
+          <li><strong>Privacidad Garantizada:</strong> Tus datos financieros son 100% privados y nunca se comparten con terceros.</li>
         </ul>
-        <h2>Cómo funciona</h2>
-        <p>Dictas o fotografías un gasto, Hera lo entiende y lo categoriza. Cada semana analiza tus patrones, detecta desviaciones y te escribe antes de que el mes se te vaya de las manos. Sin suscripción obligatoria, sin anuncios.</p>
-        <nav>
-          <a href="/es/">Español</a> |
-          <a href="/en/">English</a>
+
+        <h2>Cómo Funciona</h2>
+        <p>Solamente necesitas hablar o tomar una foto. Hera entiende la moneda, el comercio y el concepto del gasto. Cada semana analiza tus hábitos y te ofrece diagnósticos claros para mantener tus finanzas bajo control.</p>
+
+        <nav style="margin-top: 30px; border-top: 1px solid #ccc; padding-top: 15px;">
+          <h3>Secciones y Recursos:</h3>
+          <ul style="list-style: none; padding: 0; display: flex; gap: 15px; flex-wrap: wrap;">
+            <li><a href="https://herawallet.app/es/">Sitio Web Oficial (Español)</a></li>
+            <li><a href="https://herawallet.app/en/">Official Website (English)</a></li>
+            <li><a href="https://herawallet.app/es/#por-que">Por qué HeraWallet</a></li>
+            <li><a href="https://herawallet.app/es/#como">Cómo Funciona</a></li>
+            <li><a href="https://herawallet.app/es/#comparativa">Comparativa</a></li>
+            <li><a href="https://herawallet.app/es/#faq">Preguntas Frecuentes</a></li>
+          </ul>
         </nav>
       </main>
-    </noscript>
+    </div>
 
     <script type="module" src="/src/main.tsx"></script>
   </body>
