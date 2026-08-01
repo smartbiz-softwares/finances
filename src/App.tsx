@@ -737,8 +737,10 @@ function TokenUsageMeter({ subscription, onUpgrade }: { subscription: any; onUpg
 
   const renewalMs = subscription.nextRenewalAt ? new Date(subscription.nextRenewalAt).getTime() - now : 0;
 
-  // Verde con holgura, ámbar por debajo del 25%, rojo por debajo del 10%.
-  const barColor = remainingPct <= 10 ? 'bg-error' : remainingPct <= 25 ? 'bg-warning' : 'bg-brand';
+  // La barra se llena según se gasta, así que el aviso llega cuando está casi
+  // completa: ámbar a partir del 75% consumido, rojo a partir del 90%.
+  const usedPct = 100 - remainingPct;
+  const barColor = usedPct >= 90 ? 'bg-error' : usedPct >= 75 ? 'bg-warning' : 'bg-brand';
 
   return (
     <div className="p-3 bg-bg border border-border/60 rounded-2xl space-y-2">
@@ -751,16 +753,24 @@ function TokenUsageMeter({ subscription, onUpgrade }: { subscription: any; onUpg
         </span>
       </div>
 
-      <div className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden" role="progressbar" aria-valuenow={Math.round(remainingPct)} aria-valuemin={0} aria-valuemax={100} aria-label="Tokens restantes">
+      <div
+        className="h-1.5 w-full bg-surface-hover rounded-full overflow-hidden"
+        role="progressbar"
+        aria-valuenow={Math.round(usedPct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Tokens consumidos"
+      >
+        {/* Se pinta lo gastado; lo que queda es el hueco sin rellenar. */}
         <div
           className={cn('h-full rounded-full transition-[width] duration-500 ease-out', isUnlimited ? 'bg-success' : barColor)}
-          style={{ width: `${isUnlimited ? 100 : remainingPct}%` }}
+          style={{ width: `${isUnlimited ? 0 : usedPct}%` }}
         />
       </div>
 
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] text-text-secondary">
-          {isUnlimited ? 'Tokens ilimitados' : `${Math.round(remainingPct)}% disponible`}
+          {isUnlimited ? 'Tokens ilimitados' : `${Math.round(usedPct)}% usado`}
         </span>
         {subscription.nextRenewalAt && !isUnlimited && (
           <span className="text-[10px] font-mono text-text-dim tabular-nums" title="Tiempo hasta la próxima renovación">
@@ -9756,10 +9766,9 @@ export default function App() {
                                 <div
                                   className="h-full bg-gradient-to-r from-brand to-brand-hover rounded-full transition-all duration-500"
                                   style={{
-                                    // Muestra lo que QUEDA, igual que el widget del
-                                    // menú: antes esta barra crecía al gastar y la
-                                    // otra decrecía, con el mismo dato detrás.
-                                    width: `${Math.round(computeTokenUsage(userSubscriptionData.subscription).remainingPct)}%`
+                                    // Pinta lo consumido, igual que el widget del
+                                    // menú: lo que queda es el hueco sin rellenar.
+                                    width: `${Math.round(computeTokenUsage(userSubscriptionData.subscription).usedPct)}%`
                                   }}
                                 />
                               </div>
