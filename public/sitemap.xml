@@ -1,28 +1,100 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <!-- 1. Inicio / Landing Principal -->
   <url>
     <loc>https://herawallet.app/</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
     <xhtml:link rel="alternate" hreflang="es" href="https://herawallet.app/es/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://herawallet.app/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://herawallet.app/"/>
-    <changefreq>weekly</changefreq>
-    <priority>1.0</priority>
   </url>
+
+  <!-- 2. Acceso a la Aplicación (Login / Autenticación OTP) -->
+  <url>
+    <loc>https://herawallet.app/?login=true</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <!-- 3. Por Qué Hera (Propuesta de valor y beneficios) -->
+  <url>
+    <loc>https://herawallet.app/#por-que</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- 4. Cómo Funciona (Registro por voz, imágenes y predicción) -->
+  <url>
+    <loc>https://herawallet.app/#como</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- 5. Comparativa (HeraWallet vs Apps Tradicionales) -->
+  <url>
+    <loc>https://herawallet.app/#comparativa</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- 6. Preguntas Frecuentes (FAQ) -->
+  <url>
+    <loc>https://herawallet.app/#faq</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- 7. Demostración y Capturas de la App -->
+  <url>
+    <loc>https://herawallet.app/#app</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- 8. Privacidad y Seguridad -->
+  <url>
+    <loc>https://herawallet.app/#privacidad</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- 9. Registro / Comenzar Gratis -->
+  <url>
+    <loc>https://herawallet.app/#empezar</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <!-- 10. Versión Español (ES) -->
   <url>
     <loc>https://herawallet.app/es/</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
     <xhtml:link rel="alternate" hreflang="es" href="https://herawallet.app/es/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://herawallet.app/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://herawallet.app/"/>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
   </url>
+
+  <!-- 11. Versión Inglés (EN) -->
   <url>
     <loc>https://herawallet.app/en/</loc>
+    <lastmod>2026-08-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
     <xhtml:link rel="alternate" hreflang="es" href="https://herawallet.app/es/"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://herawallet.app/en/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://herawallet.app/"/>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
   </url>
 </urlset>
