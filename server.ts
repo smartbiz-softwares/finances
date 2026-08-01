@@ -19,6 +19,21 @@ if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
 }
 
 const app = express();
+
+// Redirección HTTP 301 Permanente de dominios antiguos (ej: mobilerepair.com.uy) a https://herawallet.app
+app.use((req, res, next) => {
+  const host = (req.headers.host || '').toLowerCase();
+  if (
+    host.includes('mobilerepair.com.uy') ||
+    host.includes('herawallet.com') ||
+    host.startsWith('www.herawallet.app')
+  ) {
+    const targetUrl = `https://herawallet.app${req.originalUrl || ''}`;
+    return res.redirect(301, targetUrl);
+  }
+  next();
+});
+
 app.use(cors());
 // El webhook de Stripe necesita el cuerpo crudo para poder validar la firma HMAC.
 // Debe montarse ANTES de express.json(), o el body llega ya parseado y la firma no cuadra.

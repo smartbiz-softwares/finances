@@ -1,0 +1,2175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HeraWallet — App de finanzas personales gratis con IA</title>
+<meta name="description" content="HeraWallet es una app de finanzas personales gratis para controlar gastos con IA. Registra por voz o foto, sin conectar el banco. Aprende de tus hábitos, recuerda tus metas y te avisa antes de que el mes se te vaya de las manos.">
+<meta name="author" content="HeraWallet">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#F9F9F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#20201F" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://herawallet.app/es/">
+<link rel="alternate" hreflang="en" href="https://herawallet.app/en/">
+<link rel="alternate" hreflang="es" href="https://herawallet.app/es/">
+<link rel="alternate" hreflang="x-default" href="https://herawallet.app/en/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HeraWallet">
+<meta property="og:locale" content="es_ES">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:url" content="https://herawallet.app/es/">
+<meta property="og:title" content="HeraWallet — App de finanzas personales gratis con IA">
+<meta property="og:description" content="No es solo una app para registrar gastos. Es un director financiero personal que aprende, recuerda, predice y conversa contigo.">
+<meta property="og:image" content="https://herawallet.app/assets/og.es.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="HeraWallet: app de finanzas personales gratis con inteligencia artificial">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="HeraWallet — App de finanzas personales gratis con IA">
+<meta name="twitter:description" content="Aprende, recuerda, predice y conversa. Tus metas empiezan con un mejor control.">
+<meta name="twitter:image" content="https://herawallet.app/assets/og.es.jpg">
+
+<link rel="icon" href="/assets/favicon.ico" sizes="32x32">
+<link rel="icon" href="/assets/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+
+<link rel="preload" href="/assets/fonts/inter-6ab57b.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/sourceserif4-a15d60.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-a375c3.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-137556.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-da72a9.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-3b78c6.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-f059b7.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-b6db4a.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/inter-6ab57b.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-a375c3.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-137556.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-da72a9.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-3b78c6.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-f059b7.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-b6db4a.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/inter-6ab57b.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-a375c3.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-137556.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-da72a9.woff2) format('woff2');
+  unicode-range: U+1F00-1FFF;
+}
+/* greek */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-3b78c6.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-f059b7.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-b6db4a.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url(/assets/fonts/inter-6ab57b.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-d2761c.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-028edb.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-db1e20.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-acf87d.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-c8b23d.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-0a7197.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-d2761c.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-028edb.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-db1e20.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-acf87d.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-c8b23d.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(/assets/fonts/jetbrainsmono-0a7197.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-0bf20e.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-2efb87.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-2e88b8.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-3765f9.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-f7e138.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-cf295f.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-5cd8a0.woff2) format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* cyrillic */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-cebbca.woff2) format('woff2');
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+/* greek */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-3c1d66.woff2) format('woff2');
+  unicode-range: U+0370-0377, U+037A-037F, U+0384-038A, U+038C, U+038E-03A1, U+03A3-03FF;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-cf22e2.woff2) format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-3bc0e2.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(/assets/fonts/sourceserif4-a15d60.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* ============================================================
+   HeraWallet — Sistema de diseño
+   Tokens de la guía de identidad visual
+   ============================================================ */
+:root{
+  --bg:#F9F9F7;
+  --surface:#FFFFFF;
+  --surface-2:#F3F2EF;
+  --border:#E7E3DD;
+  --border-soft:#EFEDE8;
+  --ink:#2E2B28;
+  --ink-2:#6F6B66;
+  --placeholder:#757069;
+  --brand:#D97757;
+  --brand-hover:#C96A4D;
+  --brand-text:#AD5738;
+  /* Fondo para texto blanco: #D97757 solo da 3.12:1 y no pasa AA.
+     #BE5836 da 4.53:1. --brand sigue para logo, barras y puntos. */
+  --brand-solid:#BE5836;
+  --brand-solid-hover:#A8492A;
+  --brand-tint:rgba(217,119,87,.10);
+  --brand-tint-2:rgba(217,119,87,.05);
+  --success:#3E8E68;
+  --warn:#D89A36;
+  --error:#C45454;
+  --shadow-s:0 1px 2px rgba(46,43,40,.04);
+  --shadow-m:0 12px 40px -12px rgba(46,43,40,.16);
+  --shadow-l:0 40px 120px -40px rgba(46,43,40,.34);
+
+  /* noche: fijo en ambos temas para la sección de privacidad */
+  --night:#20201F;
+  --night-surface:#2C2C2A;
+  --night-surface-2:#353533;
+  --night-border:#3A3A38;
+  --night-ink:#ECE7E1;
+  --night-ink-2:#B4AEA8;
+
+  --r-sm:10px;
+  --r-md:14px;
+  --r-lg:20px;
+  --r-phone:42px;
+  --t:200ms cubic-bezier(.22,.61,.36,1);
+  --maxw:1520px;
+  --rail:120px;
+
+  /* marca HeraWallet: mascara alfa, hereda color via background-color */
+  --logo:url("/assets/logo-mask.png");
+
+  --serif:"Source Serif 4",ui-serif,Georgia,"Times New Roman",serif;
+  --sans:"Inter",ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+html[data-theme="dark"]{
+  --bg:#20201F;
+  --surface:#2C2C2A;
+  --surface-2:#353533;
+  --border:#3A3A38;
+  --border-soft:#333331;
+  --ink:#ECE7E1;
+  --ink-2:#B4AEA8;
+  --placeholder:#9E9890;
+  --brand:#D97757;
+  --brand-hover:#E08668;
+  --brand-text:#E08668;
+  --brand-solid:#BE5836;
+  --brand-solid-hover:#A8492A;
+  --brand-tint:rgba(217,119,87,.16);
+  --brand-tint-2:rgba(217,119,87,.07);
+  --success:#5DAF84;
+  --warn:#E2B04C;
+  --error:#E06A6A;
+  --shadow-s:0 1px 2px rgba(0,0,0,.2);
+  --shadow-m:0 12px 40px -12px rgba(0,0,0,.5);
+  --shadow-l:0 40px 120px -40px rgba(0,0,0,.7);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:16px;
+  line-height:1.65;
+  font-feature-settings:"cv11","ss01";
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+  transition:background-color var(--t),color var(--t);
+}
+img,svg{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--brand);outline-offset:3px;border-radius:4px}
+::selection{background:var(--brand);color:#fff}
+
+/* ---------- Tipografía ---------- */
+h1,h2,h3,h4{
+  font-family:var(--serif);
+  font-weight:400;
+  letter-spacing:-.022em;
+  line-height:1.06;
+  margin:0;
+  text-wrap:balance;
+}
+h1{font-size:clamp(2.9rem,7.4vw,5.4rem);letter-spacing:-.03em}
+h2{font-size:clamp(2rem,4.4vw,3.35rem)}
+h3{font-size:clamp(1.25rem,2vw,1.6rem);line-height:1.2}
+/* Las tarjetas usan h3 para no saltarse un nivel, con el tamaño de h4. */
+.card h3,.shot h3{font-size:1.06rem;line-height:1.3;letter-spacing:-.01em}
+h4{font-size:1.06rem;line-height:1.3;letter-spacing:-.01em}
+p{margin:0}
+em{font-style:italic}
+.lead{
+  font-size:clamp(1.06rem,1.5vw,1.3rem);
+  line-height:1.55;
+  color:var(--ink-2);
+  max-width:34ch;
+  text-wrap:pretty;
+}
+.eyebrow{
+  font-family:var(--mono);
+  font-size:.7rem;
+  font-weight:500;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--brand-text);
+}
+.eyebrow--muted{color:var(--ink-2)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- Layout ---------- */
+.wrap{width:100%;max-width:var(--maxw);margin-inline:auto;padding-inline:clamp(20px,3vw,48px)}
+section{position:relative}
+.band{padding-block:clamp(88px,12vw,152px)}
+.band--tight{padding-block:clamp(64px,8vw,104px)}
+.anchor{scroll-margin-top:96px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:clamp(40px,6vw,80px);align-items:center}
+.rule{height:1px;background:var(--border);border:0;margin:0}
+.center{text-align:center}
+.center .lead{margin-inline:auto}
+
+/* ---------- Reveal ---------- */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .7s cubic-bezier(.22,.61,.36,1),transform .7s cubic-bezier(.22,.61,.36,1)}
+.rv.in{opacity:1;transform:none}
+.rv[data-d="1"]{transition-delay:.08s}
+.rv[data-d="2"]{transition-delay:.16s}
+.rv[data-d="3"]{transition-delay:.24s}
+.rv[data-d="4"]{transition-delay:.32s}
+
+/* ---------- Botones ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:13px 22px;border-radius:var(--r-md);
+  font-size:.95rem;font-weight:500;letter-spacing:-.005em;white-space:nowrap;
+  border:1px solid transparent;
+  transition:background-color var(--t),border-color var(--t),color var(--t),transform var(--t),box-shadow var(--t);
+}
+.btn svg{width:16px;height:16px;transition:transform var(--t)}
+.btn--primary{background:var(--brand-solid);color:#fff;box-shadow:0 1px 2px rgba(46,43,40,.10)}
+.btn--primary:hover{background:var(--brand-solid-hover);transform:translateY(-1px);box-shadow:0 8px 24px -10px rgba(217,119,87,.7)}
+.btn--primary:active{transform:translateY(0)}
+.btn--primary:hover svg{transform:translateX(3px)}
+.btn--ghost{background:transparent;color:var(--ink);border-color:var(--border)}
+.btn--ghost:hover{background:var(--surface);border-color:var(--ink-2);transform:translateY(-1px)}
+.btn--sm{padding:9px 16px;font-size:.875rem}
+.btn--onnight{background:var(--night-ink);color:var(--night)}
+.btn--onnight:hover{background:#fff;transform:translateY(-1px)}
+.btn--ghostnight{border-color:var(--night-border);color:var(--night-ink)}
+.btn--ghostnight:hover{background:var(--night-surface-2);border-color:var(--night-ink-2)}
+
+/* ---------- Marca ---------- */
+.mark{
+  width:22px;height:27px;flex:none;
+  background-color:var(--brand);
+  -webkit-mask:var(--logo) center/contain no-repeat;
+  mask:var(--logo) center/contain no-repeat;
+}
+.mark--night{background-color:var(--brand)}
+.brand{display:inline-flex;align-items:center;gap:6px}
+.brand__name{font-family:var(--serif);font-size:1.2rem;letter-spacing:-.022em;white-space:nowrap}
+.brand__name b{font-weight:600;color:var(--brand-text)}
+.only-narrow{display:none}
+
+/* ---------- Navbar ---------- */
+.nav{position:fixed;inset:0 0 auto 0;z-index:60;transition:background-color var(--t),border-color var(--t)}
+.nav::after{content:"";position:absolute;inset:0;z-index:-1;border-bottom:1px solid transparent;transition:border-color var(--t)}
+.nav.stuck{background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%)}
+.nav.stuck::after{border-bottom-color:var(--border)}
+.nav__bar{display:flex;align-items:center;gap:28px;height:68px}
+.nav__links{display:flex;gap:26px;margin-left:auto;font-size:.9rem;color:var(--ink-2)}
+.nav__links a{position:relative;transition:color var(--t)}
+.nav__links a:hover{color:var(--ink)}
+.nav__links a::after{content:"";position:absolute;left:0;right:100%;bottom:-5px;height:1px;background:var(--brand);transition:right var(--t)}
+.nav__links a:hover::after{right:0}
+.nav__actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+.iconbtn{
+  width:36px;height:36px;display:grid;place-items:center;border-radius:10px;
+  border:1px solid var(--border);color:var(--ink-2);
+  transition:background-color var(--t),color var(--t),border-color var(--t);
+}
+.iconbtn:hover{background:var(--surface);color:var(--ink)}
+.iconbtn svg{width:16px;height:16px}
+/* selector de idioma */
+.langsw{
+  height:36px;padding:0 11px;display:grid;place-items:center;border-radius:10px;
+  border:1px solid var(--border);color:var(--ink-2);
+  font-family:var(--mono);font-size:.7rem;letter-spacing:.09em;
+  transition:background-color var(--t),color var(--t),border-color var(--t);
+}
+.langsw:hover{background:var(--surface);color:var(--ink);border-color:var(--ink-2)}
+html[data-theme="dark"] .icon-sun{display:none}
+html:not([data-theme="dark"]) .icon-moon{display:none}
+.progress{position:absolute;left:0;bottom:0;height:2px;width:100%;transform-origin:0 50%;transform:scaleX(0);background:var(--brand);opacity:.9}
+
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{padding-top:clamp(104px,13vh,152px);padding-bottom:clamp(56px,7vw,88px);overflow:hidden}
+.hero__grid{display:grid;grid-template-columns:1.02fr .98fr;gap:clamp(32px,5vw,72px);align-items:center}
+.hero h1{margin:0}
+.hero h1 em{color:var(--brand);font-style:italic}
+.hero .lead{margin-top:24px;max-width:38ch;font-size:clamp(1.06rem,1.35vw,1.24rem)}
+.hero__cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:34px}
+.hero__fine{display:flex;flex-wrap:wrap;gap:16px;margin-top:22px;font-family:var(--mono);font-size:.7rem;letter-spacing:.06em;color:var(--ink-2)}
+.hero__fine span{display:inline-flex;align-items:center;gap:7px}
+.hero__fine i{width:3px;height:3px;border-radius:50%;background:var(--brand);display:block}
+.hero__stage{position:relative;display:flex;justify-content:center;align-items:flex-end}
+.hero__halo{
+  position:absolute;width:120%;aspect-ratio:1;left:-10%;top:-8%;z-index:0;pointer-events:none;
+  background:radial-gradient(circle at 50% 45%,var(--brand-tint) 0%,transparent 62%);
+  filter:blur(6px);
+}
+/* ---------- Mockup de teléfono ---------- */
+.phone{
+  --pw:min(352px,84vw);
+  position:relative;z-index:1;
+  width:var(--pw);aspect-ratio:390/812;
+  padding:9px;border-radius:var(--r-phone);
+  background:linear-gradient(160deg,#4a4744,#232120 46%,#3b3835);
+  box-shadow:var(--shadow-l),0 0 0 1px rgba(0,0,0,.35);
+  transform:translateY(24px);opacity:0;
+  transition:transform 1.1s cubic-bezier(.22,.61,.36,1),opacity .9s ease;
+}
+.phone.in{transform:none;opacity:1}
+.phone__screen{
+  position:relative;height:100%;border-radius:34px;overflow:hidden;
+  background:var(--bg);display:flex;flex-direction:column;
+}
+.phone__island{
+  position:absolute;top:9px;left:50%;translate:-50% 0;z-index:5;
+  width:74px;height:20px;border-radius:12px;background:#191817;
+}
+.appbar{
+  display:flex;align-items:center;gap:6px;
+  padding:36px 14px 12px;border-bottom:1px solid var(--border-soft);
+  background:var(--surface);
+}
+.appbar__av{width:28px;height:28px;border-radius:50%;background:var(--brand);display:grid;place-items:center;flex:none}
+.appbar__av .mark{width:12px;height:15px;background-color:#fff}
+.appbar__name{font-size:.82rem;font-weight:500;line-height:1.2}
+.appbar__meta{font-family:var(--mono);font-size:.58rem;letter-spacing:.08em;color:var(--success);text-transform:uppercase}
+.appbar__tools{margin-left:auto;display:flex;align-items:center;gap:7px}
+.appbar__tool{
+  width:23px;height:23px;border-radius:50%;border:1px solid var(--border);
+  display:grid;place-items:center;flex:none;
+}
+.appbar__tool svg{width:11px;height:11px;stroke:var(--ink-2);stroke-width:1.6;fill:none}
+.appbar__tool--me{border:0;overflow:hidden}
+.appbar__tool--me img{width:100%;height:100%;object-fit:cover}
+.appbar__lock{font-family:var(--serif);font-size:.86rem;letter-spacing:-.02em;line-height:1}
+.appbar__lock b{font-weight:600;color:var(--brand-text)}
+.chat{flex:1;padding:16px 15px;display:flex;flex-direction:column;gap:9px;overflow:hidden}
+.chat__day{
+  align-self:center;font-family:var(--mono);font-size:.55rem;letter-spacing:.12em;
+  color:var(--ink-2);text-transform:uppercase;margin-bottom:2px;
+}
+.bub{
+  max-width:88%;padding:10px 13px;font-size:.78rem;line-height:1.5;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:15px 15px 15px 5px;
+  opacity:0;transform:translateY(8px) scale(.985);transform-origin:0 100%;
+  transition:opacity .5s ease,transform .5s cubic-bezier(.22,.61,.36,1);
+}
+.bub b{font-weight:600}
+.bub--me{
+  align-self:flex-end;background:var(--brand-solid);color:#fff;border-color:transparent;
+  border-radius:15px 15px 5px 15px;transform-origin:100% 100%;
+}
+.bub--card{padding:12px;border-radius:15px;width:88%;max-width:none}
+.bub.on{opacity:1;transform:none}
+.goal{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.goal__t{font-size:.72rem;font-weight:500}
+.goal__p{font-family:var(--mono);font-size:.72rem;color:var(--brand-text)}
+.bar{height:5px;border-radius:99px;background:var(--surface-2);margin-top:9px;overflow:hidden}
+.bar>i{display:block;height:100%;border-radius:99px;background:var(--brand);width:0;transition:width 1.4s cubic-bezier(.22,.61,.36,1)}
+.goal__sub{font-family:var(--mono);font-size:.58rem;color:var(--ink-2);margin-top:8px;letter-spacing:.03em}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.chip{
+  font-size:.68rem;padding:6px 11px;border-radius:99px;
+  border:1px solid var(--border);background:var(--surface);color:var(--ink-2);
+  opacity:0;transform:translateY(6px);
+  transition:opacity .45s ease,transform .45s ease,border-color var(--t),color var(--t);
+}
+.chip.on{opacity:1;transform:none}
+.chip--go{border-color:var(--brand);color:var(--brand-text)}
+.typing{display:inline-flex;gap:3px;align-items:center;height:10px}
+.typing i{width:4px;height:4px;border-radius:50%;background:var(--placeholder);animation:blink 1.3s infinite}
+.typing i:nth-child(2){animation-delay:.18s}
+.typing i:nth-child(3){animation-delay:.36s}
+@keyframes blink{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+.composer{
+  margin:0 14px 14px;padding:13px 14px 11px;
+  border:1px solid var(--border);border-radius:16px;background:var(--surface);
+  box-shadow:var(--shadow-s);
+}
+.composer__ph{font-size:.74rem;color:var(--placeholder);line-height:1.4}
+.composer__row{
+  display:flex;align-items:center;gap:13px;margin-top:11px;padding-top:10px;
+  border-top:1px solid var(--border-soft);
+}
+.composer__row svg{width:14px;height:14px;stroke:var(--ink-2);stroke-width:1.5;fill:none;flex:none}
+.composer__go{
+  margin-left:auto;display:inline-flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:99px;background:var(--brand-solid);color:#fff;
+  font-size:.68rem;font-weight:500;
+}
+.composer__go svg{stroke:#fff;width:11px;height:11px}
+.composer.pulse .composer__go{animation:pulse 2.6s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(217,119,87,.5)}70%{box-shadow:0 0 0 12px rgba(217,119,87,0)}100%{box-shadow:0 0 0 0 rgba(217,119,87,0)}}
+/* notificación proactiva flotante */
+.push{
+  position:absolute;z-index:3;right:-4%;top:-5%;width:min(268px,72vw);
+  display:flex;gap:11px;padding:13px 14px;border-radius:var(--r-md);
+  background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border);box-shadow:var(--shadow-m);
+  opacity:0;transform:translate(10px,-6px);
+  transition:opacity .7s ease,transform .7s cubic-bezier(.22,.61,.36,1);
+}
+.push.on{opacity:1;transform:none}
+.push__av{width:26px;height:26px;border-radius:8px;background:var(--brand);display:grid;place-items:center;flex:none}
+.push__av .mark{width:11px;height:14px;background-color:#fff}
+.push__k{font-family:var(--mono);font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.push__t{font-size:.76rem;line-height:1.45;margin-top:3px}
+@media (max-width:1080px){.push{right:auto;left:0;top:-4%}}
+
+/* ============================================================
+   FRANJA DE CONFIANZA
+   ============================================================ */
+.strip{border-block:1px solid var(--border);background:var(--brand-tint-2)}
+.strip__row{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;padding-block:26px}
+.strip__i{display:flex;flex-direction:column;gap:4px}
+.strip__i b{font-family:var(--serif);font-size:1.5rem;font-weight:400;letter-spacing:-.02em}
+.strip__i span{font-family:var(--mono);font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+
+/* ============================================================
+   TARJETAS
+   ============================================================ */
+.cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.cards2{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.card{
+  position:relative;overflow:hidden;isolation:isolate;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:clamp(22px,2.4vw,30px);
+  transition:transform var(--t),border-color var(--t),box-shadow var(--t);
+}
+.card::before{
+  content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:0;
+  background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),var(--brand-tint),transparent 68%);
+  transition:opacity .35s ease;
+}
+.card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--brand) 34%,var(--border));box-shadow:var(--shadow-m)}
+.card:hover::before{opacity:1}
+.card h3{margin:16px 0 8px}
+.card p{font-size:.94rem;color:var(--ink-2);line-height:1.6}
+.ico{width:19px;height:19px;stroke:var(--brand);stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.icobox{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:var(--brand-tint);}
+
+/* ============================================================
+   HILO NARRATIVO  (signature)
+   ============================================================ */
+.beats{position:relative}
+.beats::before{
+  content:"";position:absolute;top:0;bottom:0;left:calc(var(--rail) / 2);width:1px;
+  background:linear-gradient(180deg,transparent,var(--border) 4%,var(--border) 96%,transparent);
+}
+.beats__fill{
+  position:absolute;top:0;left:calc(var(--rail) / 2);width:1px;height:0;
+  background:linear-gradient(180deg,var(--brand),color-mix(in srgb,var(--brand) 20%,transparent));
+}
+.beat{display:grid;grid-template-columns:var(--rail) 1fr;padding-block:clamp(64px,8vw,110px)}
+.beat:first-child{padding-top:clamp(56px,7vw,90px)}
+.beat__rail{position:relative}
+.beat__node{
+  position:sticky;top:120px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  width:var(--rail);margin-left:calc(var(--rail) / -2);left:50%;
+}
+.beat__dot{
+  width:11px;height:11px;border-radius:50%;background:var(--bg);
+  border:1px solid var(--border);position:relative;
+  transition:border-color .5s ease,transform .5s ease;
+}
+.beat__dot::after{
+  content:"";position:absolute;inset:3px;border-radius:50%;background:var(--brand);
+  opacity:0;transform:scale(.4);transition:opacity .5s ease,transform .5s cubic-bezier(.22,.61,.36,1);
+}
+.beat.in .beat__dot{border-color:var(--brand)}
+.beat.in .beat__dot::after{opacity:1;transform:none}
+.beat__time{
+  font-family:var(--mono);font-size:.63rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--ink-2);writing-mode:vertical-rl;transition:color .5s ease;
+}
+.beat.in .beat__time{color:var(--ink-2)}
+.beat__body{max-width:min(100%,1180px)}
+.beat__body h2{margin-bottom:20px;max-width:24ch}
+.beat__body .lead{max-width:52ch}
+.beat__wide{margin-top:40px}
+
+/* nota de Hera: la IA habla primero */
+.hsays{
+  display:flex;gap:14px;padding:18px 20px;border-radius:var(--r-lg);
+  background:var(--surface);border:1px solid var(--border);
+  border-left:2px solid var(--brand);max-width:640px;
+}
+.hsays__av{width:30px;height:30px;border-radius:9px;background:var(--brand-tint);display:grid;place-items:center;flex:none}
+.hsays__av .mark{width:12px;height:15px}
+.hsays__k{font-family:var(--mono);font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-2)}
+.hsays__t{font-family:var(--serif);font-size:1.1rem;line-height:1.45;margin-top:6px;letter-spacing:-.012em}
+.hsays__t em{color:var(--brand-text)}
+
+/* ============================================================
+   CONVERSACIÓN AMPLIADA
+   ============================================================ */
+.convo{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:clamp(20px,3vw,32px);display:flex;flex-direction:column;gap:12px;
+}
+.convo .bub{max-width:min(74%,720px);font-size:.94rem;padding:13px 17px;border-radius:18px 18px 18px 6px;opacity:1;transform:none}
+.convo .bub--me{border-radius:18px 18px 6px 18px}
+.convo__note{
+  display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:.62rem;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);
+  padding-top:14px;margin-top:6px;border-top:1px dashed var(--border);
+}
+.tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.tool{
+  font-family:var(--mono);font-size:.62rem;padding:4px 9px;border-radius:6px;
+  background:var(--surface-2);border:1px solid var(--border);color:var(--ink-2);
+}
+
+/* ============================================================
+   OBJETIVOS
+   ============================================================ */
+.goals{display:flex;flex-direction:column;gap:2px}
+.goalrow{
+  display:grid;grid-template-columns:1fr auto;gap:6px 20px;align-items:center;
+  padding:20px 4px;border-bottom:1px solid var(--border);
+}
+.goalrow:first-child{border-top:1px solid var(--border)}
+.goalrow__t{font-family:var(--serif);font-size:1.16rem;letter-spacing:-.015em}
+.goalrow__n{font-family:var(--mono);font-size:.86rem;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.goalrow__n b{color:var(--ink);font-weight:500}
+.goalrow__bar{grid-column:1/-1;height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:4px}
+.goalrow__bar>i{display:block;height:100%;border-radius:99px;background:var(--brand);width:0;transition:width 1.5s cubic-bezier(.22,.61,.36,1)}
+.goalrow__bar>i.soft{background:color-mix(in srgb,var(--brand) 45%,var(--surface-2))}
+.goalrow__m{grid-column:1/-1;font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;color:var(--ink-2)}
+
+/* ============================================================
+   PREDICCIONES / GRÁFICO
+   ============================================================ */
+.panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:clamp(20px,2.6vw,30px);
+}
+.panel__head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.panel__legend{display:flex;gap:18px;font-family:var(--mono);font-size:.63rem;letter-spacing:.07em;color:var(--ink-2);text-transform:uppercase}
+.panel__legend span{display:inline-flex;align-items:center;gap:7px}
+.lg-line{width:16px;height:0;border-top:2px solid var(--ink)}
+.lg-dash{width:16px;height:0;border-top:2px dashed var(--brand)}
+.chart{width:100%;max-width:1040px;height:auto;overflow:visible}
+.chart .axis{stroke:var(--border);stroke-width:1}
+.chart .lbl{font-family:var(--mono);font-size:9px;fill:var(--ink-2);letter-spacing:.08em}
+.chart .real{fill:none;stroke:var(--ink);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.chart .proj{fill:none;stroke:var(--brand);stroke-width:2;stroke-dasharray:5 5;stroke-linecap:round}
+.chart .area{fill:var(--brand-tint-2)}
+.chart .risk{fill:var(--brand);opacity:.07}
+.chart .draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);transition:stroke-dashoffset 1.8s cubic-bezier(.4,0,.2,1)}
+.chart .draw.on{stroke-dashoffset:0}
+.chart .mk{fill:var(--brand)}
+.callout{
+  display:flex;gap:12px;align-items:flex-start;margin-top:22px;padding-top:20px;
+  border-top:1px solid var(--border);
+}
+.callout__av{width:26px;height:26px;border-radius:8px;background:var(--brand);display:grid;place-items:center;flex:none;margin-top:2px}
+.callout__av .mark{width:11px;height:14px;background-color:#fff}
+.callout p{font-size:.95rem;line-height:1.55}
+.callout p b{font-weight:600}
+
+/* ---------- Score ---------- */
+.score{display:flex;align-items:center;gap:clamp(20px,3vw,40px)}
+.gauge{position:relative;width:132px;height:132px;flex:none}
+.gauge svg{transform:rotate(-90deg)}
+.gauge circle{fill:none;stroke-width:7;stroke-linecap:round}
+.gauge .track{stroke:var(--surface-2)}
+.gauge .val{stroke:var(--brand);stroke-dasharray:var(--c);stroke-dashoffset:var(--c);transition:stroke-dashoffset 1.7s cubic-bezier(.22,.61,.36,1)}
+.gauge__n{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.gauge__n b{font-family:var(--mono);font-size:2rem;font-weight:400;line-height:1;letter-spacing:-.03em}
+.gauge__n span{font-family:var(--mono);font-size:.55rem;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2)}
+.delta{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:.7rem;color:var(--success)}
+
+/* ============================================================
+   CAPTURAS
+   ============================================================ */
+.shots{
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:clamp(40px,4.5vw,68px) clamp(18px,2.6vw,38px);align-items:start;
+}
+.shot{display:flex;flex-direction:column;align-items:center;gap:18px;margin:0}
+.shot .phone{--pw:min(300px,100%);aspect-ratio:150/299;transform:none;opacity:1;box-shadow:var(--shadow-m)}
+.shot .phone__island{display:none}
+.shotimg{width:100%;height:100%;object-fit:cover;object-position:top center;border-radius:34px;background:var(--bg)}
+.shot__cap{text-align:center;max-width:32ch;margin:0}
+.shot__cap b{display:block;font-family:var(--serif);font-size:1.08rem;font-weight:400;letter-spacing:-.015em}
+.shot__cap span{font-size:.86rem;color:var(--ink-2)}
+
+/* ============================================================
+   COMPARATIVA
+   ============================================================ */
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.cmp{width:100%;min-width:620px;border-collapse:collapse;text-align:left}
+.cmp th,.cmp td{padding:16px 18px;border-bottom:1px solid var(--border);vertical-align:middle}
+.cmp thead th{
+  font-family:var(--mono);font-size:.65rem;font-weight:500;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-2);border-bottom:1px solid var(--ink-2);
+}
+.cmp tbody th{font-weight:400;font-size:.95rem;width:38%}
+.cmp td{text-align:center;width:20.6%}
+.cmp thead th:not(:first-child){text-align:center}
+.cmp .col-h{background:var(--brand-tint-2);color:var(--brand-text);border-bottom-color:var(--brand)}
+.cmp td.col-h{color:inherit}
+.cmp tbody tr:last-child th,.cmp tbody tr:last-child td{border-bottom:none}
+.cmp tbody tr{transition:background-color var(--t)}
+.cmp tbody tr:hover{background:var(--surface)}
+.yes{width:17px;height:17px;stroke:var(--brand);stroke-width:1.8;fill:none;display:inline-block}
+.no{display:inline-block;width:11px;height:1px;background:var(--placeholder)}
+.cmp__brand{display:inline-flex;align-items:center;gap:7px;justify-content:center}
+.cmp__brand .mark{width:11px;height:14px}
+
+/* ============================================================
+   NOCHE / PRIVACIDAD
+   ============================================================ */
+.night{background:var(--night);color:var(--night-ink)}
+.night h2,.night h3{color:var(--night-ink)}
+.night .lead,.night p{color:var(--night-ink-2)}
+.night .eyebrow{color:#E08668}
+.night .rule{background:var(--night-border)}
+.night .card{background:var(--night-surface);border-color:var(--night-border)}
+.night .card:hover{border-color:color-mix(in srgb,var(--brand) 45%,var(--night-border))}
+.night .card h3{color:var(--night-ink)}
+.night .card p{color:var(--night-ink-2)}
+.night .icobox{background:rgba(217,119,87,.14)}
+.vault{
+  font-family:var(--mono);font-size:.76rem;line-height:1.9;
+  background:var(--night-surface);border:1px solid var(--night-border);border-radius:var(--r-md);
+  padding:20px 22px;color:var(--night-ink-2);overflow-x:auto;
+}
+.vault__bar{display:flex;gap:6px;align-items:center;margin-bottom:14px;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--night-ink-2)}
+.vault__bar i{width:7px;height:7px;border-radius:50%;background:var(--night-border);display:block}
+.vault b{color:var(--brand);font-weight:400}
+.vault .c{color:#918B84}
+
+/* ============================================================
+   TESTIMONIOS
+   ============================================================ */
+.quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.quote{display:flex;flex-direction:column;gap:20px;height:100%}
+.quote p{font-family:var(--serif);font-size:1.14rem;line-height:1.5;letter-spacing:-.012em;color:var(--ink);flex:1}
+.who{display:flex;align-items:center;gap:11px}
+.who img{width:38px;height:38px;border-radius:50%;flex:none;background:var(--surface-2)}
+.who b{font-size:.88rem;font-weight:500;display:block;line-height:1.3}
+.who span{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;color:var(--ink-2)}
+.disclaimer{font-family:var(--mono);font-size:.62rem;letter-spacing:.06em;color:var(--ink-2);margin-top:24px}
+
+/* ============================================================
+   FAQ
+   ============================================================ */
+.faq{border-top:1px solid var(--border)}
+.faq details{border-bottom:1px solid var(--border)}
+.faq summary{
+  display:flex;align-items:center;gap:20px;padding:24px 4px;cursor:pointer;
+  font-family:var(--serif);font-size:clamp(1.05rem,1.6vw,1.28rem);letter-spacing:-.015em;
+  list-style:none;transition:color var(--t);
+}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary:hover{color:var(--brand)}
+.faq summary svg{width:17px;height:17px;margin-left:auto;flex:none;stroke:var(--ink-2);stroke-width:1.5;fill:none;transition:transform var(--t),stroke var(--t)}
+.faq details[open] summary svg{transform:rotate(45deg);stroke:var(--brand)}
+.faq__a{padding:0 60px 26px 4px;color:var(--ink-2);font-size:.97rem;max-width:70ch}
+
+/* ============================================================
+   CTA FINAL + FOOTER
+   ============================================================ */
+.final{text-align:center;padding-block:clamp(96px,13vw,168px);position:relative;overflow:hidden}
+.final::before{
+  content:"";position:absolute;inset:auto 0 -40% 0;height:80%;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 100%,var(--brand-tint) 0%,transparent 66%);
+}
+.final h2{font-size:clamp(2.2rem,6vw,4.4rem);position:relative}
+.final .mark{width:26px;height:32px;margin-inline:auto}
+.foot{border-top:1px solid var(--border);padding-block:56px 34px}
+.foot__grid{display:grid;grid-template-columns:1.5fr repeat(4,minmax(0,1fr));gap:clamp(28px,3vw,44px)}
+.foot__col h2{font-family:var(--mono);font-size:.63rem;font-weight:500;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-2);margin:0 0 16px}
+.foot__col ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px;font-size:.9rem;color:var(--ink-2)}
+.foot__col a{transition:color var(--t)}
+.foot__col a:hover{color:var(--brand)}
+.foot__about{font-size:.9rem;color:var(--ink-2);max-width:30ch;margin-top:14px}
+.foot__bottom{
+  display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;
+  margin-top:52px;padding-top:24px;border-top:1px solid var(--border);
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;color:var(--ink-2);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width:1000px){
+  .hero__grid{grid-template-columns:1fr;gap:52px;text-align:left}
+  .hero .lead{max-width:46ch}
+  .shots{grid-template-columns:repeat(2,1fr)}
+  .shot .phone{--pw:min(320px,100%)}
+  .shot:nth-child(2) .phone{transform:none}
+  .foot__grid{grid-template-columns:1.3fr 1fr 1fr}
+}
+@media (max-width:860px){
+  :root{--rail:0px}
+  .beats::before,.beats__fill{display:none}
+  .beat{grid-template-columns:1fr}
+  .beat__node{
+    position:static;flex-direction:row;width:auto;margin:0 0 18px;left:auto;
+    justify-content:flex-start;gap:9px;
+    padding:5px 13px 5px 11px;border:1px solid var(--border);border-radius:99px;
+    background:var(--surface);
+  }
+  .beat__time{writing-mode:horizontal-tb;color:var(--ink-2)}
+  .cards3,.cards2,.quotes,.strip__row{grid-template-columns:1fr}
+  .strip__row{gap:18px;padding-block:22px}
+  .grid2{grid-template-columns:1fr;gap:36px}
+  .convo .bub{max-width:88%}
+  .nav__links{display:none}
+  .nav__bar{height:62px;gap:12px}
+  .nav__actions{gap:8px}
+  .nav__actions #theme{order:2}
+  .nav__actions .btn{order:1}
+  .nav__actions .langsw{order:3}
+  .only-wide{display:none}
+  .only-narrow{display:inline}
+  .faq__a{padding-right:8px}
+  .score{flex-direction:column;align-items:flex-start;gap:22px}
+}
+@media (max-width:640px){
+  .shots{grid-template-columns:1fr;justify-items:center;gap:48px}
+  /* En móvil el CTA secundario compite con "Comenzar gratis" por un espacio
+     que no hay. La sección de capturas sigue accesible desde el nav. */
+  .btn--demo{display:none}
+}
+@media (max-width:520px){
+  .wrap{padding-inline:20px}
+  .push{width:84vw;left:2%;top:-3%}
+  .foot__grid{grid-template-columns:1fr 1fr;gap:32px 24px}
+  .foot__col:first-child{grid-column:1/-1}
+  .hero__cta{gap:10px}
+}
+
+/* ---------- Movimiento reducido ---------- */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{
+    animation-duration:.001ms !important;animation-iteration-count:1 !important;
+    transition-duration:.001ms !important;
+  }
+  .rv{opacity:1;transform:none}
+  .phone{opacity:1;transform:none}
+  .bub,.chip,.push{opacity:1;transform:none}
+}
+
+/* ---------- Impresión ---------- */
+@media print{
+  .nav,.push,.hero__halo{display:none}
+  body{background:#fff}
+}
+
+/* ---------- Salto al contenido ---------- */
+.skip{position:fixed;top:12px;left:-9999px;z-index:99;background:var(--surface)}
+.skip:focus{left:16px}
+
+</style>
+<noscript><style>
+.rv,.phone,.bub,.chip,.push{opacity:1!important;transform:none!important}
+.chart .draw{stroke-dashoffset:0!important}
+</style></noscript>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://herawallet.app/#org",
+      "name": "HeraWallet",
+      "url": "https://herawallet.app/",
+      "description": "HeraWallet desarrolla una app de finanzas personales gratis con IA que funciona sin conectar el banco.",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://herawallet.app/assets/icon-512.png",
+        "width": 512,
+        "height": 512
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://herawallet.app/#website",
+      "url": "https://herawallet.app/es/",
+      "name": "HeraWallet",
+      "inLanguage": "es",
+      "description": "HeraWallet es una app de finanzas personales gratis para controlar gastos con IA. Registra por voz o foto, sin conectar el banco. Aprende de tus hábitos, recuerda tus metas y te avisa antes de que el mes se te vaya de las manos.",
+      "publisher": {
+        "@id": "https://herawallet.app/#org"
+      }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://herawallet.app/#app",
+      "name": "HeraWallet",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Android, iOS, Web",
+      "description": "App de finanzas personales y control de gastos gratis con inteligencia artificial. Registra por voz o fotografiando el ticket, sin conectar el banco. Aprende de tus hábitos, recuerda tus metas, predice tu saldo y empieza la conversación.",
+      "url": "https://herawallet.app/es/",
+      "inLanguage": "es",
+      "image": "https://herawallet.app/assets/og.es.jpg",
+      "featureList": [
+        "Registrar gastos por voz",
+        "Escanear tickets con IA",
+        "Funciona sin conectar el banco",
+        "Funciona con efectivo",
+        "Recuerda tus metas de ahorro",
+        "Predicción de saldo",
+        "Avisos proactivos",
+        "Datos exportables y legibles"
+      ],
+      "publisher": {
+        "@id": "https://herawallet.app/#org"
+      },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD",
+        "availability": "https://schema.org/InStock",
+        "description": "Comenzar gratis. Sin tarjeta de crédito."
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://herawallet.app/es/#faq",
+      "inLanguage": "es",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "¿Necesito conectar mi banco?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Registras hablando o escribiendo y Hera entiende el resto. Funciona igual si manejas efectivo, algo esencial en Cuba y en buena parte de Latinoamérica."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Puedo registrar por voz o con una foto?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Las dos cosas. Dictas el movimiento y Hera lo entiende, o fotografías la factura y la IA reconoce el importe, el concepto y la categoría. Después te muestra qué entendió para que lo confirmes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Qué recuerda Hera sobre mí?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Tus metas, tus hábitos de gasto y las decisiones que ya tomaste. Esa memoria vive en archivos de texto legibles que puedes revisar, exportar o borrar en cualquier momento."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Puedo corregirla cuando se equivoca?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Siempre. Hera confirma antes de guardar un movimiento y puedes editar cualquier dato después. Cuando la corriges, aprende de la corrección."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Es gratis?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Puedes empezar gratis, sin tarjeta y sin anuncios. Si más adelante hay un plan de pago, será por funciones extra, nunca por recuperar tus propios datos."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "¿Funciona sin buena conexión?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Registrar y consultar tu información funciona con muy poco ancho de banda. Las respuestas de la IA sí necesitan conexión, y quedan guardadas para cuando vuelvas a entrar."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip btn btn--ghost btn--sm" href="#main">Ir al contenido</a>
+
+<!-- ============================ NAVBAR ============================ -->
+<header class="nav" id="nav">
+  <div class="wrap">
+    <nav class="nav__bar" aria-label="Principal">
+      <a class="brand" href="#top" aria-label="HeraWallet, inicio">
+        <span class="mark" role="img" aria-label="HeraWallet"></span>
+        <span class="brand__name" aria-hidden="true">era<b>Wallet</b></span>
+      </a>
+      <div class="nav__links">
+        <a href="#por-que">Por qué Hera</a>
+        <a href="#como">Cómo funciona</a>
+        <a href="#privacidad">Privacidad</a>
+        <a href="#faq">Preguntas</a>
+      </div>
+      <div class="nav__actions">
+        <a class="langsw" href="/en/" hreflang="en" lang="en" aria-label="Read this page in English">EN</a>
+        <button class="iconbtn" id="theme" type="button" aria-label="Cambiar entre tema claro y oscuro">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a7 7 0 1 0 10.5 10.5Z"/></svg>
+        </button>
+        <a class="btn btn--primary btn--sm" href="#empezar"><span class="only-wide">Comenzar gratis</span><span class="only-narrow">Empezar</span></a>
+      </div>
+    </nav>
+  </div>
+  <div class="progress" id="progress" aria-hidden="true"></div>
+</header>
+
+<main id="main">
+<span id="top"></span>
+
+<!-- ============================ 1. HERO ============================ -->
+<section class="hero">
+  <div class="wrap">
+    <div class="hero__grid">
+      <div>
+        <h1 class="rv in" data-d="1">La inteligencia artificial que <em>entiende</em> tu dinero.</h1>
+        <p class="lead rv in" data-d="2">Hera aprende de tus hábitos, recuerda tus metas y te escribe antes de que el mes se te vaya de las manos. No tienes que preguntarle nada.</p>
+        <div class="hero__cta rv in" data-d="3">
+          <a class="btn btn--primary" href="#empezar">Comenzar gratis
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn btn--ghost btn--demo" href="#app">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5 19 12 7 19.5z"/></svg>
+            <span class="only-wide">Ver demostración</span><span class="only-narrow">Ver demo</span>
+          </a>
+        </div>
+        <p class="hero__fine rv in" data-d="4">
+          <span><i></i>Sin tarjetas</span>
+          <span><i></i>Sin anuncios</span>
+          <span><i></i>Privacidad primero</span>
+        </p>
+      </div>
+
+      <div class="hero__stage">
+        <div class="hero__halo" aria-hidden="true"></div>
+
+        <!-- Notificación proactiva: Hera trabaja con la app cerrada -->
+        <aside class="push" id="push" aria-label="Ejemplo de aviso de Hera">
+          <span class="push__av" aria-hidden="true"><span class="mark"></span></span>
+          <div>
+            <p class="push__k">Hera · ahora</p>
+            <p class="push__t">Este mes vas 18 % arriba en restaurantes. ¿Lo revisamos juntos?</p>
+          </div>
+        </aside>
+
+        <!-- Mockup: la app hablando primero -->
+        <div class="phone" id="phone" role="img" aria-label="Pantalla de HeraWallet: Hera recuerda la meta de comprar una casa, muestra un 63 % de progreso y propone revisarla.">
+          <div class="phone__screen">
+            <span class="phone__island" aria-hidden="true"></span>
+            <div class="appbar">
+              <span class="mark" aria-hidden="true" style="width:13px;height:16px"></span>
+              <span class="appbar__lock" aria-hidden="true">era<b>Wallet</b></span>
+              <div class="appbar__tools" aria-hidden="true">
+                <span class="appbar__tool"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="appbar__tool"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.5 20a2 2 0 0 0 3 0"/></svg></span>
+                <span class="appbar__tool appbar__tool--me"><img src="/assets/av-5fee57c5.png" width="23" height="23" alt=""></span>
+              </div>
+            </div>
+
+            <div class="chat" id="chat">
+              <p class="chat__day">Hoy · 9:41</p>
+              <div class="bub" data-step="1">Hace tres meses querías comprar una casa.</div>
+              <div class="bub bub--card" data-step="2">
+                <div class="goal">
+                  <span class="goal__t">Casa propia</span>
+                  <span class="goal__p num" data-count="63" data-suffix=" %">0 %</span>
+                </div>
+                <div class="bar"><i data-fill="63"></i></div>
+                <p class="goal__sub">12 400 de 20 000 · a este ritmo, marzo 2027</p>
+              </div>
+              <div class="bub" data-step="3">Ya alcanzaste el <b>63 %</b>. ¿Revisamos si es buen momento?</div>
+              <div class="chips" data-step="4">
+                <button class="chip chip--go" type="button" tabindex="-1">Sí, revisemos</button>
+                <button class="chip" type="button" tabindex="-1">Más tarde</button>
+              </div>
+            </div>
+
+            <div class="composer" id="composer" aria-hidden="true">
+              <p class="composer__ph">¿Cómo va mi meta del fondo de emergencia?</p>
+              <div class="composer__row">
+                <svg viewBox="0 0 24 24"><path d="M20 11.5 12.5 19a4.6 4.6 0 0 1-6.5-6.5l7-7a3 3 0 0 1 4.3 4.3l-7 7a1.4 1.4 0 0 1-2-2l6.3-6.3"/></svg>
+                <svg class="composer__mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M18.5 11v1a6.5 6.5 0 0 1-13 0v-1"/><path d="M12 18.5V21"/></svg>
+                <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/></svg>
+                <span class="composer__go">
+                  <svg viewBox="0 0 24 24" stroke-linejoin="round"><path d="M4 12 21 4l-8 17-2.5-6.5z"/></svg>
+                  Consultar
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 2. INDICADORES ============================ -->
+<section class="strip" aria-label="Lo que puedes esperar">
+  <div class="wrap">
+    <div class="strip__row">
+      <div class="strip__i rv"><b>Sin anuncios</b><span>ni venta de datos</span></div>
+      <div class="strip__i rv" data-d="1"><b>Voz y foto</b><span>dicta o escanea el ticket</span></div>
+      <div class="strip__i rv" data-d="2"><b>Sin banco</b><span>funciona con efectivo</span></div>
+      <div class="strip__i rv" data-d="3"><b>Tu memoria</b><span>en archivos que puedes leer</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 3. POR QUÉ ============================ -->
+<section class="band anchor" id="por-que">
+  <div class="wrap">
+    <p class="eyebrow eyebrow--muted rv">El problema</p>
+    <h2 class="rv" data-d="1" style="margin-top:18px;max-width:22ch">Las apps te muestran números. Hera te dice qué significan.</h2>
+    <p class="lead rv" data-d="2" style="margin-top:22px;max-width:44ch">Registrar gastos es la parte fácil. Lo difícil es saber qué hacer con ellos. Hera hace la parte difícil.</p>
+
+    <div class="cards3" style="margin-top:clamp(44px,5vw,68px)">
+      <article class="card rv" data-d="1" data-tilt>
+        <span class="icobox" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 4a4 4 0 0 0-4 4c-1.7.6-3 2.2-3 4 0 1.5.8 2.8 2 3.5V16a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3v-.5c1.2-.7 2-2 2-3.5 0-1.8-1.3-3.4-3-4a4 4 0 0 0-4-4Z"/><path d="M12 4v15"/></svg>
+        </span>
+        <h3>Aprende</h3>
+        <p>Entiende cómo gastas: los días, las categorías, las excusas. Cada conversación la vuelve más precisa.</p>
+      </article>
+      <article class="card rv" data-d="2" data-tilt>
+        <span class="icobox" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        <h3>Recuerda</h3>
+        <p>Le contaste tu meta una vez. Tres meses después la sigue teniendo presente, sin que tengas que repetirla.</p>
+      </article>
+      <article class="card rv" data-d="3" data-tilt>
+        <span class="icobox" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><polyline points="21 7 13.5 15 9 10.5 3 17"/><polyline points="15 7 21 7 21 13"/></svg>
+        </span>
+        <h3>Se anticipa</h3>
+        <p>Detecta el patrón antes del problema: ese gasto de fin de mes que siempre te descuadra la cuenta.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ HILO NARRATIVO ============================ -->
+<div class="wrap">
+  <div class="beats" id="beats">
+    <span class="beats__fill" id="fill" aria-hidden="true"></span>
+
+    <!-- ---------- 4. CÓMO FUNCIONA ---------- -->
+    <section class="beat anchor" id="como">
+      <div class="beat__rail" aria-hidden="true">
+        <div class="beat__node"><span class="beat__dot"></span><span class="beat__time">El primer día</span></div>
+      </div>
+      <div class="beat__body">
+        <p class="eyebrow rv">Cómo funciona</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Le hablas como a una persona.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px">Sin formularios, sin categorías, sin plantillas. Dices lo que pasó y Hera se encarga del resto.</p>
+        <div class="cards3 beat__wide">
+          <article class="card rv" data-d="1" data-tilt>
+            <span class="icobox" aria-hidden="true">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M18.5 11v1a6.5 6.5 0 0 1-13 0v-1"/><path d="M12 18.5V21"/></svg>
+            </span>
+            <h3>Lo dices o lo fotografías</h3>
+            <p>«Gasté 50 en la cena con Ana». Dictado, escrito, o una foto del ticket: la IA lee el importe.</p>
+          </article>
+          <article class="card rv" data-d="2" data-tilt>
+            <span class="icobox" aria-hidden="true">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M21.5 11.1V12a9.5 9.5 0 1 1-5.6-8.7"/><polyline points="21.5 4.5 12 14 9 11"/></svg>
+            </span>
+            <h3>Lo confirma</h3>
+            <p>Te muestra qué entendió antes de guardar nada. La última palabra siempre es tuya.</p>
+          </article>
+          <article class="card rv" data-d="3" data-tilt>
+            <span class="icobox" aria-hidden="true">
+              <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><circle cx="5" cy="19" r="2.4"/><circle cx="19" cy="19" r="2.4"/><path d="M12 7.4v3.2M10.8 12.2 6.6 16.8M13.2 12.2l4.2 4.6"/></svg>
+            </span>
+            <h3>Lo conecta</h3>
+            <p>Cruza el movimiento con tus metas y te dice, en una frase, qué acaba de cambiar.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 5. IA CONVERSACIONAL ---------- -->
+    <section class="beat anchor" id="conversacion">
+      <div class="beat__rail" aria-hidden="true">
+        <div class="beat__node"><span class="beat__dot"></span><span class="beat__time">Cada día</span></div>
+      </div>
+      <div class="beat__body">
+        <p class="eyebrow rv">IA conversacional</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Una conversación, no un formulario.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px">Hera consulta tus datos reales antes de responder. Nada de consejos genéricos: cifras tuyas.</p>
+
+        <div class="convo beat__wide rv" data-d="1">
+          <div class="bub bub--me">Gasté 50 cenando. ¿Cómo afecta mi meta de ahorro?</div>
+          <div class="bub">Lo registré en <b>Restaurantes</b>. Vas por 310 este mes, un 18 % arriba de tu promedio.<br>Tu meta de la casa sigue en 63 %: no la tocaste. Pero con dos cenas más así, se atrasa 11 días.</div>
+          <div class="bub bub--me">¿Y si corto una?</div>
+          <div class="bub">Recuperas 9 de esos 11 días. Te aviso el viernes, que es cuando suele pasar.</div>
+          <div class="tools" aria-label="Herramientas que usó Hera">
+            <span class="tool">create_transaction</span>
+            <span class="tool">get_financial_summary</span>
+            <span class="tool">simulate_forecast</span>
+          </div>
+          <p class="convo__note">
+            <svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Consultó tu base de datos antes de responder · 1,2 s
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 6. OBJETIVOS ---------- -->
+    <section class="beat anchor" id="objetivos">
+      <div class="beat__rail" aria-hidden="true">
+        <div class="beat__node"><span class="beat__dot"></span><span class="beat__time">Hace tres meses</span></div>
+      </div>
+      <div class="beat__body">
+        <p class="eyebrow rv">Objetivos inteligentes</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Tus metas no se olvidan solas.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px">Cada movimiento se mide contra lo que quieres lograr. El progreso es la respuesta, no un gráfico más.</p>
+
+        <div class="goals beat__wide rv" data-d="1">
+          <div class="goalrow">
+            <span class="goalrow__t">Casa propia</span>
+            <span class="goalrow__n"><b class="num" data-count="12600">0</b> / 20 000</span>
+            <span class="goalrow__bar"><i data-fill="63"></i></span>
+            <span class="goalrow__m">63 % · creada hace 3 meses · a este ritmo, marzo 2027</span>
+          </div>
+          <div class="goalrow">
+            <span class="goalrow__t">Fondo de emergencia (3 meses)</span>
+            <span class="goalrow__n"><b class="num" data-count="1850">0</b> / 3 000</span>
+            <span class="goalrow__bar"><i data-fill="62"></i></span>
+            <span class="goalrow__m">62 % · cuota sugerida 65 / semana · límite 31/12/2026</span>
+          </div>
+          <div class="goalrow">
+            <span class="goalrow__t">Laptop de trabajo</span>
+            <span class="goalrow__n"><b class="num" data-count="780">0</b> / 1 200</span>
+            <span class="goalrow__bar"><i data-fill="65"></i></span>
+            <span class="goalrow__m">65 % · Hera la adelantó: la usas para facturar</span>
+          </div>
+          <div class="goalrow">
+            <span class="goalrow__t" style="color:var(--ink-2)">Viaje a Japón</span>
+            <span class="goalrow__n"><b class="num" data-count="920">0</b> / 2 500</span>
+            <span class="goalrow__bar"><i class="soft" data-fill="37"></i></span>
+            <span class="goalrow__m">37 % · después del fondo de emergencia · límite 15/04/2027</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 7. PREDICCIONES ---------- -->
+    <section class="beat anchor" id="predicciones">
+      <div class="beat__rail" aria-hidden="true">
+        <div class="beat__node"><span class="beat__dot"></span><span class="beat__time">En cuatro meses</span></div>
+      </div>
+      <div class="beat__body">
+        <p class="eyebrow rv">Predicciones</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Te avisa antes, no después.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px">Hera proyecta tu saldo con tus propios ciclos de gasto y te habla mientras todavía puedes hacer algo.</p>
+
+        <div class="panel beat__wide rv" data-d="1">
+          <div class="panel__head">
+            <div>
+              <p class="eyebrow eyebrow--muted">Proyección de saldo</p>
+              <p style="font-family:var(--serif);font-size:1.3rem;letter-spacing:-.02em;margin-top:6px">Próximos cuatro meses</p>
+            </div>
+            <div class="panel__legend">
+              <span><i class="lg-line" aria-hidden="true"></i>Real</span>
+              <span><i class="lg-dash" aria-hidden="true"></i>Proyección</span>
+            </div>
+          </div>
+
+          <svg class="chart" viewBox="0 0 640 232" role="img" aria-label="Gráfico: el saldo real de los últimos cinco meses y la proyección de los próximos tres. En marzo la proyección cae por debajo del límite de 200.">
+            <rect class="risk" x="40" y="177.5" width="570" height="22.5"></rect>
+            <line class="axis" x1="40" y1="200" x2="610" y2="200"></line>
+            <line class="axis" x1="40" y1="177.5" x2="610" y2="177.5" stroke-dasharray="2 4"></line>
+            <text class="lbl" x="40" y="171">LÍMITE 200</text>
+            <path class="area" d="M40,101 L121,83 L202,126 L283,85 L364,106 L364,200 L40,200 Z"></path>
+            <path class="real draw" d="M40,101 L121,83 L202,126 L283,85 L364,106"></path>
+            <path class="proj draw" d="M364,106 L445,182 L526,155 L607,128"></path>
+            <circle class="mk" cx="445" cy="182" r="4"></circle>
+            <circle cx="445" cy="182" r="9" fill="none" stroke="var(--brand)" stroke-width="1" opacity=".45"></circle>
+            <text class="lbl" x="424" y="215" style="fill:var(--brand-text)">12 MAR</text>
+            <text class="lbl" x="33" y="215">OCT</text>
+            <text class="lbl" x="114" y="215">NOV</text>
+            <text class="lbl" x="196" y="215">DIC</text>
+            <text class="lbl" x="277" y="215">ENE</text>
+            <text class="lbl" x="358" y="215">FEB</text>
+            <text class="lbl" x="519" y="215">ABR</text>
+            <text class="lbl" x="600" y="215">MAY</text>
+          </svg>
+
+          <div class="callout">
+            <span class="callout__av" aria-hidden="true"><span class="mark"></span></span>
+            <p>El 12 de marzo tu saldo baja de 200. Si mueves <b>40 hoy</b> al fondo de emergencia, llegas sin descubierto.<br><span class="mono" style="font-size:.68rem;letter-spacing:.06em;color:var(--ink-2)">BASADO EN 4 MESES DE TUS DATOS</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- 8. COACH ---------- -->
+    <section class="beat anchor" id="coach">
+      <div class="beat__rail" aria-hidden="true">
+        <div class="beat__node"><span class="beat__dot"></span><span class="beat__time">Siempre</span></div>
+      </div>
+      <div class="beat__body">
+        <p class="eyebrow rv">Coach financiero</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Trabaja también cuando cierras la app.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px">Revisa, compara y solo te escribe cuando vale la pena. La mayoría de las apps esperan tu pregunta; Hera empieza la conversación.</p>
+
+        <div class="beat__wide" style="display:flex;flex-direction:column;gap:20px">
+          <div class="panel rv" data-d="1">
+            <div class="score">
+              <div class="gauge" role="img" aria-label="Score financiero: 78 de 100, seis puntos más que el mes pasado.">
+                <svg viewBox="0 0 132 132" width="132" height="132" aria-hidden="true">
+                  <circle class="track" cx="66" cy="66" r="58"></circle>
+                  <circle class="val" cx="66" cy="66" r="58" data-score="78"></circle>
+                </svg>
+                <span class="gauge__n"><b class="num" data-count="78">0</b><span>Score</span></span>
+              </div>
+              <div>
+                <h3 style="margin-bottom:10px">Tu score sube cuando decides mejor.</h3>
+                <p style="color:var(--ink-2);font-size:.96rem;max-width:42ch">No mide cuánto ganas. Mide constancia, colchón y cuántas veces cumpliste lo que te propusiste.</p>
+                <p class="delta" style="margin-top:14px">
+                  <svg class="ico" style="width:13px;height:13px;stroke:var(--success)" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+                  +6 este mes
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="hsays rv" data-d="2" style="max-width:none">
+            <span class="hsays__av" aria-hidden="true"><span class="mark"></span></span>
+            <div>
+              <p class="hsays__k">Hera · domingo 8:12</p>
+              <p class="hsays__t">Mañana toca el alquiler y tu saldo queda en 210. ¿Muevo la compra grande al viernes?</p>
+            </div>
+          </div>
+          <div class="hsays rv" data-d="3" style="max-width:none">
+            <span class="hsays__av" aria-hidden="true"><span class="mark"></span></span>
+            <div>
+              <p class="hsays__k">Hera · lo hablamos hace tres meses</p>
+              <p class="hsays__t">Ya alcanzaste el 63 % de la casa. <em>¿Revisamos si es buen momento?</em></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /beats -->
+</div><!-- /wrap -->
+
+<!-- ============================ 9. CAPTURAS REALES ============================ -->
+<section class="band anchor" id="app">
+  <div class="wrap">
+    <div style="max-width:52ch">
+      <p class="eyebrow eyebrow--muted rv">Capturas reales</p>
+      <h2 class="rv" data-d="1" style="margin-top:18px">Seis pantallas. Ninguna te pide llenar un formulario.</h2>
+      <p class="lead rv" data-d="2" style="margin-top:20px">Sin maquetas ni retoques: esto es Hera funcionando.</p>
+    </div>
+
+    <div class="shots" style="margin-top:clamp(48px,6vw,80px)">
+      <figure class="shot rv">
+        <div class="phone">
+          <div class="phone__screen">
+            <img class="shotimg" src="/assets/av-7df911d2.webp" width="432" height="889" alt="Pantalla de inicio de HeraWallet: Hera saluda por su nombre al usuario y ofrece un campo para preguntar, con accesos a Transacciones, Ahorros, Metas, Score y Reportes." loading="lazy" decoding="async">
+          </div>
+        </div>
+        <figcaption class="shot__cap">
+          <b>Empieza la conversación</b>
+          <span>Hera abre con lo que toca hoy. Tú preguntas en tus palabras.</span>
+        </figcaption>
+      </figure>
+      <figure class="shot rv">
+        <div class="phone">
+          <div class="phone__screen">
+            <img class="shotimg" src="/assets/av-6258f3b6.webp" width="432" height="889" alt="Ventana Crear Registro de HeraWallet con la pestaña Dictar por voz activa y un botón de micrófono grande." loading="lazy" decoding="async">
+          </div>
+        </div>
+        <figcaption class="shot__cap">
+          <b>Dictar o escanear</b>
+          <span>Habla, o fotografía el ticket: la IA saca importe, concepto y categoría.</span>
+        </figcaption>
+      </figure>
+      <figure class="shot rv">
+        <div class="phone">
+          <div class="phone__screen">
+            <img class="shotimg" src="/assets/av-c2393b5d.webp" width="432" height="889" alt="Listado de transacciones de HeraWallet con ingresos, gastos, balance del periodo y etiquetas que indican si el movimiento entró por voz o por imagen." loading="lazy" decoding="async">
+          </div>
+        </div>
+        <figcaption class="shot__cap">
+          <b>Todo queda trazado</b>
+          <span>Cada movimiento recuerda cómo entró: por voz, por foto o a mano.</span>
+        </figcaption>
+      </figure>
+      <figure class="shot rv">
+        <div class="phone">
+          <div class="phone__screen">
+            <img class="shotimg" src="/assets/av-20d33a77.webp" width="432" height="889" alt="Pantalla de Metas de Ahorro y Fondos de Reserva de HeraWallet con el fondo de emergencia al 62 % y un viaje a Japón al 37 %." loading="lazy" decoding="async">
+          </div>
+        </div>
+        <figcaption class="shot__cap">
+          <b>Metas y fondos</b>
+          <span>Cuota semanal sugerida y avance real de cada objetivo.</span>
+        </figcaption>
+      </figure>
+      <figure class="shot rv">
+        <div class="phone">
+          <div class="phone__screen">
+            <img class="shotimg" src="/assets/av-a584aa20.webp" width="432" height="889" alt="Pantalla de Salud Financiera de HeraWallet con el Score Hera en 78 de 100 y el desglose de los cinco pilares financieros." loading="lazy" decoding="async">
+          </div>
+        </div>
+        <figcaption class="shot__cap">
+          <b>Score Hera</b>
+          <span>Cinco pilares en tiempo real. No mide cuánto ganas, mide cómo decides.</span>
+        </figcaption>
+      </figure>
+      <figure class="shot rv">
+        <div class="phone">
+          <div class="phone__screen">
+            <img class="shotimg" src="/assets/av-34c0ea30.webp" width="432" height="889" alt="Detalle del Fondo de Emergencia en HeraWallet con un plan estratégico de cuatro pasos verificables, dos ya completados." loading="lazy" decoding="async">
+          </div>
+        </div>
+        <figcaption class="shot__cap">
+          <b>Plan estratégico</b>
+          <span>Pasos concretos que puedes ir marcando. Y regenerar cuando cambie el mes.</span>
+        </figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 10. COMPARATIVA ============================ -->
+<section class="band band--tight anchor" id="comparativa">
+  <div class="wrap">
+    <div style="max-width:46ch">
+      <p class="eyebrow eyebrow--muted rv">Comparativa</p>
+      <h2 class="rv" data-d="1" style="margin-top:18px">La diferencia no es el diseño.</h2>
+      <p class="lead rv" data-d="2" style="margin-top:20px">Es quién empieza la conversación.</p>
+    </div>
+
+    <div class="tablewrap rv" data-d="1" style="margin-top:clamp(36px,4vw,56px)" tabindex="0" aria-label="Tabla comparativa, desplázate horizontalmente">
+      <table class="cmp">
+        <caption class="visually-hidden" style="position:absolute;left:-9999px">Comparación de HeraWallet con apps de gastos y hojas de cálculo</caption>
+        <thead>
+          <tr>
+            <th scope="col">&nbsp;</th>
+            <th scope="col" class="col-h"><span class="cmp__brand"><span class="mark" aria-hidden="true"></span>HeraWallet</span></th>
+            <th scope="col">Apps de gastos</th>
+            <th scope="col">Hoja de cálculo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Registrar por voz</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><i class="no" role="img" aria-label="No"></i></td></tr>
+          <tr><th scope="row">Entiende el contexto</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><i class="no" role="img" aria-label="No"></i></td></tr>
+          <tr><th scope="row">Recuerda tus metas meses después</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><i class="no" role="img" aria-label="No"></i></td></tr>
+          <tr><th scope="row">Empieza la conversación</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><i class="no" role="img" aria-label="No"></i></td></tr>
+          <tr><th scope="row">Predice tu fin de mes</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><i class="no" role="img" aria-label="No"></i></td></tr>
+          <tr><th scope="row">Explica el porqué de cada cifra</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><i class="no" role="img" aria-label="No"></i></td></tr>
+          <tr><th scope="row">Funciona sin conectar el banco</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td></tr>
+          <tr><th scope="row">Tus datos salen en un archivo tuyo</th><td class="col-h"><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td><td><i class="no" role="img" aria-label="No"></i></td><td><svg class="yes" viewBox="0 0 24 24" aria-label="Sí"><polyline points="20 6 9 17 4 12"/></svg></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 11. PRIVACIDAD ============================ -->
+<section class="band night anchor" id="privacidad">
+  <div class="wrap">
+    <div class="grid2">
+      <div>
+        <p class="eyebrow rv">Seguridad y privacidad</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Tu memoria financiera es tuya. Literalmente.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:22px;max-width:40ch">Lo que Hera aprende de ti no queda encerrado en una base de datos ajena: vive en archivos de texto que puedes abrir, exportar o borrar cuando quieras.</p>
+        <div class="rv" data-d="3" style="margin-top:30px">
+          <a class="btn btn--ghostnight" href="#empezar">Leer la política de privacidad
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="rv" data-d="2">
+        <div class="vault" aria-label="Ejemplo del archivo de memoria de Hera">
+          <p class="vault__bar"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>&nbsp; PERFIL_USUARIO.md</p>
+<pre style="margin:0;font:inherit;white-space:pre-wrap"><b># Metas</b>
+- Casa propia · 20 000 · <span class="c">creada 12/11</span>
+- Fondo de emergencia · 3 000
+- Viaje a México · <span class="c">en pausa</span>
+
+<b># Hábitos</b>
+- Cobra por transferencia el día 5
+- Gasta más los sábados por la tarde
+- Sube restaurantes a fin de mes
+
+<b># Aprendizajes</b>
+- Prefiere respuestas cortas
+- No quiere avisos antes de las 8:00</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards3" style="margin-top:clamp(48px,6vw,76px)">
+      <article class="card rv" data-d="1" data-tilt>
+        <span class="icobox" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+        </span>
+        <h3>Cifrado de extremo a extremo</h3>
+        <p>Tus movimientos viajan cifrados y se guardan cifrados. Ni el equipo de Hera lee tus cifras.</p>
+      </article>
+      <article class="card rv" data-d="2" data-tilt>
+        <span class="icobox" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A9.6 9.6 0 0 1 12 5c5 0 9 4.5 9 7 0 .8-.5 1.9-1.4 3"/><path d="M6.3 7.3C3.9 8.9 3 11 3 12c0 2.5 4 7 9 7 1.6 0 3-.4 4.2-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+        </span>
+        <h3>Sin anuncios, sin reventa</h3>
+        <p>No hay anunciantes que financien esto, así que no hay nada que vender. Ese es el modelo.</p>
+      </article>
+      <article class="card rv" data-d="3" data-tilt>
+        <span class="icobox" aria-hidden="true">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/><path d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/></svg>
+        </span>
+        <h3>Borrar es borrar</h3>
+        <p>Un botón elimina tu cuenta, tus movimientos y la memoria que Hera construyó. Sin copias escondidas.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 12. TESTIMONIOS ============================ -->
+<section class="band anchor" id="testimonios">
+  <div class="wrap">
+    <div style="max-width:44ch">
+      <p class="eyebrow eyebrow--muted rv">Testimonios</p>
+      <h2 class="rv" data-d="1" style="margin-top:18px">Lo que cambia no es la app. Es la calma.</h2>
+    </div>
+
+    <div class="quotes" style="margin-top:clamp(44px,5vw,64px)">
+      <article class="card quote rv" data-d="1" data-tilt>
+        <p>«Llevaba tres años intentando ahorrar con una hoja de cálculo. Hera me escribió un domingo y me dijo exactamente qué estaba pasando.»</p>
+        <div class="who">
+          <img src="/assets/av-5fee57c5.png" width="38" height="38" alt="" loading="lazy" decoding="async">
+          <div><b>Nombre Apellido</b><span>Freelancer · La Habana</span></div>
+        </div>
+      </article>
+      <article class="card quote rv" data-d="2" data-tilt>
+        <p>«Facturo en tres monedas distintas. Es la primera vez que entiendo cuánto gano de verdad al mes.»</p>
+        <div class="who">
+          <img src="/assets/av-5fee57c5.png" width="38" height="38" alt="" loading="lazy" decoding="async">
+          <div><b>Nombre Apellido</b><span>Diseñadora · Ciudad de México</span></div>
+        </div>
+      </article>
+      <article class="card quote rv" data-d="3" data-tilt>
+        <p>«Le dicto los gastos caminando. En dos semanas dejé de tener esa sensación de no saber en qué se me fue el dinero.»</p>
+        <div class="who">
+          <img src="/assets/av-5fee57c5.png" width="38" height="38" alt="" loading="lazy" decoding="async">
+          <div><b>Nombre Apellido</b><span>Emprendedor · Bogotá</span></div>
+        </div>
+      </article>
+    </div>
+    <p class="disclaimer rv">Testimonios de ejemplo. Se sustituirán por reseñas reales antes del lanzamiento.</p>
+  </div>
+</section>
+
+<!-- ============================ 13. FAQ ============================ -->
+<section class="band band--tight anchor" id="faq">
+  <div class="wrap">
+    <div class="grid2" style="align-items:start;gap:clamp(32px,5vw,72px)">
+      <div>
+        <p class="eyebrow eyebrow--muted rv">Preguntas</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px">Lo que suelen preguntarnos.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px;max-width:30ch">Si falta la tuya, escríbenos: contestamos personas.</p>
+      </div>
+
+      <div class="faq rv" data-d="1">
+        <details>
+          <summary>¿Necesito conectar mi banco?
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+          <p class="faq__a">No. Registras hablando o escribiendo y Hera entiende el resto. Funciona igual si manejas efectivo, algo esencial en Cuba y en buena parte de Latinoamérica.</p>
+        </details>
+        <details>
+          <summary>¿Puedo registrar por voz o con una foto?
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+          <p class="faq__a">Las dos cosas. Dictas el movimiento y Hera lo entiende, o fotografías la factura y la IA reconoce el importe, el concepto y la categoría. Después te muestra qué entendió para que lo confirmes.</p>
+        </details>
+        <details>
+          <summary>¿Qué recuerda Hera sobre mí?
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+          <p class="faq__a">Tus metas, tus hábitos de gasto y las decisiones que ya tomaste. Esa memoria vive en archivos de texto legibles que puedes revisar, exportar o borrar en cualquier momento.</p>
+        </details>
+        <details>
+          <summary>¿Puedo corregirla cuando se equivoca?
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+          <p class="faq__a">Siempre. Hera confirma antes de guardar un movimiento y puedes editar cualquier dato después. Cuando la corriges, aprende de la corrección.</p>
+        </details>
+        <details>
+          <summary>¿Es gratis?
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+          <p class="faq__a">Puedes empezar gratis, sin tarjeta y sin anuncios. Si más adelante hay un plan de pago, será por funciones extra, nunca por recuperar tus propios datos.</p>
+        </details>
+        <details>
+          <summary>¿Funciona sin buena conexión?
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </summary>
+          <p class="faq__a">Registrar y consultar tu información funciona con muy poco ancho de banda. Las respuestas de la IA sí necesitan conexión, y quedan guardadas para cuando vuelvas a entrar.</p>
+        </details>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 14. CIERRE ============================ -->
+<section class="final anchor" id="empezar">
+  <div class="wrap">
+    <span class="mark rv" aria-hidden="true"></span>
+    <h2 class="rv" data-d="1" style="margin-top:26px;max-width:20ch;margin-inline:auto">Tus metas empiezan con un mejor control.</h2>
+    <p class="lead rv" data-d="2" style="margin-top:24px;max-width:40ch;margin-inline:auto">Cuéntale a Hera qué quieres lograr. Ella se acuerda por ti.</p>
+    <div class="hero__cta rv" data-d="3" style="justify-content:center;margin-top:34px">
+      <a class="btn btn--primary" href="#empezar">Comenzar gratis
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a class="btn btn--ghost" href="#app"><span class="only-wide">Ver capturas reales</span><span class="only-narrow">Ver capturas</span></a>
+    </div>
+    <p class="hero__fine rv" data-d="4" style="justify-content:center">
+      <span><i></i>Sin tarjetas</span>
+      <span><i></i>Sin anuncios</span>
+      <span><i></i>Privacidad primero</span>
+    </p>
+  </div>
+</section>
+</main>
+
+<!-- ============================ 15. FOOTER ============================ -->
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot__grid">
+      <div class="foot__col">
+        <a class="brand" href="#top">
+          <span class="mark" role="img" aria-label="HeraWallet"></span>
+          <span class="brand__name" aria-hidden="true">era<b>Wallet</b></span>
+        </a>
+        <p class="foot__about">Un director financiero personal para quien nunca tuvo uno.</p>
+      </div>
+      <div class="foot__col">
+        <h2>Producto</h2>
+        <ul>
+          <li><a href="#como">Cómo funciona</a></li>
+          <li><a href="#conversacion">IA conversacional</a></li>
+          <li><a href="#objetivos">Objetivos</a></li>
+          <li><a href="#predicciones">Predicciones</a></li>
+          <li><a href="#app">La aplicación</a></li>
+        </ul>
+      </div>
+      <div class="foot__col">
+        <h2>Compañía</h2>
+        <ul>
+          <li><a href="#por-que">Por qué Hera</a></li>
+          <li><a href="#comparativa">Comparativa</a></li>
+          <li><a href="#testimonios">Historias</a></li>
+          <li><a href="#faq">Preguntas</a></li>
+        </ul>
+      </div>
+      <div class="foot__col">
+        <h2>Confianza</h2>
+        <ul>
+          <li><a href="#privacidad">Privacidad</a></li>
+          <li><a href="#privacidad">Seguridad</a></li>
+          <li><a href="#privacidad">Tus datos</a></li>
+          <li><a href="#privacidad">Borrar tu cuenta</a></li>
+        </ul>
+      </div>
+      <div class="foot__col">
+        <h2>Ayuda</h2>
+        <ul>
+          <li><a href="#empezar">Empezar gratis</a></li>
+          <li><a href="#empezar">Escríbenos</a></li>
+          <li><a href="#empezar">Sugerir una función</a></li>
+          <li><a href="#empezar">Reportar un problema</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="foot__bottom">
+      <span>© 2026 HeraWallet</span>
+      <span>Hecho para Cuba y Latinoamérica</span>
+      <span>Tus metas empiezan con un mejor control</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+   HeraWallet — interacciones
+   Sin dependencias. Todo respeta prefers-reduced-motion.
+   ============================================================ */
+(function () {
+  'use strict';
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var $  = function (s, c) { return (c || document).querySelector(s); };
+  var $$ = function (s, c) { return Array.prototype.slice.call((c || document).querySelectorAll(s)); };
+
+  /* ---------- Tema claro / oscuro ---------- */
+  var root = document.documentElement;
+  var prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+  var theme = prefersDark.matches ? 'dark' : 'light';
+  var apply = function () {
+    root.setAttribute('data-theme', theme);
+    var btn = $('#theme');
+    if (btn) btn.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false');
+  };
+  apply();
+  prefersDark.addEventListener('change', function (e) { theme = e.matches ? 'dark' : 'light'; apply(); });
+  var tbtn = $('#theme');
+  if (tbtn) tbtn.addEventListener('click', function () {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    apply();
+  });
+
+  /* ---------- Contadores ---------- */
+  var fmt = function (n) { return n.toLocaleString('es-ES').replace(/\./g, '\u2009'); };
+  function count(el) {
+    if (el.dataset.done) return;
+    el.dataset.done = '1';
+    var target = parseFloat(el.dataset.count);
+    var suffix = el.dataset.suffix || '';
+    if (reduce) { el.textContent = fmt(target) + suffix; return; }
+    var dur = 1400, t0 = null;
+    function step(t) {
+      if (!t0) t0 = t;
+      var p = Math.min((t - t0) / dur, 1);
+      var e = 1 - Math.pow(1 - p, 3);
+      el.textContent = fmt(Math.round(target * e)) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  /* ---------- Barras, medidor y gráfico ---------- */
+  function bars(scope) {
+    $$('[data-fill]', scope).forEach(function (b) {
+      if (b.dataset.done) return;
+      b.dataset.done = '1';
+      b.style.width = b.dataset.fill + '%';
+    });
+  }
+  function gauge(scope) {
+    $$('.val[data-score]', scope).forEach(function (c) {
+      if (c.dataset.done) return;
+      c.dataset.done = '1';
+      var r = c.r.baseVal.value, len = 2 * Math.PI * r;
+      c.style.setProperty('--c', len);
+      requestAnimationFrame(function () {
+        c.style.strokeDashoffset = len * (1 - c.dataset.score / 100);
+      });
+    });
+  }
+  function draw(scope) {
+    $$('.draw', scope).forEach(function (p) {
+      if (p.dataset.done) return;
+      p.dataset.done = '1';
+      var len = Math.ceil(p.getTotalLength());
+      p.style.setProperty('--len', len);
+      requestAnimationFrame(function () { p.classList.add('on'); });
+    });
+  }
+
+  /* ---------- Scroll reveal ---------- */
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        var el = en.target;
+        el.classList.add('in');
+        $$('[data-count]', el).forEach(count);
+        if (el.hasAttribute('data-count')) count(el);
+        bars(el); gauge(el); draw(el);
+        io.unobserve(el);
+      });
+    }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' });
+    $$('.rv').forEach(function (el) { io.observe(el); });
+
+    /* nodos del hilo */
+    var bo = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        en.target.classList.toggle('in', en.isIntersecting);
+      });
+    }, { rootMargin: '-45% 0px -45% 0px' });
+    $$('.beat').forEach(function (el) { bo.observe(el); });
+  } else {
+    $$('.rv').forEach(function (el) { el.classList.add('in'); });
+    bars(document); gauge(document); draw(document);
+    $$('[data-count]').forEach(count);
+  }
+
+  /* ---------- Navbar, progreso y relleno del hilo ---------- */
+  var nav = $('#nav'), prog = $('#progress'), beats = $('#beats'), fill = $('#fill');
+  var ticking = false;
+  function onScroll() {
+    var y = window.pageYOffset;
+    if (nav) nav.classList.toggle('stuck', y > 12);
+    if (prog) {
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      prog.style.transform = 'scaleX(' + (max > 0 ? Math.min(y / max, 1) : 0) + ')';
+    }
+    if (beats && fill) {
+      var r = beats.getBoundingClientRect();
+      var h = Math.min(Math.max(window.innerHeight * 0.5 - r.top, 0), r.height);
+      fill.style.height = h + 'px';
+    }
+    ticking = false;
+  }
+  window.addEventListener('scroll', function () {
+    if (!ticking) { ticking = true; requestAnimationFrame(onScroll); }
+  }, { passive: true });
+  window.addEventListener('resize', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- Luz que sigue al cursor (muy ligera) ---------- */
+  if (window.matchMedia('(hover: hover)').matches && !reduce) {
+    $$('[data-tilt]').forEach(function (card) {
+      card.addEventListener('pointermove', function (e) {
+        var r = card.getBoundingClientRect();
+        card.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+        card.style.setProperty('--my', (e.clientY - r.top) + 'px');
+      });
+    });
+  }
+
+  /* ---------- Secuencia de entrada del hero ---------- */
+  var phone = $('#phone');
+  function sequence() {
+    if (!phone) return;
+    phone.classList.add('in');
+    var steps = $$('[data-step]');
+    var push = $('#push');
+    var composer = $('#composer');
+    var bar = $('.chat .bar > i');
+    if (reduce) {
+      steps.forEach(function (s) {
+        s.classList.add('on');
+        $$('.chip', s).forEach(function (c) { c.classList.add('on'); });
+      });
+      if (bar) bar.style.width = bar.dataset.fill + '%';
+      if (push) push.classList.add('on');
+      return;
+    }
+    var at = [820, 1420, 2280, 2900];
+    steps.forEach(function (s, i) {
+      setTimeout(function () {
+        s.classList.add('on');
+        $$('[data-count]', s).forEach(count);
+        $$('.chip', s).forEach(function (c, j) {
+          setTimeout(function () { c.classList.add('on'); }, j * 120);
+        });
+      }, at[i] || 3200);
+    });
+    setTimeout(function () { if (bar) bar.style.width = bar.dataset.fill + '%'; }, 1650);
+    setTimeout(function () { if (composer) composer.classList.add('pulse'); }, 3400);
+    setTimeout(function () { if (push) push.classList.add('on'); }, 3900);
+  }
+  if (document.readyState === 'complete') sequence();
+  else window.addEventListener('load', sequence);
+  setTimeout(sequence, 1200); /* red lenta: no esperamos las fuentes */
+
+  /* ---------- Acordeón: solo uno abierto ---------- */
+  var faqs = $$('.faq details');
+  faqs.forEach(function (d) {
+    d.addEventListener('toggle', function () {
+      if (!d.open) return;
+      faqs.forEach(function (o) { if (o !== d) o.open = false; });
+    });
+  });
+})();
+
+</script>
+</body>
+</html>
