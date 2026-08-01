@@ -4811,8 +4811,8 @@ export default function App() {
             <h1 className="text-2xl font-serif font-semibold tracking-tight text-text-primary">HeraWallet</h1>
             <p className="text-xs text-text-secondary max-w-[260px] mx-auto leading-relaxed">
               {!otpSent
-                ? 'Tus metas empiezan con un mejor control. Accede con tu teléfono.'
-                : `Ingresa el código enviado al ${phonePrefix} ${phone}`
+                ? 'Tus metas empiezan con un mejor control. Elige cómo quieres recibir tu código.'
+                : `Ingresa el código de 6 dígitos que acabamos de enviarte.`
               }
             </p>
           </div>
@@ -4985,7 +4985,7 @@ export default function App() {
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]" />
                     <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
                   </div>
-                ) : 'Continuar con SMS'}
+                ) : authChannel === 'email' ? 'Continuar con correo' : 'Continuar con SMS'}
               </button>
             </div>
           ) : (
@@ -5082,7 +5082,7 @@ export default function App() {
                   onClick={() => { setOtpSent(false); setOtpCode(''); setOtpError(''); }}
                   className="text-xs text-brand font-medium hover:text-brand-hover transition-colors cursor-pointer"
                 >
-                  Cambiar número
+                  {authChannel === 'email' ? 'Cambiar correo' : 'Cambiar número'}
                 </button>
 
                 {otpTimer > 0 ? (
@@ -5097,7 +5097,7 @@ export default function App() {
                     className="text-xs text-brand font-medium hover:text-brand-hover transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
                   >
                     {otpLoading && <Sparkles size={12} className="animate-spin" />}
-                    Reenviar OTP
+                    Reenviar código
                   </button>
                 )}
               </div>
@@ -5136,7 +5136,7 @@ export default function App() {
                   <section className="space-y-1.5">
                     <h3 className="font-bold text-text-primary text-xs uppercase font-mono tracking-wider">1. Aceptación de los Términos y Naturaleza del Servicio</h3>
                     <p>
-                      Bienvenido a HeraWallet. Al crear una cuenta, acceder mediante verificación por SMS (OTP) o utilizar nuestros servicios analíticos, usted ("el Usuario") acepta sin reservas estar sujeto a estos Términos, Condiciones y Políticas de Privacidad. HeraWallet opera como una plataforma inteligente de gestión financiera personal, consolidación patrimonial y análisis automatizado mediante Inteligencia Artificial.
+                      Bienvenido a HeraWallet. Al crear una cuenta, acceder mediante verificación por SMS o correo electrónico (OTP) o utilizar nuestros servicios analíticos, usted ("el Usuario") acepta sin reservas estar sujeto a estos Términos, Condiciones y Políticas de Privacidad. HeraWallet opera como una plataforma inteligente de gestión financiera personal, consolidación patrimonial y análisis automatizado mediante Inteligencia Artificial.
                     </p>
                   </section>
 
