@@ -89,6 +89,7 @@ import {
   Tag,
   X
 } from 'lucide-react';
+import { LandingPage } from './LandingPage';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
@@ -1200,6 +1201,16 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Website Landing Page vs Auth Modal State
+  const [showAuthScreen, setShowAuthScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const search = window.location.search.toLowerCase();
+      const hash = window.location.hash.toLowerCase();
+      return search.includes('login') || search.includes('app') || search.includes('auth') || hash === '#login' || hash === '#auth';
+    }
+    return false;
+  });
 
   // OTP Login State
   const [phone, setPhone] = useState('');
@@ -4744,10 +4755,24 @@ export default function App() {
     );
   }
 
-  // --- OTP Login Screen ---
+  // --- OTP Login Screen or Website Landing Page ---
   if (!user && !showAdmin) {
+    if (!showAuthScreen) {
+      return <LandingPage onOpenAuth={() => setShowAuthScreen(true)} />;
+    }
+
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-bg p-4 relative overflow-hidden">
+        {/* Volver a la Landing Page */}
+        <button
+          type="button"
+          onClick={() => setShowAuthScreen(false)}
+          className="absolute top-4 left-4 z-20 px-3.5 py-2 rounded-2xl bg-surface border border-border hover:border-brand/50 text-xs font-medium text-text-secondary hover:text-text-primary flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.97]"
+        >
+          <ArrowLeft size={14} />
+          <span>Volver al sitio web</span>
+        </button>
+
         {/* Subtle Ambient Glow */}
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-80 h-80 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
 
