@@ -95,7 +95,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
 import { UserProfile } from './types';
-import api, { signOut, setToken, getToken, setUser, apiUrl } from './api';
+import api, { signOut, setToken, getToken, setUser, apiUrl, IS_NATIVE_APP } from './api';
 
 function AnimatedCountUp({ value, prefix = '', suffix = '', decimals = 2, className = '' }: { value: number | string; prefix?: string; suffix?: string; decimals?: number; className?: string }) {
   const [displayVal, setDisplayVal] = useState(0);
@@ -1227,6 +1227,9 @@ export default function App() {
 
   // Website Landing Page vs Auth Modal State
   const [showAuthScreen, setShowAuthScreen] = useState<boolean>(() => {
+    // En la app nativa se entra directo al login: quien la ha instalado ya
+    // pasó por la página de presentación y no necesita que se la repitan.
+    if (IS_NATIVE_APP) return true;
     if (typeof window !== 'undefined') {
       const search = window.location.search.toLowerCase();
       const hash = window.location.hash.toLowerCase();

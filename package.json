@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "build:app": "VITE_API_BASE=https://herawallet.app vite build",
+    "build:app": "VITE_API_BASE=https://herawallet.app VITE_NATIVE_APP=1 vite build",
     "apk": "npm run build:app && npx cap sync android && cd android && ./gradlew assembleDebug",
     "apk:release": "npm run build:app && npx cap sync android && cd android && ./gradlew assembleRelease",
     "app:open": "npx cap open android"

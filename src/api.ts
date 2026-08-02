@@ -33,6 +33,13 @@ export function onAuthChange(fn: (user: any) => void) {
  */
 export const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
 
+/**
+ * ¿Estamos dentro de la app nativa? Se decide en compilación, no husmeando el
+ * agente de usuario: la app se compila con su propia variable y así no hay
+ * detección frágil que se rompa con la siguiente versión del WebView.
+ */
+export const IS_NATIVE_APP = (import.meta as any).env?.VITE_NATIVE_APP === '1';
+
 /** Antepone el servidor a una ruta de API. Úsalo en cualquier fetch directo. */
 export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
