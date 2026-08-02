@@ -494,7 +494,7 @@
   --rail:120px;
 
   /* marca HeraWallet: mascara alfa, hereda color via background-color */
-  --logo:url("/assets/logo-mask.png");
+  --logo:url("/logo.svg");
 
   --serif:"Source Serif 4",ui-serif,Georgia,"Times New Roman",serif;
   --sans:"Inter",ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -1144,6 +1144,39 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
   body{background:#fff}
 }
 
+/* ---------- Descarga de la app ---------- */
+.dl{display:grid;grid-template-columns:1fr minmax(320px,420px);gap:clamp(40px,6vw,88px);align-items:center}
+.dl__list{margin-top:28px;display:grid;gap:12px;list-style:none}
+.dl__list li{display:flex;gap:11px;align-items:baseline;color:var(--ink-2);font-size:.98rem}
+.dl__list li::before{
+  content:"";flex:none;width:5px;height:5px;border-radius:99px;
+  background:var(--brand);transform:translateY(-2px);
+}
+.dl__card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:clamp(24px,3vw,32px);
+  box-shadow:0 1px 2px rgba(46,43,40,.05);
+}
+.dl__head{display:flex;align-items:center;gap:15px}
+/* Mismo tratamiento que el icono instalado: el trazo respira dentro del cuadro. */
+.dl__icon{
+  flex:none;width:56px;height:56px;border-radius:15px;
+  background:#20201F;display:grid;place-items:center;
+}
+.dl__icon::before{
+  content:"";width:22px;height:27px;background-color:var(--brand);
+  -webkit-mask:var(--logo) center/contain no-repeat;
+  mask:var(--logo) center/contain no-repeat;
+}
+.dl__name{display:block;font-size:1.05rem;font-weight:500;letter-spacing:-.012em}
+.dl__meta{display:block;margin-top:3px;font-size:.8rem;color:var(--ink-2)}
+.dl__btn{width:100%;justify-content:center;margin-top:24px}
+.dl__note{margin-top:16px;font-size:.82rem;line-height:1.55;color:var(--ink-2)}
+.dl__note a{color:var(--brand-text);text-decoration:underline;text-underline-offset:2px}
+@media (max-width:900px){
+  .dl{grid-template-columns:1fr;gap:40px}
+}
+
 /* ---------- Salto al contenido ---------- */
 .skip{position:fixed;top:12px;left:-9999px;z-index:99;background:var(--surface)}
 .skip:focus{left:16px}
@@ -1288,6 +1321,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
         <a href="#how">How it works</a>
         <a href="#privacy">Privacy</a>
         <a href="#faq">FAQ</a>
+        <a href="#download">Get the app</a>
       </div>
       <div class="nav__actions">
         <a class="langsw" href="/es/" hreflang="es" lang="es" aria-label="Leer esta página en español">ES</a>
@@ -1909,6 +1943,38 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
 </section>
 
 <!-- ============================ 14. CIERRE ============================ -->
+<!-- ====================== APP DOWNLOAD ====================== -->
+<section class="band anchor" id="download">
+  <div class="wrap">
+    <div class="dl">
+      <div>
+        <p class="eyebrow rv">Android</p>
+        <h2 class="rv" data-d="1" style="margin-top:18px;max-width:18ch">Hera, in your pocket.</h2>
+        <p class="lead rv" data-d="2" style="margin-top:20px;max-width:42ch">Same account, same data as the web. It opens straight into your session.</p>
+        <ul class="dl__list rv" data-d="3">
+          <li>Talk to Hera and log the expense without typing</li>
+          <li>Snap the receipt and Hera writes it down</li>
+          <li>Your session lasts 30 days</li>
+        </ul>
+      </div>
+
+      <div class="dl__card rv" data-d="2">
+        <div class="dl__head">
+          <span class="dl__icon" aria-hidden="true"></span>
+          <div>
+            <b class="dl__name">HeraWallet</b>
+            <span class="dl__meta mono" id="dl-meta">Android 7 or newer</span>
+          </div>
+        </div>
+        <a class="btn btn--primary dl__btn" href="/descargar/HeraWallet.apk" download id="dl-btn">Download for Android
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>
+        </a>
+        <p class="dl__note">It installs from the file, not from the Play Store, so Android will ask you to allow it once. On iPhone, <a href="#start">open Hera in your browser</a> and add it to your home screen.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="final anchor" id="start">
   <div class="wrap">
     <span class="mark rv" aria-hidden="true"></span>
@@ -1948,6 +2014,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
           <li><a href="#goals">Goals</a></li>
           <li><a href="#forecast">Forecasting</a></li>
           <li><a href="#app">The app</a></li>
+          <li><a href="#download">Get the app</a></li>
         </ul>
       </div>
       <div class="foot__col">
@@ -2204,6 +2271,24 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
   }, true);
 })();
 
+</script>
+
+<script>
+/* Peso y fecha reales del APK publicado. Sin APK, la sección se oculta. */
+(function(){
+  var sec = document.getElementById('download');
+  if (!sec) return;
+  fetch('/api/app/latest').then(function(r){ return r.json(); }).then(function(d){
+    if (!d || !d.disponible) { sec.hidden = true; return; }
+    var meta = document.getElementById('dl-meta');
+    if (meta) {
+      var partes = ['Android 7 or newer'];
+      if (d.version) partes.unshift('v' + d.version);
+      if (d.mb) partes.push(d.mb + ' MB');
+      meta.textContent = partes.join(' \u00b7 ');
+    }
+  }).catch(function(){ /* Sin respuesta se deja el texto por defecto. */ });
+})();
 </script>
 </body>
 </html>

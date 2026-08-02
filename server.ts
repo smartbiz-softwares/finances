@@ -4286,6 +4286,54 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, 'dist');
+
+// --- Descarga de la app Android -----------------------------------------
+//
+// El APK vive fuera de dist/ a propósito: pesa varios megas y no tiene por
+// qué recompilarse ni copiarse en cada build del cliente. `scripts/publicar-app.sh`
+// lo deja aquí después de compilarlo.
+const apkPath = path.join(__dirname, 'apk', 'HeraWallet.apk');
+
+/** Datos del APK publicado, o null si todavía no se ha compilado ninguno. */
+function leerApkPublicado() {
+  try {
+    const info = fs.statSync(apkPath);
+    let version = '';
+    try {
+      version = JSON.parse(fs.readFileSync(path.join(__dirname, 'apk', 'version.json'), 'utf8')).version || '';
+    } catch {
+      // Sin version.json solo se informa del tamaño y la fecha.
+    }
+    return {
+      disponible: true,
+      version,
+      bytes: info.size,
+      mb: Math.round((info.size / 1024 / 1024) * 10) / 10,
+      actualizado: info.mtime.toISOString(),
+      url: '/descargar/HeraWallet.apk',
+    };
+  } catch {
+    return { disponible: false };
+  }
+}
+
+// La web consulta esto para mostrar peso y fecha reales en vez de un texto fijo
+// que envejece mal.
+app.get('/api/app/latest', (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json(leerApkPublicado());
+});
+
+app.get('/descargar/HeraWallet.apk', (_req, res) => {
+  if (!leerApkPublicado().disponible) {
+    return res.status(404).json({ error: 'Todavía no hay una versión publicada de la app.' });
+  }
+  // Sin cache: quien pulsa descargar quiere la versión de ahora, no la que
+  // guardó el navegador la semana pasada.
+  res.set('Cache-Control', 'no-store');
+  res.download(apkPath, 'HeraWallet.apk');
+});
+
 app.use(express.static(distPath));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();

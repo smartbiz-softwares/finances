@@ -62,10 +62,57 @@ Permisos declarados: `INTERNET`, `ACCESS_NETWORK_STATE`, `RECORD_AUDIO`,
 `required="false"`: un teléfono sin ellos debe poder instalar la app y usar el
 resto.
 
+## Publicar la app junto con la web
+
+En el servidor, el despliegue normal deja la app al día sin pasos aparte:
+
+```bash
+scripts/desplegar.sh          # trae cambios, compila la web, reinicia y rehace el APK
+scripts/desplegar.sh --sin-app
+```
+
+El APK se rehace solo si el commit cambió desde el último publicado, porque
+compilar Android tarda minutos. Si el servidor no tiene `ANDROID_HOME` o
+`JAVA_HOME`, `scripts/publicar-app.sh` avisa y termina sin error: la web se
+despliega igual y se conserva el APK anterior.
+
+El resultado se copia a `apk/HeraWallet.apk` (fuera de `dist/`, para no
+arrastrar siete megas en cada build del cliente) y se sirve en:
+
+| Ruta | Qué devuelve |
+|---|---|
+| `/descargar/HeraWallet.apk` | El archivo, sin caché |
+| `/api/app/latest` | Versión, peso y fecha reales |
+
+La sección de descarga de la web y el aviso de la pantalla de acceso leen
+`/api/app/latest`: si no hay APK publicado, ambos desaparecen en lugar de
+ofrecer un enlace roto. El aviso solo se muestra a quien entra desde Android
+por navegador, y se puede descartar.
+
+## El icono
+
+El logo original ocupa todo su lienzo, sin márgenes. Como icono quedaba mal:
+Android recorta el icono adaptativo a círculo, cuadrado redondeado o
+*squircle* según el lanzador, y solo garantiza el 66 % central.
+
+`public/logo.svg` es el logo vectorizado, y de ahí salen:
+
+- `drawable/ic_launcher_foreground.xml` — el trazo como vector, a 46 unidades
+  de alto sobre el lienzo de 108. Lo que tiene que caber en el círculo seguro
+  es la diagonal del logo, no su alto.
+- `drawable/ic_launcher_monochrome.xml` — la misma silueta para los iconos con
+  tema de Android 13+.
+- `mipmap-*/ic_launcher*.png` — versiones para Android 7 y anteriores, que no
+  recortan nada, así que llevan el margen y la forma ya dibujados.
+
+Si cambias los iconos, Gradle puede fallar con `resource ... not found`: guarda
+los recursos ya fusionados y no se entera de los que se borran. Un
+`gradle clean` lo resuelve, y `publicar-app.sh` lo reintenta solo.
+
 ## Instalar el APK de pruebas
 
 ```bash
-adb install -r apk/HeraWallet-debug.apk
+adb install -r apk/HeraWallet.apk
 ```
 
 O copiar el archivo al teléfono y abrirlo. Android pedirá permitir la

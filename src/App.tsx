@@ -1238,6 +1238,42 @@ export default function App() {
     return false;
   });
 
+  // --- Aviso para instalar la app Android -------------------------------
+  //
+  // Solo aparece a quien puede aprovecharlo: un teléfono Android que está
+  // entrando por el navegador. Dentro de la app ya instalada, en iPhone o en
+  // un escritorio no tiene sentido ofrecer un APK.
+  const [appDescargable, setAppDescargable] = useState<{ mb?: number; version?: string } | null>(null);
+  const [avisoAppOculto, setAvisoAppOculto] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('hera_aviso_app_oculto') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (IS_NATIVE_APP || avisoAppOculto) return;
+    if (typeof navigator === 'undefined' || !/android/i.test(navigator.userAgent)) return;
+
+    fetch(apiUrl('/api/app/latest'))
+      .then((r) => r.json())
+      .then((d) => { if (d?.disponible) setAppDescargable({ mb: d.mb, version: d.version }); })
+      .catch(() => { /* Sin respuesta simplemente no se ofrece la descarga. */ });
+  }, [avisoAppOculto]);
+
+  // Hay aviso solo si el APK existe y la persona no lo ha descartado antes.
+  const avisoApp = avisoAppOculto ? null : appDescargable;
+
+  const ocultarAvisoApp = () => {
+    setAvisoAppOculto(true);
+    try {
+      localStorage.setItem('hera_aviso_app_oculto', '1');
+    } catch {
+      // Sin almacenamiento el aviso reaparecerá; es preferible a fallar.
+    }
+  };
+
   // OTP Login State
   const [phone, setPhone] = useState('');
   // Canal de verificación elegido por la persona: SMS o correo.
@@ -4806,11 +4842,63 @@ export default function App() {
 
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-bg p-4 relative overflow-hidden">
+        {/* Instalar la app: franja superior, solo en Android por navegador */}
+        {avisoApp && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute top-0 inset-x-0 z-30 bg-surface border-b border-border px-3 py-2.5 flex items-center gap-3 shadow-xs"
+          >
+            {/* Réplica del icono instalado. El logo va como máscara porque el
+                SVG se pinta con currentColor y un <img> no lo heredaría. */}
+            <div className="w-9 h-9 flex-none rounded-xl bg-[#20201F] flex items-center justify-center">
+              <span
+                aria-hidden="true"
+                className="block w-3.5 h-[17px] bg-brand"
+                style={{
+                  WebkitMaskImage: 'url(/logo.svg)',
+                  maskImage: 'url(/logo.svg)',
+                  WebkitMaskSize: 'contain',
+                  maskSize: 'contain',
+                  WebkitMaskRepeat: 'no-repeat',
+                  maskRepeat: 'no-repeat',
+                  WebkitMaskPosition: 'center',
+                  maskPosition: 'center',
+                }}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-text-primary leading-tight">Instala HeraWallet</p>
+              <p className="text-[11px] text-text-secondary leading-tight truncate">
+                Voz y recibos sin abrir el navegador
+                {avisoApp.mb ? ` · ${avisoApp.mb} MB` : ''}
+              </p>
+            </div>
+            <a
+              href={apiUrl('/descargar/HeraWallet.apk')}
+              download
+              className="flex-none px-3 py-1.5 rounded-xl bg-brand text-white text-xs font-medium flex items-center gap-1.5 transition-transform active:scale-[0.97]"
+            >
+              <Download size={13} />
+              Instalar
+            </a>
+            <button
+              type="button"
+              onClick={ocultarAvisoApp}
+              aria-label="Ocultar el aviso para instalar la app"
+              className="flex-none p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg transition-colors active:scale-[0.97]"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+
         {/* Volver a la Landing Page */}
         <button
           type="button"
           onClick={() => setShowAuthScreen(false)}
-          className="absolute top-4 left-4 z-20 px-3.5 py-2 rounded-2xl bg-surface border border-border hover:border-brand/50 text-xs font-medium text-text-secondary hover:text-text-primary flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.97]"
+          className={`absolute ${avisoApp ? 'top-[66px]' : 'top-4'} left-4 z-20 px-3.5 py-2 rounded-2xl bg-surface border border-border hover:border-brand/50 text-xs font-medium text-text-secondary hover:text-text-primary flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.97]`}
         >
           <ArrowLeft size={14} />
           <span>Volver al sitio web</span>
