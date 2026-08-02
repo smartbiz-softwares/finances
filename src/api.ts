@@ -24,6 +24,21 @@ export function onAuthChange(fn: (user: any) => void) {
   return () => { _listeners = _listeners.filter(f => f !== fn); };
 }
 
+/**
+ * Servidor al que apunta la aplicación.
+ *
+ * En web se deja vacío: las rutas relativas van al mismo origen que sirve la
+ * página. En la app nativa no hay servidor propio, así que se compila con
+ * VITE_API_BASE apuntando a producción.
+ */
+export const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
+
+/** Antepone el servidor a una ruta de API. Úsalo en cualquier fetch directo. */
+export function apiUrl(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE}${p}`;
+}
+
 async function api(path: string, options: any = {}) {
   const headers: any = { 'Content-Type': 'application/json' };
   if (_token) headers['Authorization'] = `Bearer ${_token}`;
@@ -34,12 +49,12 @@ async function api(path: string, options: any = {}) {
 
   let res: Response;
   try {
-    // Try relative path first (Vite proxy / production server)
-    res = await fetch(formattedPath, { ...options, headers: { ...headers, ...options.headers } });
+    res = await fetch(apiUrl(formattedPath), { ...options, headers: { ...headers, ...options.headers } });
   } catch {
-    // Fallback to explicit localhost:4000
-    const fallbackUrl = `http://localhost:4000${formattedPath}`;
-    res = await fetch(fallbackUrl, { ...options, headers: { ...headers, ...options.headers } });
+    // Respaldo solo útil en desarrollo local: en la app nativa API_BASE ya
+    // apunta a producción y este segundo intento no tendría sentido.
+    if (API_BASE) throw new Error('No se pudo conectar con el servidor. Revisa tu conexión.');
+    res = await fetch(`http://localhost:4000${formattedPath}`, { ...options, headers: { ...headers, ...options.headers } });
   }
 
   const text = await res.text();

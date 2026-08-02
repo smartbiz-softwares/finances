@@ -95,7 +95,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
 import { UserProfile } from './types';
-import api, { signOut, setToken, getToken, setUser } from './api';
+import api, { signOut, setToken, getToken, setUser, apiUrl } from './api';
 
 function AnimatedCountUp({ value, prefix = '', suffix = '', decimals = 2, className = '' }: { value: number | string; prefix?: string; suffix?: string; decimals?: number; className?: string }) {
   const [displayVal, setDisplayVal] = useState(0);
@@ -2120,7 +2120,7 @@ export default function App() {
   const fetchAdminBroadcastHistory = useCallback(async () => {
     if (!adminToken) return;
     try {
-      const res = await fetch('/api/admin/notifications/history', {
+      const res = await fetch(apiUrl('/api/admin/notifications/history'), {
         headers: { Authorization: `Bearer ${adminToken}` }
       });
       if (res.ok) {
@@ -2135,7 +2135,7 @@ export default function App() {
     if (!adminToken || !broadcastTitle || !broadcastMessage) return;
     setIsBroadcasting(true);
     try {
-      const res = await fetch('/api/admin/notifications/broadcast', {
+      const res = await fetch(apiUrl('/api/admin/notifications/broadcast'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -2378,7 +2378,7 @@ export default function App() {
   const fetchAdminCubaRequests = useCallback(async () => {
     if (!adminToken) return;
     try {
-      const res = await fetch('/api/admin/cuba-requests', {
+      const res = await fetch(apiUrl('/api/admin/cuba-requests'), {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
       const data = await res.json();
@@ -2426,7 +2426,7 @@ export default function App() {
     e.preventDefault();
     if (!adminToken) return;
     try {
-      const res = await fetch('/api/admin/cuba-config', {
+      const res = await fetch(apiUrl('/api/admin/cuba-config'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -2452,7 +2452,7 @@ export default function App() {
   const handleApproveCubaRequest = async (requestId: string) => {
     if (!adminToken) return;
     try {
-      const res = await fetch(`/api/admin/cuba-requests/${requestId}/approve`, {
+      const res = await fetch(apiUrl(`/api/admin/cuba-requests/${requestId}/approve`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
@@ -2473,7 +2473,7 @@ export default function App() {
   const handleRejectCubaRequest = async (requestId: string) => {
     if (!adminToken) return;
     try {
-      const res = await fetch(`/api/admin/cuba-requests/${requestId}/reject`, {
+      const res = await fetch(apiUrl(`/api/admin/cuba-requests/${requestId}/reject`), {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
@@ -3310,14 +3310,14 @@ export default function App() {
 
       let fetchRes: Response | null = null;
       try {
-        fetchRes = await fetch('/api/export-document', {
+        fetchRes = await fetch(apiUrl('/api/export-document'), {
           method: 'POST',
           headers,
           body: JSON.stringify({ format, title, columns, rows, summary: docData?.summary })
         });
       } catch {
         try {
-          fetchRes = await fetch('/api/export-document', {
+          fetchRes = await fetch(apiUrl('/api/export-document'), {
             method: 'POST',
             headers,
             body: JSON.stringify({ format, title, columns, rows, summary: docData?.summary })
@@ -3713,7 +3713,7 @@ export default function App() {
     if (buf) chunks.push(buf);
 
     const token = getToken();
-    const fetchChunk = (t: string) => fetch('/api/tts', {
+    const fetchChunk = (t: string) => fetch(apiUrl('/api/tts'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ text: t, lang: liveLang() })
@@ -4603,7 +4603,7 @@ export default function App() {
     e.preventDefault();
     setAdminLoading(true);
     try {
-      const res = await fetch('/api/admin/login', {
+      const res = await fetch(apiUrl('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: adminUsername, password: adminPassword })
@@ -4627,7 +4627,7 @@ export default function App() {
     const t = token || adminToken;
     if (!t) return;
     try {
-      const res = await fetch('/api/admin/realtime', { headers: { Authorization: `Bearer ${t}` } });
+      const res = await fetch(apiUrl('/api/admin/realtime'), { headers: { Authorization: `Bearer ${t}` } });
       if (res.ok) setRealtimeData(await res.json());
     } catch { }
   }, [adminToken]);
@@ -4645,13 +4645,13 @@ export default function App() {
     try {
       const headers = { 'Authorization': `Bearer ${t}` };
       const [statsRes, provsRes, usersRes, logsRes, plansRes, cubaRes, allTxsRes] = await Promise.all([
-        fetch('/api/admin/stats', { headers }).then(r => r.json()),
-        fetch('/api/admin/providers', { headers }).then(r => r.json()),
-        fetch('/api/admin/users', { headers }).then(r => r.json()),
-        fetch('/api/admin/logs', { headers }).then(r => r.json()),
-        fetch('/api/admin/plans', { headers }).then(r => r.json()),
-        fetch('/api/admin/cuba-requests', { headers }).then(r => r.json()),
-        fetch('/api/admin/all-transactions', { headers }).then(r => r.json())
+        fetch(apiUrl('/api/admin/stats'), { headers }).then(r => r.json()),
+        fetch(apiUrl('/api/admin/providers'), { headers }).then(r => r.json()),
+        fetch(apiUrl('/api/admin/users'), { headers }).then(r => r.json()),
+        fetch(apiUrl('/api/admin/logs'), { headers }).then(r => r.json()),
+        fetch(apiUrl('/api/admin/plans'), { headers }).then(r => r.json()),
+        fetch(apiUrl('/api/admin/cuba-requests'), { headers }).then(r => r.json()),
+        fetch(apiUrl('/api/admin/all-transactions'), { headers }).then(r => r.json())
       ]);
 
       setAdminStats(statsRes);
@@ -4670,7 +4670,7 @@ export default function App() {
     if (!adminToken) return;
     const newRole = currentRole === 'founder' ? 'standard' : 'founder';
     try {
-      const res = await fetch(`/api/admin/users/${userId}/role`, {
+      const res = await fetch(apiUrl(`/api/admin/users/${userId}/role`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -4700,7 +4700,7 @@ export default function App() {
     setUserTelemetryData(null);
     if (!adminToken) return;
     try {
-      const res = await fetch(`/api/admin/users/${u.id}/telemetry`, {
+      const res = await fetch(apiUrl(`/api/admin/users/${u.id}/telemetry`), {
         headers: { 'Authorization': `Bearer ${adminToken}` }
       });
       const data = await res.json();
@@ -4719,7 +4719,7 @@ export default function App() {
   const handleUpdateProviderKey = async (id: string, apiKey: string, isActive: number) => {
     if (!adminToken) return;
     try {
-      await fetch(`/api/admin/providers/${id}`, {
+      await fetch(apiUrl(`/api/admin/providers/${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -4738,7 +4738,7 @@ export default function App() {
     e.preventDefault();
     if (!newProviderName || !newProviderModel || !adminToken) return;
     try {
-      await fetch('/api/admin/providers', {
+      await fetch(apiUrl('/api/admin/providers'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

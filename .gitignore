@@ -9,3 +9,12 @@ coverage/
 *.db
 *.db-wal
 *.db-shm
+
+# Android (Capacitor)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/release/
+apk/
