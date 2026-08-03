@@ -1512,6 +1512,9 @@ export default function App() {
 
   // Movimiento pendiente de confirmar borrado (null = sin diálogo abierto)
   const [txToDelete, setTxToDelete] = useState<any | null>(null);
+  // Movimiento abierto en el detalle. La lista resume; aquí está todo lo que se
+  // guardó de él, incluido el recibo si se registró con una foto.
+  const [txDetalle, setTxDetalle] = useState<any | null>(null);
   const [deletingTx, setDeletingTx] = useState(false);
   const liveRecorderRef = useRef<MediaRecorder | null>(null);
   const liveChunksRef = useRef<Blob[]>([]);
@@ -8378,7 +8381,17 @@ export default function App() {
                                   whileInView={{ opacity: 1, x: 0 }}
                                   viewport={{ once: true, margin: "-20px" }}
                                   transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-                                  className="relative flex items-center justify-between bg-surface border border-border hover:border-brand/40 p-4 rounded-2xl shadow-xs transition-all duration-200 group active:scale-[0.99]"
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => setTxDetalle(item)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      setTxDetalle(item);
+                                    }
+                                  }}
+                                  aria-label={`Ver detalles de ${item.description || item.category}`}
+                                  className="relative flex items-center justify-between bg-surface border border-border hover:border-brand/40 p-4 rounded-2xl shadow-xs transition-all duration-200 group active:scale-[0.99] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                                 >
                                   {/* Left Node Icon & Relative Time on Mandarina Timeline Connector */}
                                   <div className="absolute -left-[3.25rem] sm:-left-[3.75rem] top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -8441,10 +8454,11 @@ export default function App() {
                                       </span>
                                     </div>
 
-                                    {/* Eliminar movimiento (siempre visible) */}
+                                    {/* Eliminar movimiento (siempre visible). Detiene la
+                                        propagación: pulsar la papelera borra, no abre el detalle. */}
                                     <button
                                       type="button"
-                                      onClick={() => setTxToDelete(item)}
+                                      onClick={(e) => { e.stopPropagation(); setTxToDelete(item); }}
                                       className="p-2 rounded-xl text-text-dim hover:text-error hover:bg-error/10 transition-colors duration-200 cursor-pointer active:scale-[0.95]"
                                       title="Eliminar movimiento"
                                       aria-label={`Eliminar ${item.description || item.category}`}
@@ -11732,6 +11746,125 @@ export default function App() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Detalle de un movimiento */}
+      <AnimatePresence>
+        {txDetalle && (() => {
+          const esIngreso = txDetalle.type === 'income';
+          // `date` es el día del movimiento; `createdAt` es cuándo se registró.
+          // No tienen por qué coincidir: un gasto del sábado puede anotarse el lunes.
+          const dia = txDetalle.date
+            ? new Date(`${txDetalle.date}T12:00:00`).toLocaleDateString('es', {
+                weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+              })
+            : null;
+          const registro = txDetalle.createdAt
+            ? new Date(txDetalle.createdAt).toLocaleString('es', {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+              })
+            : null;
+
+          const datos = [
+            { etiqueta: 'Cuenta', valor: txDetalle.accountName || 'Cuenta principal' },
+            { etiqueta: 'Categoría', valor: txDetalle.category },
+            { etiqueta: 'Fecha', valor: dia },
+            { etiqueta: 'Registrado', valor: registro },
+          ].filter((d) => d.valor);
+
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              onClick={() => setTxDetalle(null)}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 10 }}
+                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-label="Detalles del movimiento"
+                className="max-w-sm w-full bg-surface border border-border rounded-3xl overflow-hidden max-h-[85vh] flex flex-col"
+              >
+                {/* Cabecera: lo que se busca al abrir es cuánto y de qué */}
+                <div className="p-6 pb-5 space-y-4 border-b border-border">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className={cn(
+                      "w-11 h-11 rounded-2xl flex items-center justify-center border shrink-0",
+                      esIngreso
+                        ? "border-success/30 bg-success/10 text-success"
+                        : "border-brand/30 bg-brand/10 text-brand"
+                    )}>
+                      {getCategoryIcon(txDetalle.category, txDetalle.type, txDetalle.description)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTxDetalle(null)}
+                      aria-label="Cerrar"
+                      className="p-1.5 rounded-lg text-text-dim hover:text-text-primary hover:bg-bg transition-colors active:scale-[0.95]"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <p className={cn(
+                      "font-mono font-bold text-2xl tracking-tight",
+                      esIngreso ? "text-success" : "text-text-primary"
+                    )}>
+                      {esIngreso ? '+' : '-'}{Number(txDetalle.amount).toFixed(2)}{currencySymbol}
+                    </p>
+                    <h3 className="font-serif font-semibold text-base text-text-primary leading-snug">
+                      {txDetalle.description || txDetalle.category}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-4 overflow-y-auto">
+                  <dl className="space-y-3">
+                    {datos.map((d) => (
+                      <div key={d.etiqueta} className="flex items-baseline justify-between gap-4">
+                        <dt className="text-[11px] text-text-secondary shrink-0">{d.etiqueta}</dt>
+                        <dd className="text-xs text-text-primary text-right first-letter:uppercase">{d.valor}</dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {txDetalle.receiptUrl && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-text-secondary">Recibo</p>
+                      <img
+                        src={txDetalle.receiptUrl}
+                        alt="Recibo del movimiento"
+                        loading="lazy"
+                        className="w-full rounded-xl border border-border"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 pt-0 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTxDetalle(null)}
+                    className="flex-1 bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors duration-200"
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTxToDelete(txDetalle); setTxDetalle(null); }}
+                    className="px-4 py-2.5 rounded-xl border border-border text-text-dim hover:text-error hover:border-error/40 hover:bg-error/5 text-xs font-medium cursor-pointer transition-colors duration-200 flex items-center gap-1.5"
+                  >
+                    <Trash2 size={14} />
+                    Eliminar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
       {/* Confirmación de borrado de un movimiento */}
