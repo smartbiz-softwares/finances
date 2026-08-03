@@ -67,6 +67,7 @@ import {
   Brain,
   RotateCw,
   Copy,
+  Gift,
   Volume2,
   ThumbsUp,
   ThumbsDown,
@@ -91,6 +92,8 @@ import {
   X
 } from 'lucide-react';
 import { LandingPage } from './LandingPage';
+import { Referidos } from './Referidos';
+import { PanelReferidos } from './PanelReferidos';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
@@ -1238,6 +1241,44 @@ export default function App() {
     return false;
   });
 
+  // --- Invitación recibida ----------------------------------------------
+  //
+  // El código llega en el enlace (?ref=XXXXXX) y tiene que sobrevivir a que la
+  // persona pida el código por SMS, cambie de canal o recargue la página antes
+  // de terminar el alta, así que se guarda hasta que se usa.
+  const [codigoReferido, setCodigoReferido] = useState<string>(() => {
+    try {
+      const enUrl = new URLSearchParams(window.location.search).get('ref');
+      if (enUrl) {
+        const limpio = enUrl.trim().toUpperCase().slice(0, 12);
+        localStorage.setItem('hera_ref', limpio);
+        return limpio;
+      }
+      return localStorage.getItem('hera_ref') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [invitacion, setInvitacion] = useState<{ tokens: number; invitadoPor: string | null } | null>(null);
+  const [mostrarReferidos, setMostrarReferidos] = useState(false);
+
+  useEffect(() => {
+    if (!codigoReferido) return;
+
+    // Se comprueba antes de registrarse para poder decirle cuánto gana y quién
+    // lo invitó; un código inválido se descarta en silencio.
+    fetch(apiUrl(`/api/referidos/validar/${encodeURIComponent(codigoReferido)}`))
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.valido) setInvitacion({ tokens: d.tokens, invitadoPor: d.invitadoPor });
+        else {
+          setCodigoReferido('');
+          try { localStorage.removeItem('hera_ref'); } catch { /* sin almacenamiento */ }
+        }
+      })
+      .catch(() => { /* Sin respuesta se sigue como un alta normal. */ });
+  }, [codigoReferido]);
+
   // --- Aviso para instalar la app --------------------------------------
   //
   // Cada plataforma se instala de una manera distinta, así que el aviso solo
@@ -1932,6 +1973,8 @@ export default function App() {
   const [adminLogs, setAdminLogs] = useState<any[]>([]);
   const [adminAllTransactions, setAdminAllTransactions] = useState<any[]>([]);
   const [selectedUserForTelemetry, setSelectedUserForTelemetry] = useState<any | null>(null);
+  // Referidos del usuario abierto en el panel: a quién trajo y quién lo trajo.
+  const [referidosDelUsuario, setReferidosDelUsuario] = useState<any | null>(null);
   const [userTelemetryData, setUserTelemetryData] = useState<any | null>(null);
   const [isLoadingTelemetry, setIsLoadingTelemetry] = useState(false);
   const [showTelemetryDrawer, setShowTelemetryDrawer] = useState(false);
@@ -4244,12 +4287,25 @@ export default function App() {
     try {
       const data = await api('/verify-otp', {
         method: 'POST',
-        body: JSON.stringify(
-          authChannel === 'email' ? { email: identifier, code } : { phone: identifier, code }
-        )
+        body: JSON.stringify({
+          ...(authChannel === 'email' ? { email: identifier } : { phone: identifier }),
+          code,
+          // Solo se envía si venía de un enlace de invitación. El servidor lo
+          // ignora salvo en el alta, así que enviarlo de más no hace daño.
+          ...(codigoReferido ? { codigoReferido } : {}),
+        })
       });
 
       setToken(data.token);
+
+      // El código ya cumplió su función: dejarlo guardado haría que un segundo
+      // alta desde el mismo teléfono lo reenviara sin motivo.
+      if (codigoReferido) {
+        setCodigoReferido('');
+        setInvitacion(null);
+        try { localStorage.removeItem('hera_ref'); } catch { /* sin almacenamiento */ }
+      }
+
       const userData = { uid: data.user.id, email: data.user.email, displayName: data.user.displayName, phone: data.user.phone, photoURL: data.user.photoURL || '' };
       setUserState(userData);
       setUser(userData);
@@ -4777,13 +4833,20 @@ export default function App() {
     setShowTelemetryDrawer(true);
     setIsLoadingTelemetry(true);
     setUserTelemetryData(null);
+    setReferidosDelUsuario(null);
     if (!adminToken) return;
+
+    const cabeceras = { Authorization: `Bearer ${adminToken}` };
     try {
-      const res = await fetch(apiUrl(`/api/admin/users/${u.id}/telemetry`), {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-      });
-      const data = await res.json();
-      setUserTelemetryData(data);
+      // Las dos peticiones son independientes: si los referidos fallan, la
+      // telemetría se muestra igual.
+      const [telemetria, refs] = await Promise.allSettled([
+        fetch(apiUrl(`/api/admin/users/${u.id}/telemetry`), { headers: cabeceras }).then((r) => r.json()),
+        fetch(apiUrl(`/api/admin/usuarios/${u.id}/referidos`), { headers: cabeceras }).then((r) => r.json()),
+      ]);
+
+      if (telemetria.status === 'fulfilled') setUserTelemetryData(telemetria.value);
+      if (refs.status === 'fulfilled') setReferidosDelUsuario(refs.value);
     } catch { } finally {
       setIsLoadingTelemetry(false);
     }
@@ -5051,6 +5114,21 @@ export default function App() {
           <div className="mx-auto flex justify-center">
             <HeraWalletLogo size="lg" showText={false} />
           </div>
+
+          {/* Invitación: se dice antes de pedir nada qué gana por entrar */}
+          {invitacion && (
+            <div className="flex items-center gap-3 p-3 rounded-2xl bg-brand/8 border border-brand/25 text-left">
+              <div className="w-8 h-8 rounded-xl bg-brand/15 text-brand flex items-center justify-center shrink-0">
+                <Gift size={15} />
+              </div>
+              <p className="text-[11px] leading-snug text-text-primary">
+                {invitacion.invitadoPor
+                  ? <><b>{invitacion.invitadoPor}</b> te invitó. </>
+                  : 'Vienes con una invitación. '}
+                Empiezas con <b>{invitacion.tokens.toLocaleString('es')} tokens</b> extra.
+              </p>
+            </div>
+          )}
 
           {/* Header */}
           <div className="space-y-1 text-center">
@@ -5638,6 +5716,28 @@ export default function App() {
                         <div className="flex-1">
                           <span className="font-medium text-text-primary">Configuración</span>
                           <p className="text-[10px] text-text-secondary">Moneda, suscripción y reglas de IA</p>
+                        </div>
+                      </button>
+
+                      {/* Invitaciones: aquí es donde la gente ya está mirando
+                          su plan y sus tokens, que es cuando gana sentido */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsProfileMenuOpen(false);
+                          setMostrarReferidos(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-surface-hover text-xs font-medium text-text-primary transition-colors text-left group cursor-pointer"
+                      >
+                        <div className="w-7.5 h-7.5 rounded-xl bg-brand/10 text-brand flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                          <Gift size={15} />
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium text-text-primary">Invitar y ganar tokens</span>
+                          <p className="text-[10px] text-text-secondary">Ganáis los dos por cada invitación</p>
                         </div>
                       </button>
 
@@ -6889,6 +6989,8 @@ export default function App() {
 
                     {/* TAB 4: PLANES & TOKENS */}
                     {adminActiveTab === 'plans' && (
+                      <div className="space-y-4">
+                      <PanelReferidos adminToken={adminToken} onAviso={showToast} />
                       <div className="bg-surface border border-border p-5 rounded-3xl space-y-4">
                         <div className="flex items-center justify-between">
                           <h3 className="text-base font-semibold flex items-center gap-2">
@@ -6958,6 +7060,7 @@ export default function App() {
                             </div>
                           ))}
                         </div>
+                      </div>
                       </div>
                     )}
 
@@ -11748,6 +11851,40 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Invitaciones */}
+      <AnimatePresence>
+        {mostrarReferidos && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMostrarReferidos(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Invitar y ganar tokens"
+              className="w-full sm:max-w-md bg-bg border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-serif font-semibold text-lg text-text-primary">Invitaciones</h2>
+                <button
+                  type="button"
+                  onClick={() => setMostrarReferidos(false)}
+                  aria-label="Cerrar"
+                  className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface transition-colors active:scale-[0.95]"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <Referidos />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Detalle de un movimiento */}
       <AnimatePresence>
         {txDetalle && (() => {
@@ -12964,6 +13101,60 @@ export default function App() {
                     <p className="text-lg font-serif font-bold text-text-primary">{selectedUserForTelemetry.totalQueries || 0}</p>
                   </div>
                 </div>
+
+                {/* Referidos: a quién trajo y quién lo trajo a él */}
+                {referidosDelUsuario && (
+                  <div className="p-4 bg-bg border border-border rounded-2xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold text-text-primary uppercase tracking-wider font-mono flex items-center gap-1.5">
+                        <Gift size={13} className="text-brand" />
+                        Referidos
+                      </h4>
+                      {referidosDelUsuario.codigo && (
+                        <span className="font-mono text-[11px] font-bold tracking-widest text-brand">
+                          {referidosDelUsuario.codigo}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                      <div>
+                        <p className="text-text-secondary text-[10px]">Ha traído</p>
+                        <p className="font-bold text-text-primary">{referidosDelUsuario.total || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-text-secondary text-[10px]">Tokens ganados</p>
+                        <p className="font-bold text-success">
+                          +{Number(referidosDelUsuario.tokensGanados || 0).toLocaleString('es')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {referidosDelUsuario.invitadoPor && (
+                      <p className="text-[11px] text-text-secondary font-mono pt-1 border-t border-border">
+                        Entró invitado por{' '}
+                        <strong className="text-text-primary">
+                          {referidosDelUsuario.invitadoPor.displayName || referidosDelUsuario.invitadoPor.email || '—'}
+                        </strong>
+                      </p>
+                    )}
+
+                    {referidosDelUsuario.lista?.length > 0 && (
+                      <ul className="space-y-1.5 max-h-40 overflow-y-auto scrollbar-none pt-1 border-t border-border">
+                        {referidosDelUsuario.lista.map((r: any) => (
+                          <li key={r.id} className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                            <span className="text-text-primary truncate">
+                              {r.displayName || r.email || r.phone || 'Cuenta nueva'}
+                            </span>
+                            <span className="text-text-dim shrink-0">
+                              {new Date(r.creadoEn).toLocaleDateString('es', { day: '2-digit', month: 'short' })}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
 
                 {/* Deep Telemetry Data from API */}
                 {isLoadingTelemetry ? (
