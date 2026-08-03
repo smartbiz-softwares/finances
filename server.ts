@@ -14,6 +14,8 @@ import nodemailer from 'nodemailer';
 import { AgentOrchestrator } from './src/agent/brain/orchestrator.ts';
 import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine.ts';
 import { initMySQLSchema } from './src/db/mysql.ts';
+import * as notificaciones from './server/notificaciones.ts';
+import * as reglasNotificaciones from './server/reglas.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -4479,6 +4481,17 @@ app.get('/api/admin/health', adminAuthMiddleware, async (req, res) => {
   const allOk = Object.values(checks).every((c: any) => c.ok !== false);
   res.json({ commit: GIT_COMMIT, startedAt: BOOT_TIME, allOk, checks });
 });
+
+// --- Notificaciones -------------------------------------------------------
+//
+// El planificador solo arranca si hay claves VAPID: sin ellas no hay a quién
+// enviar, y una pasada cada media hora que no puede entregar nada solo gasta.
+notificaciones.crearTablas(db);
+notificaciones.montarEndpoints(app, db, authMiddleware);
+
+if (notificaciones.configurarWebPush()) {
+  reglasNotificaciones.arrancarPlanificador(db);
+}
 
 const PORT = process.env.PORT || 4000;
 app.listen(Number(PORT), '0.0.0.0', () => {

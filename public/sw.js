@@ -46,6 +46,65 @@ self.addEventListener('activate', (evento) => {
   );
 });
 
+// --- Notificaciones --------------------------------------------------------
+
+self.addEventListener('push', (evento) => {
+  let datos = {};
+  try {
+    datos = evento.data ? evento.data.json() : {};
+  } catch {
+    // Si el cuerpo no es JSON no se descarta el aviso: se muestra genérico.
+    datos = { titulo: 'HeraWallet', cuerpo: evento.data ? evento.data.text() : '' };
+  }
+
+  const opciones = {
+    body: datos.cuerpo || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    // Agrupar por tipo evita apilar tres resúmenes si el teléfono estuvo
+    // apagado: se ve el último, que es el que importa.
+    tag: datos.tipo || 'hera',
+    renotify: true,
+    data: { url: datos.url || '/', tipo: datos.tipo || '' },
+    actions: (datos.acciones || []).slice(0, 2).map((a) => ({
+      action: a.action,
+      title: a.title,
+    })),
+  };
+
+  evento.waitUntil(
+    self.registration.showNotification(datos.titulo || 'HeraWallet', opciones)
+  );
+});
+
+self.addEventListener('notificationclick', (evento) => {
+  evento.notification.close();
+
+  const datos = evento.notification.data || {};
+  // Pulsar el botón de registrar lleva directo al dictado: el recordatorio se
+  // convierte en el registro, sin pasos intermedios.
+  const destino = evento.action === 'registrar'
+    ? '/?accion=registrar'
+    : (datos.url || '/');
+
+  evento.waitUntil((async () => {
+    const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // Si la app ya está abierta se reutiliza esa pestaña en vez de abrir otra.
+    for (const ventana of ventanas) {
+      if ('focus' in ventana) {
+        await ventana.focus();
+        ventana.postMessage({ tipo: 'notificacion-abierta', destino, notificacion: datos.tipo });
+        return;
+      }
+    }
+
+    if (self.clients.openWindow) {
+      await self.clients.openWindow(destino);
+    }
+  })());
+});
+
 self.addEventListener('fetch', (evento) => {
   const peticion = evento.request;
 
