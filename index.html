@@ -34,11 +34,20 @@
     <meta name="twitter:image" content="https://herawallet.app/og-image.png" />
 
     <!-- Favicons & App Icons -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/logo.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#20201F" />
+
+    <!-- iOS: al añadir a la pantalla de inicio, Safari no recorta ni pone
+         fondo a este icono, así que va cuadrado, con margen y sin
+         transparencia. Tampoco lee `display` del manifest en versiones
+         antiguas, de ahí el meta `apple-mobile-web-app-capable`. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="HeraWallet" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">

@@ -1238,12 +1238,20 @@ export default function App() {
     return false;
   });
 
-  // --- Aviso para instalar la app Android -------------------------------
+  // --- Aviso para instalar la app --------------------------------------
   //
-  // Solo aparece a quien puede aprovecharlo: un teléfono Android que está
-  // entrando por el navegador. Dentro de la app ya instalada, en iPhone o en
-  // un escritorio no tiene sentido ofrecer un APK.
-  const [appDescargable, setAppDescargable] = useState<{ mb?: number; version?: string } | null>(null);
+  // Cada plataforma se instala de una manera distinta, así que el aviso solo
+  // aparece cuando hay algo que ofrecer de verdad:
+  //
+  //   android — descarga del APK
+  //   ios     — instrucciones para "Añadir a pantalla de inicio"; Apple no
+  //             expone ninguna forma de instalar desde código
+  //   safari  — la persona está en iPhone pero fuera de Safari (Chrome, o el
+  //             navegador incrustado de Instagram o WhatsApp), donde esa
+  //             opción del menú no existe
+  const [plataformaAviso, setPlataformaAviso] = useState<'android' | 'ios' | 'safari' | null>(null);
+  const [apkInfo, setApkInfo] = useState<{ mb?: number; version?: string } | null>(null);
+  const [pasosIosVisibles, setPasosIosVisibles] = useState(false);
   const [avisoAppOculto, setAvisoAppOculto] = useState<boolean>(() => {
     try {
       return localStorage.getItem('hera_aviso_app_oculto') === '1';
@@ -1254,19 +1262,48 @@ export default function App() {
 
   useEffect(() => {
     if (IS_NATIVE_APP || avisoAppOculto) return;
-    if (typeof navigator === 'undefined' || !/android/i.test(navigator.userAgent)) return;
+    if (typeof navigator === 'undefined') return;
 
-    fetch(apiUrl('/api/app/latest'))
-      .then((r) => r.json())
-      .then((d) => { if (d?.disponible) setAppDescargable({ mb: d.mb, version: d.version }); })
-      .catch(() => { /* Sin respuesta simplemente no se ofrece la descarga. */ });
+    const ua = navigator.userAgent;
+
+    // Ya está instalada y abierta desde la pantalla de inicio.
+    const instalada = (navigator as any).standalone === true
+      || window.matchMedia?.('(display-mode: standalone)').matches;
+    if (instalada) return;
+
+    // El iPad moderno se identifica como Mac; los dedos lo delatan.
+    const esIos = /iphone|ipad|ipod/i.test(ua)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    if (esIos) {
+      // En iOS todos los navegadores usan WebKit, pero solo Safari ofrece
+      // "Añadir a pantalla de inicio" en su menú de compartir.
+      const otroNavegador = /CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+      const dentroDeOtraApp = /FBAN|FBAV|Instagram|Line|Twitter|WhatsApp/i.test(ua);
+      setPlataformaAviso(otroNavegador || dentroDeOtraApp ? 'safari' : 'ios');
+      return;
+    }
+
+    if (/android/i.test(ua)) {
+      fetch(apiUrl('/api/app/latest'))
+        .then((r) => r.json())
+        .then((d) => {
+          // Sin APK publicado no se ofrece nada: mejor ningún aviso que un
+          // enlace que descarga un error.
+          if (d?.disponible) {
+            setApkInfo({ mb: d.mb, version: d.version });
+            setPlataformaAviso('android');
+          }
+        })
+        .catch(() => { /* Sin respuesta simplemente no se ofrece la descarga. */ });
+    }
   }, [avisoAppOculto]);
 
-  // Hay aviso solo si el APK existe y la persona no lo ha descartado antes.
-  const avisoApp = avisoAppOculto ? null : appDescargable;
+  const avisoApp = avisoAppOculto ? null : plataformaAviso;
 
   const ocultarAvisoApp = () => {
     setAvisoAppOculto(true);
+    setPasosIosVisibles(false);
     try {
       localStorage.setItem('hera_aviso_app_oculto', '1');
     } catch {
@@ -4842,7 +4879,8 @@ export default function App() {
 
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-bg p-4 relative overflow-hidden">
-        {/* Instalar la app: franja superior, solo en Android por navegador */}
+        {/* Instalar la app: misma franja en Android y iPhone; solo cambia lo
+            que ocurre al pulsar, porque iOS no permite instalar desde código */}
         {avisoApp && (
           <motion.div
             initial={{ opacity: 0, y: -12 }}
@@ -4871,18 +4909,42 @@ export default function App() {
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium text-text-primary leading-tight">Instala HeraWallet</p>
               <p className="text-[11px] text-text-secondary leading-tight truncate">
-                Voz y recibos sin abrir el navegador
-                {avisoApp.mb ? ` · ${avisoApp.mb} MB` : ''}
+                {avisoApp === 'safari'
+                  ? 'Ábrela en Safari para instalarla'
+                  : 'Voz y recibos sin abrir el navegador'}
+                {avisoApp === 'android' && apkInfo?.mb ? ` · ${apkInfo.mb} MB` : ''}
               </p>
             </div>
-            <a
-              href={apiUrl('/descargar/HeraWallet.apk')}
-              download
-              className="flex-none px-3 py-1.5 rounded-xl bg-brand text-white text-xs font-medium flex items-center gap-1.5 transition-transform active:scale-[0.97]"
-            >
-              <Download size={13} />
-              Instalar
-            </a>
+
+            {avisoApp === 'android' && (
+              <a
+                href={apiUrl('/descargar/HeraWallet.apk')}
+                download
+                className="flex-none px-3 py-1.5 rounded-xl bg-brand text-white text-xs font-medium flex items-center gap-1.5 transition-transform active:scale-[0.97]"
+              >
+                <Download size={13} />
+                Instalar
+              </a>
+            )}
+
+            {avisoApp === 'ios' && (
+              <button
+                type="button"
+                onClick={() => setPasosIosVisibles(true)}
+                className="flex-none px-3 py-1.5 rounded-xl bg-brand text-white text-xs font-medium flex items-center gap-1.5 transition-transform active:scale-[0.97]"
+              >
+                <Download size={13} />
+                Instalar
+              </button>
+            )}
+
+            {/* Fuera de Safari no hay nada que pulsar: la opción de instalar no
+                está en el menú de ese navegador. */}
+            {avisoApp === 'safari' && (
+              <span className="flex-none px-3 py-1.5 rounded-xl bg-bg border border-border text-[11px] text-text-secondary">
+                Safari
+              </span>
+            )}
             <button
               type="button"
               onClick={ocultarAvisoApp}
@@ -4893,6 +4955,74 @@ export default function App() {
             </button>
           </motion.div>
         )}
+
+        {/* Pasos para iPhone. Apple no expone ninguna API de instalación, así
+            que lo más cerca que se puede estar de un solo toque es enseñar los
+            dos pasos exactos, con el icono que la persona va a ver. */}
+        <AnimatePresence>
+          {pasosIosVisibles && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setPasosIosVisibles(false)}
+                className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px]"
+              />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
+                role="dialog"
+                aria-label="Cómo instalar HeraWallet en tu iPhone"
+                className="fixed bottom-0 inset-x-0 z-50 bg-surface border-t border-border rounded-t-3xl p-5 pb-8 space-y-5 shadow-2xl"
+              >
+                <div className="w-9 h-1 rounded-full bg-border mx-auto" />
+
+                <div className="text-center space-y-1">
+                  <h2 className="text-base font-serif font-semibold text-text-primary">Añádela a tu pantalla de inicio</h2>
+                  <p className="text-xs text-text-secondary leading-relaxed max-w-[280px] mx-auto">
+                    En iPhone las apps se instalan desde el propio Safari. Son dos toques.
+                  </p>
+                </div>
+
+                <ol className="space-y-3">
+                  <li className="flex items-center gap-3 p-3 rounded-2xl bg-bg border border-border">
+                    <span className="flex-none w-6 h-6 rounded-full bg-brand text-white text-xs font-medium flex items-center justify-center">1</span>
+                    <p className="text-xs text-text-primary flex-1">
+                      Pulsa <b>Compartir</b> en la barra de abajo
+                    </p>
+                    {/* El mismo icono que aparece en la barra de Safari. */}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-none text-brand" aria-hidden="true">
+                      <path d="M12 15V3M8 7l4-4 4 4" />
+                      <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+                    </svg>
+                  </li>
+                  <li className="flex items-center gap-3 p-3 rounded-2xl bg-bg border border-border">
+                    <span className="flex-none w-6 h-6 rounded-full bg-brand text-white text-xs font-medium flex items-center justify-center">2</span>
+                    <p className="text-xs text-text-primary flex-1">
+                      Elige <b>Añadir a pantalla de inicio</b>
+                    </p>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 flex-none text-brand" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="4" />
+                      <path d="M12 8v8M8 12h8" />
+                    </svg>
+                  </li>
+                </ol>
+
+                <button
+                  type="button"
+                  onClick={() => setPasosIosVisibles(false)}
+                  className="w-full py-3 rounded-2xl bg-brand text-white text-sm font-medium transition-transform active:scale-[0.98]"
+                >
+                  Entendido
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
 
         {/* Volver a la Landing Page */}
         <button
