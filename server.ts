@@ -16,6 +16,7 @@ import { MirrorToneEngine } from './src/agent/profile/mirrorToneEngine.ts';
 import { initMySQLSchema } from './src/db/mysql.ts';
 import * as notificaciones from './server/notificaciones.ts';
 import * as reglasNotificaciones from './server/reglas.ts';
+import * as referidos from './server/referidos.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -1143,8 +1144,32 @@ function getCurrencyFromPhone(phone: string): string {
   return 'USD';
 }
 
+/**
+ * Suma tokens a un usuario y lo deja anotado en su historial.
+ *
+ * Se añaden también al cupo del plan para que las barras de consumo sigan
+ * teniendo sentido: sin eso, el saldo superaría al total y la barra aparecería
+ * llena o vacía según el caso.
+ */
+function acreditarTokens(userId: string, tokens: number, descripcion: string) {
+  if (!tokens || tokens <= 0) return;
+
+  getOrCreateSubscription(userId);
+  db.prepare(`
+    UPDATE user_subscriptions
+    SET tokenBalance = tokenBalance + ?, tokensTotalPlan = tokensTotalPlan + ?
+    WHERE userId = ?
+  `).run(tokens, tokens, userId);
+
+  const ahora = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO token_transactions (id, userId, type, tokens, amountUSD, description, date, createdAt)
+    VALUES (?, ?, 'referral_bonus', ?, 0, ?, ?, ?)
+  `).run(randomUUID(), userId, tokens, descripcion, ahora.split('T')[0], ahora);
+}
+
 app.post('/api/verify-otp', (req, res) => {
-  const { phone, email: emailInput, code } = req.body || {};
+  const { phone, email: emailInput, code, codigoReferido } = req.body || {};
 
   // El identificador es el mismo con el que se pidió el código.
   const identifier = emailInput ? normalizeEmail(emailInput) : phone;
@@ -1219,6 +1244,44 @@ app.post('/api/verify-otp', (req, res) => {
       JSON.stringify({ actionType: 'open_settings', label: 'Ver mi plan' }),
       new Date().toISOString()
     );
+
+    // El código solo se canjea al crear la cuenta. Aceptarlo más tarde
+    // permitiría reclamar el premio después de llevar meses usando la app.
+    if (codigoReferido) {
+      try {
+        const canje = referidos.canjear(db, {
+          codigo: String(codigoReferido),
+          referidoId: id,
+          ip: clientIpOf(req),
+          acreditar: acreditarTokens,
+          notificar: (destinatario, titulo, mensaje) => {
+            db.prepare(`
+              INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+              VALUES (?, ?, ?, ?, 'success', ?, 0, ?)
+            `).run(randomUUID(), destinatario, titulo, mensaje,
+                   JSON.stringify({ actionType: 'open_referrals', label: 'Ver mis invitados' }),
+                   new Date().toISOString());
+          },
+        });
+
+        if (canje.aplicado) {
+          db.prepare(`
+            INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+            VALUES (?, ?, ?, ?, 'success', ?, 0, ?)
+          `).run(
+            randomUUID(), id, 'Tienes tokens de bienvenida',
+            `Entraste con una invitación, así que empiezas con ${Number(canje.tokensReferido).toLocaleString('es')} tokens extra.`,
+            JSON.stringify({ actionType: 'open_settings', label: 'Ver mi plan' }),
+            new Date().toISOString()
+          );
+          logAudit(id, 'referral_redeemed', `Alta con código de referido de ${canje.referidorId}`);
+        }
+      } catch (err) {
+        // Un fallo aquí no puede impedir el alta: la cuenta ya está creada y la
+        // persona tiene que poder entrar.
+        console.error('[referidos] fallo al canjear', err);
+      }
+    }
   }
 
   // Registro de conexión: alimenta "últimas conexiones" del panel.
@@ -4488,6 +4551,10 @@ app.get('/api/admin/health', adminAuthMiddleware, async (req, res) => {
 // enviar, y una pasada cada media hora que no puede entregar nada solo gasta.
 notificaciones.crearTablas(db);
 notificaciones.montarEndpoints(app, db, authMiddleware);
+
+// --- Referidos ------------------------------------------------------------
+referidos.crearTablas(db);
+referidos.montarEndpoints(app, db, authMiddleware, adminAuthMiddleware);
 
 if (notificaciones.configurarWebPush()) {
   reglasNotificaciones.arrancarPlanificador(db);
