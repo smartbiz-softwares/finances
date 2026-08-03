@@ -5,7 +5,14 @@ on:
     branches:
       - main
 
+# Dos despliegues a la vez sobre el mismo servidor se pisan: uno reinicia el
+# proceso mientras el otro está a medio compilar. Se encolan.
+concurrency:
+  group: desplegar-main
+  cancel-in-progress: false
+
 jobs:
+  # --- La web ---------------------------------------------------------------
   deploy:
     runs-on: ubuntu-latest
 
@@ -26,3 +33,150 @@ jobs:
             npm install
             npm run build
             pm2 restart hera-api || pm2 start tsx --name "hera-api" -- server.ts
+
+  # --- La app Android -------------------------------------------------------
+  #
+  # El servidor no tiene SDK de Android ni JDK 21, así que el APK se compila
+  # aquí y se sube ya hecho. Sin esto, la web se actualizaría sola y la app se
+  # quedaría atrás hasta que alguien se acordara de subirla a mano.
+  #
+  # Va después de la web y no la bloquea: si la compilación de Android falla, el
+  # sitio ya está desplegado y en el servidor sigue publicado el APK anterior.
+  app:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+        with:
+          # Historial completo: hace falta para comparar con el commit anterior.
+          fetch-depth: 0
+
+      - name: ¿Cambió algo que afecte a la app?
+        id: decidir
+        run: |
+          # Un cambio solo en website.html o en la documentación no justifica
+          # cinco minutos de compilación de Android.
+          RUTAS="src android index.html capacitor.config.ts package.json package-lock.json vite.config.ts public"
+          ANTES="${{ github.event.before }}"
+
+          # En el primer push de una rama, o tras un force-push, el commit
+          # anterior puede no existir aquí: se compila por si acaso.
+          if [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            echo "hace-falta=si" >> "$GITHUB_OUTPUT"
+            echo "No hay commit anterior con el que comparar; se compila."
+            exit 0
+          fi
+
+          CAMBIOS="$(git diff --name-only "$ANTES" "${{ github.sha }}" -- $RUTAS)"
+          if [ -n "$CAMBIOS" ]; then
+            echo "hace-falta=si" >> "$GITHUB_OUTPUT"
+            echo "Cambios que afectan a la app:"
+            echo "$CAMBIOS"
+          else
+            echo "hace-falta=no" >> "$GITHUB_OUTPUT"
+            echo "Nada que afecte a la app; se conserva el APK publicado."
+          fi
+
+      - name: Preparar Node
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Preparar JDK 21
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          # Gradle no admite versiones más nuevas: con JDK 26 falla con
+          # "Unsupported class file major version".
+          java-version: '21'
+
+      - name: Preparar el SDK de Android
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: android-actions/setup-android@v3
+        with:
+          # compileSdk es 36 (android/variables.gradle), pero las build-tools que
+          # usa el proyecto son las 35: es la combinación con la que compila.
+          packages: 'platforms;android-36 build-tools;35.0.0 platform-tools'
+
+      - name: Instalar dependencias
+        if: steps.decidir.outputs.hace-falta == 'si'
+        run: npm ci
+
+      - name: Compilar el cliente y armar el APK
+        if: steps.decidir.outputs.hace-falta == 'si'
+        run: |
+          npm run build:app
+          npx cap sync android
+          cd android && ./gradlew --no-daemon assembleDebug
+
+      - name: Preparar el APK para publicar
+        if: steps.decidir.outputs.hace-falta == 'si'
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk/HeraWallet.apk
+
+          VERSION="$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle || echo '1.0')"
+          cat > apk/version.json <<JSON
+          {
+            "version": "$VERSION",
+            "commit": "$(git rev-parse --short HEAD)",
+            "publicado": "$(date -Iseconds)"
+          }
+          JSON
+
+          ls -lh apk/
+
+      # Copia descargable desde la propia ejecución, útil para probar en un
+      # teléfono sin tocar producción.
+      - name: Guardar el APK en la ejecución
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeraWallet-apk
+          path: apk/HeraWallet.apk
+          retention-days: 30
+
+      - name: Preparar la carpeta en el servidor
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22112 }}
+          script: mkdir -p /var/www/finances/apk
+
+      # Se sube a un nombre temporal y se mueve al final, para que nadie llegue
+      # a descargar un archivo a medio copiar.
+      - name: Subir el APK
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22112 }}
+          source: 'apk/HeraWallet.apk,apk/version.json'
+          target: /var/www/finances/apk-nuevo
+          strip_components: 1
+
+      - name: Publicar el APK
+        if: steps.decidir.outputs.hace-falta == 'si'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22112 }}
+          script: |
+            cd /var/www/finances
+            mv apk-nuevo/HeraWallet.apk apk/HeraWallet.apk
+            mv apk-nuevo/version.json apk/version.json
+            rmdir apk-nuevo || true
+            ls -lh apk/
