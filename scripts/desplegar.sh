@@ -17,7 +17,7 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 
-PM2_APP="${PM2_APP:-hera}"
+PM2_APP="${PM2_APP:-hera-api}"
 CON_APP=1
 [[ "${1:-}" == "--sin-app" ]] && CON_APP=0
 
@@ -28,15 +28,18 @@ ANTES="$(git rev-parse --short HEAD)"
 
 # --- Traer cambios --------------------------------------------------------
 #
-# `--ff-only` a propósito: si el servidor tiene commits propios, es mejor
-# enterarse aquí que descubrir un merge automático raro más tarde.
+# Se intenta primero sin merge. El servidor arrastra commits propios de antes de
+# automatizar el despliegue, así que si no se puede avanzar en línea recta se
+# hace el merge —que es lo que ya hace el flujo de GitHub Actions— pero dejando
+# constancia de qué había suelto.
+RAMA="$(git rev-parse --abbrev-ref HEAD)"
 log "Trayendo cambios…"
 git fetch --quiet origin
-if ! git merge --ff-only origin/"$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null; then
-  aviso "No se pudo avanzar sin merge. El servidor tiene commits locales:"
-  git --no-pager log --oneline origin/"$(git rev-parse --abbrev-ref HEAD)"..HEAD
-  aviso "Resuélvelo a mano antes de desplegar."
-  exit 1
+
+if ! git merge --ff-only "origin/$RAMA" 2>/dev/null; then
+  aviso "El servidor tiene commits que no están en origin:"
+  git --no-pager log --oneline "origin/$RAMA..HEAD"
+  git merge --no-edit "origin/$RAMA"
 fi
 
 DESPUES="$(git rev-parse --short HEAD)"
