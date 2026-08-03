@@ -17,6 +17,7 @@ import { initMySQLSchema } from './src/db/mysql.ts';
 import * as notificaciones from './server/notificaciones.ts';
 import * as reglasNotificaciones from './server/reglas.ts';
 import * as referidos from './server/referidos.ts';
+import * as logros from './server/logros.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -1145,6 +1146,33 @@ function getCurrencyFromPhone(phone: string): string {
 }
 
 /**
+ * Fecha de hoy en la zona horaria del usuario.
+ *
+ * Racha y logros se cuentan por días, y un día tiene que ser el suyo: a las
+ * 22:00 en La Habana, en UTC ya es mañana, y la racha se rompería sola.
+ */
+function hoyDe(userId: string): string {
+  const prefs = notificaciones.preferencias(db, userId);
+  return notificaciones.fechaLocal(prefs?.zonaHoraria || 'America/Havana');
+}
+
+/** Revisa los logros del usuario y anota en su campana los que sean nuevos. */
+function revisarLogros(userId: string) {
+  const nuevos = logros.revisar(db, userId, hoyDe(userId));
+
+  for (const logro of nuevos) {
+    db.prepare(`
+      INSERT INTO user_notifications (id, userId, title, message, type, actionData, isRead, createdAt)
+      VALUES (?, ?, ?, ?, 'success', ?, 0, ?)
+    `).run(randomUUID(), userId, `Logro: ${logro.nombre}`, logro.descripcion,
+           JSON.stringify({ actionType: 'open_achievements', label: 'Ver logros' }),
+           new Date().toISOString());
+  }
+
+  return nuevos;
+}
+
+/**
  * Suma tokens a un usuario y lo deja anotado en su historial.
  *
  * Se añaden también al cupo del plan para que las barras de consumo sigan
@@ -1651,7 +1679,17 @@ app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
   db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, targetAccountId, req.userId);
 
   logAudit(req.userId, 'create_transaction', `Transacción registrada: ${category} - ${amount}`);
-  res.json({ success: true, id });
+
+  // Los logros se revisan aquí porque es el momento en que cambian los datos
+  // que los alimentan. Un fallo revisándolos no puede tumbar el registro.
+  let logrosNuevos: any[] = [];
+  try {
+    logrosNuevos = revisarLogros(req.userId);
+  } catch (err) {
+    console.error('[logros] fallo al revisar', err);
+  }
+
+  res.json({ success: true, id, logros: logrosNuevos });
 });
 
 app.get('/api/finance/goals', authMiddleware, (req: any, res) => {
@@ -4555,6 +4593,10 @@ notificaciones.montarEndpoints(app, db, authMiddleware);
 // --- Referidos ------------------------------------------------------------
 referidos.crearTablas(db);
 referidos.montarEndpoints(app, db, authMiddleware, adminAuthMiddleware);
+
+// --- Racha y logros -------------------------------------------------------
+logros.crearTablas(db);
+logros.montarEndpoints(app, db, authMiddleware, hoyDe);
 
 if (notificaciones.configurarWebPush()) {
   reglasNotificaciones.arrancarPlanificador(db);

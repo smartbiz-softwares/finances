@@ -94,6 +94,7 @@ import {
 import { LandingPage } from './LandingPage';
 import { Referidos } from './Referidos';
 import { PanelReferidos } from './PanelReferidos';
+import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
@@ -1261,6 +1262,7 @@ export default function App() {
   });
   const [invitacion, setInvitacion] = useState<{ tokens: number; invitadoPor: string | null } | null>(null);
   const [mostrarReferidos, setMostrarReferidos] = useState(false);
+  const [mostrarRacha, setMostrarRacha] = useState(false);
 
   useEffect(() => {
     if (!codigoReferido) return;
@@ -5718,6 +5720,11 @@ export default function App() {
                           <p className="text-[10px] text-text-secondary">Moneda, suscripción y reglas de IA</p>
                         </div>
                       </button>
+
+                      {/* Racha: lo primero que se mira al abrir el menú */}
+                      <div onMouseDown={(e) => e.stopPropagation()}>
+                        <RachaResumen onAbrir={() => { setIsProfileMenuOpen(false); setMostrarRacha(true); }} />
+                      </div>
 
                       {/* Invitaciones: aquí es donde la gente ya está mirando
                           su plan y sus tokens, que es cuando gana sentido */}
@@ -11846,6 +11853,43 @@ export default function App() {
                   </div>
                 )}
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Celebración de un logro recién conseguido */}
+      <AvisoLogro />
+
+      {/* Racha y logros */}
+      <AnimatePresence>
+        {mostrarRacha && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMostrarRacha(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Tu racha y tus logros"
+              className="w-full sm:max-w-md bg-bg border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-serif font-semibold text-lg text-text-primary">Tu constancia</h2>
+                <button
+                  type="button"
+                  onClick={() => setMostrarRacha(false)}
+                  aria-label="Cerrar"
+                  className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface transition-colors active:scale-[0.95]"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <Racha />
             </motion.div>
           </div>
         )}
