@@ -5,6 +5,15 @@ on:
     branches:
       - main
 
+  # Permite relanzarlo desde la pestaña Actions, útil para republicar el APK sin
+  # tener que inventarse un commit.
+  workflow_dispatch:
+    inputs:
+      forzar_app:
+        description: 'Recompilar y publicar el APK aunque no haya cambios'
+        type: boolean
+        default: true
+
 # Dos despliegues a la vez sobre el mismo servidor se pisan: uno reinicia el
 # proceso mientras el otro está a medio compilar. Se encolan.
 concurrency:
@@ -58,7 +67,15 @@ jobs:
         run: |
           # Un cambio solo en website.html o en la documentación no justifica
           # cinco minutos de compilación de Android.
-          RUTAS="src android index.html capacitor.config.ts package.json package-lock.json vite.config.ts public"
+          if [ "${{ inputs.forzar_app }}" = "true" ]; then
+            echo "hace-falta=si" >> "$GITHUB_OUTPUT"
+            echo "Ejecución manual: se compila."
+            exit 0
+          fi
+
+          # Se incluye el propio flujo: si cambian los pasos de compilación, hay
+          # que comprobar que siguen funcionando.
+          RUTAS="src android index.html capacitor.config.ts package.json package-lock.json vite.config.ts public .github/workflows"
           ANTES="${{ github.event.before }}"
 
           # En el primer push de una rama, o tras un force-push, el commit
