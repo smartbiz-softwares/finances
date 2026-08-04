@@ -593,21 +593,16 @@ function HeraWalletLogo({ size = 'md', showText = true, showSlogan = false }: { 
   );
 }
 
+/**
+ * Cifra compacta.
+ *
+ * Se mantiene el nombre porque lo usan decenas de sitios, pero por dentro es el
+ * mismo formateador que el resto de la app (`src/formato.ts`): antes convivían
+ * dos con reglas distintas —uno con punto decimal, otro con coma— y la misma
+ * cantidad se leía diferente según dónde apareciera.
+ */
 export function formatCompactNumber(val: number | string | undefined | null): string {
-  const num = typeof val === 'string' ? parseFloat(val) : (val || 0);
-  if (isNaN(num)) return '0';
-  const abs = Math.abs(num);
-  const sign = num < 0 ? '-' : '';
-
-  if (abs >= 1000000) {
-    const formatted = (abs / 1000000).toFixed(1).replace(/\.0$/, '');
-    return `${sign}${formatted}M`;
-  }
-  if (abs >= 1000) {
-    const formatted = (abs / 1000).toFixed(1).replace(/\.0$/, '');
-    return `${sign}${formatted}k`;
-  }
-  return `${sign}${Math.round(abs * 100) / 100}`;
+  return compacto(val);
 }
 
 function getCategoryIcon(category: string, type: string, description?: string) {
@@ -6211,8 +6206,8 @@ export default function App() {
                             {[
                               { label: 'Usuarios Totales', val: totalUsers, icon: Users, color: 'text-brand', hint: 'Cuentas registradas' },
                               { label: 'Suscripciones Activas', val: adminStats?.activeSubscriptions || 0, icon: CheckCircle, color: 'text-success', hint: 'Planes contratados' },
-                              { label: 'Ingresos USD (Stripe)', val: `$${stripeUSD.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-brand', hint: 'Pagos en dólares' },
-                              { label: 'Ingresos CUP (Cuba)', val: `${cupCUP.toLocaleString('es-ES')} CUP`, icon: Building2, color: 'text-amber-500', hint: 'Transfermóvil aprobados' },
+                              { label: 'Ingresos USD (Stripe)', val: `$${compacto(stripeUSD)}`, icon: DollarSign, color: 'text-brand', hint: 'Pagos en dólares' },
+                              { label: 'Ingresos CUP (Cuba)', val: `${compacto(cupCUP)} CUP`, icon: Building2, color: 'text-amber-500', hint: 'Transfermóvil aprobados' },
                               { label: 'Tokens Consumidos', val: compacto(adminStats?.totalTokensConsumed || 0), icon: Sparkles, color: 'text-indigo-400', hint: 'Consumo real acumulado' },
                               { label: 'Consultas IA Exec', val: adminStats?.totalLLMQueries || 0, icon: MessageSquare, color: 'text-cyan-400', hint: 'Mensajes procesados' },
                               { label: 'Solicitudes Cuba Pend.', val: adminStats?.pendingCubaRequests || 0, icon: Clock, color: 'text-warning', hint: 'Pendientes de verificar' },
@@ -6424,7 +6419,7 @@ export default function App() {
                                     <span className="text-text-primary flex items-center gap-1.5">
                                       <span className="w-2 h-2 rounded-full bg-brand"></span> Stripe (Tarjetas USD)
                                     </span>
-                                    <span className="font-mono font-bold text-brand">${stripeUSD.toLocaleString('es-ES')} USD</span>
+                                    <span className="font-mono font-bold text-brand">${compacto(stripeUSD)} USD</span>
                                   </div>
                                   <div className="h-3.5 w-full bg-bg border border-border rounded-full overflow-hidden p-0.5">
                                     <div className="h-full bg-brand rounded-full transition-all duration-500" style={{ width: `${stripeWidthPct}%` }}></div>
@@ -6437,7 +6432,7 @@ export default function App() {
                                     <span className="text-text-primary flex items-center gap-1.5">
                                       <span className="w-2 h-2 rounded-full bg-amber-400"></span> Transfermóvil (Cuba CUP)
                                     </span>
-                                    <span className="font-mono font-bold text-amber-400">{cupCUP.toLocaleString('es-ES')} CUP</span>
+                                    <span className="font-mono font-bold text-amber-400">{compacto(cupCUP)} CUP</span>
                                   </div>
                                   <div className="h-3.5 w-full bg-bg border border-border rounded-full overflow-hidden p-0.5">
                                     <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${cubaWidthPct}%` }}></div>
@@ -7042,7 +7037,7 @@ export default function App() {
                                       <td className="p-3.5 font-mono">
                                         <p className="font-bold text-brand">${tx.amountUSD} USD</p>
                                         {tx.amountCUP && (
-                                          <p className="text-[10px] text-text-secondary">{tx.amountCUP?.toLocaleString('es-ES')} CUP</p>
+                                          <p className="text-[10px] text-text-secondary">{compacto(tx.amountCUP)} CUP</p>
                                         )}
                                       </td>
                                       <td className="p-3.5 font-mono font-bold text-text-primary select-all text-[11px] truncate max-w-[130px]">
@@ -7538,7 +7533,8 @@ export default function App() {
                             type="button"
                             onClick={() => { if (chatInput.trim()) sendChatMessage(chatInput); }}
                             disabled={!chatInput.trim() || chatLoading}
-                            className="px-4 py-2 bg-brand hover:bg-brand-hover text-white font-medium rounded-xl text-xs flex items-center gap-2 shadow-md disabled:opacity-40 transition-all active:scale-[0.97] cursor-pointer"
+                            aria-label="Consultar"
+                            className="w-10 h-10 bg-brand hover:bg-brand-hover text-white rounded-xl flex items-center justify-center shadow-md disabled:opacity-40 transition-all active:scale-[0.97] cursor-pointer shrink-0"
                           >
                             {chatLoading ? (
                               /* Cargando: solo tres puntos, sin la palabra */
@@ -7548,10 +7544,10 @@ export default function App() {
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
                               </span>
                             ) : (
-                              <>
-                                <IconoAnimado icono={IconoEnviar} size={14} />
-                                <span>Consultar</span>
-                              </>
+                              // Solo el icono: la acción se entiende sola y así
+                              // el cuadro de escritura gana el ancho que ocupaba
+                              // la palabra.
+                              <IconoAnimado icono={IconoEnviar} size={16} />
                             )}
                           </button>
                         </div>
@@ -9195,7 +9191,7 @@ export default function App() {
                               </div>
                             </div>
                             <div className="text-right font-mono font-bold text-xs text-brand">
-                              {g.currentAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol} / {g.targetAmount.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}
+                              {compacto(g.currentAmount)} {currencySymbol} / {compacto(g.targetAmount)} {currencySymbol}
                             </div>
                           </div>
 
@@ -9687,11 +9683,11 @@ export default function App() {
 
                                 <div className="text-right shrink-0">
                                   <div className="font-mono font-bold text-sm text-text-primary tracking-tight">
-                                    {totalAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}
+                                    {compacto(totalAmt)} {currencySymbol}
                                   </div>
                                   {!isPaid && !isCancelled && paidAmt > 0 && (
                                     <span className="text-[10px] font-mono text-text-dim block">
-                                      Resta: {remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}
+                                      Resta: {compacto(remainingAmt)} {currencySymbol}
                                     </span>
                                   )}
                                 </div>
@@ -9700,8 +9696,8 @@ export default function App() {
                               {/* Progress Bar Component */}
                               <div className="space-y-1 bg-bg/60 p-2.5 rounded-2xl border border-border/50">
                                 <div className="flex justify-between items-center text-[10px] font-mono text-text-secondary">
-                                  <span>Abonado: {paidAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencySymbol}</span>
-                                  <span>{pctPaid}% {isPaid ? '— Completo' : isCancelled ? '— Cancelado' : `(Pte: ${remainingAmt.toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol})`}</span>
+                                  <span>Abonado: {compacto(paidAmt)} {currencySymbol}</span>
+                                  <span>{pctPaid}% {isPaid ? '— Completo' : isCancelled ? '— Cancelado' : `(Pte: ${compacto(remainingAmt)} ${currencySymbol})`}</span>
                                 </div>
                                 <div className="w-full bg-bg h-2 rounded-full overflow-hidden border border-border/40">
                                   <div
@@ -11763,7 +11759,7 @@ export default function App() {
                       </div>
                     </div>
                     <div className="text-right shrink-0 font-mono font-bold text-xs text-text-primary">
-                      {newDebtAmount ? `${parseFloat(newDebtAmount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol}` : `0.00 ${currencySymbol}`}
+                      {newDebtAmount ? `${compacto(parseFloat(newDebtAmount))} ${currencySymbol}` : `0.00 ${currencySymbol}`}
                     </div>
                   </div>
                 </div>
@@ -11809,7 +11805,7 @@ export default function App() {
               <div className="space-y-3.5">
                 <div className="p-3 bg-bg/80 border border-border/80 rounded-2xl flex justify-between items-center text-xs font-mono">
                   <span className="text-text-secondary">Monto Total de Deuda:</span>
-                  <span className="font-bold text-text-primary">{Number(selectedDebtForPayment.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol}</span>
+                  <span className="font-bold text-text-primary">{compacto(selectedDebtForPayment.amount)} ${currencySymbol}</span>
                 </div>
 
                 <div className="space-y-1">
@@ -11894,7 +11890,7 @@ export default function App() {
                   paymentHistoryList.map((p, idx) => (
                     <div key={p.id || idx} className="p-3.5 bg-bg border border-border/80 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
                       <div>
-                        <div className="font-mono font-bold text-xs text-success">+ {Number(p.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${currencySymbol}</div>
+                        <div className="font-mono font-bold text-xs text-success">+ {compacto(p.amount)} ${currencySymbol}</div>
                         {p.note && <p className="text-[11px] text-text-secondary mt-0.5">{p.note}</p>}
                       </div>
                       <span className="text-[10px] font-mono text-text-dim">{p.date}</span>
@@ -13051,7 +13047,7 @@ export default function App() {
                       </div>
                       <div className="text-right">
                         <span className="text-base sm:text-lg font-serif font-bold text-brand tracking-tight">
-                          {((selectedPlanForCheckout.amountUSD || 0) * (cubaConfig?.cupExchangeRate || 320)).toLocaleString('es-ES', { minimumFractionDigits: 2 })} CUP
+                          {compacto((selectedPlanForCheckout.amountUSD || 0) * (cubaConfig?.cupExchangeRate || 320))} CUP
                         </span>
                       </div>
                     </div>
@@ -14073,7 +14069,7 @@ export default function App() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-text-secondary font-medium">Acumulado del Fondo</span>
                   <span className="font-mono font-bold text-brand text-sm">
-                    {selectedGoalForModal.currentAmount.toLocaleString('es-ES')} ${currencySymbol} / {selectedGoalForModal.targetAmount.toLocaleString('es-ES')} ${currencySymbol}
+                    {compacto(selectedGoalForModal.currentAmount)} ${currencySymbol} / {compacto(selectedGoalForModal.targetAmount)} ${currencySymbol}
                   </span>
                 </div>
                 <AnimatedProgressBar
