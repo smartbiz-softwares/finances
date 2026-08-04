@@ -95,6 +95,7 @@ import { LandingPage } from './LandingPage';
 import { Referidos } from './Referidos';
 import { PanelReferidos } from './PanelReferidos';
 import { Racha, RachaResumen, AvisoLogro } from './Racha';
+import { AvisoActualizacion } from './Actualizacion';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
@@ -11857,6 +11858,9 @@ export default function App() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Versión nueva de la app instalada */}
+      <AvisoActualizacion />
 
       {/* Celebración de un logro recién conseguido */}
       <AvisoLogro />

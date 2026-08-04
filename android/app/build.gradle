@@ -7,8 +7,12 @@ android {
         applicationId "app.herawallet.client"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Android solo reconoce una actualización si versionCode sube, así que
+        // no puede quedarse fijo. La compilación lo inyecta (ver el flujo de
+        // publicación); al compilar en local queda en 1, que es suficiente para
+        // probar.
+        versionCode (project.hasProperty('heraVersionCode') ? heraVersionCode.toInteger() : 1)
+        versionName (project.hasProperty('heraVersionName') ? heraVersionName : "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

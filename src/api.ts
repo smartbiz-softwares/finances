@@ -27,18 +27,25 @@ export function onAuthChange(fn: (user: any) => void) {
 /**
  * Servidor al que apunta la aplicación.
  *
- * En web se deja vacío: las rutas relativas van al mismo origen que sirve la
- * página. En la app nativa no hay servidor propio, así que se compila con
- * VITE_API_BASE apuntando a producción.
+ * Normalmente vacío: las rutas relativas van al mismo origen que sirve la
+ * página, y eso vale tanto en la web como en la app, porque la app carga su
+ * interfaz del propio servidor. La variable sigue existiendo para poder
+ * apuntar a otro sitio en desarrollo.
  */
 export const API_BASE = (import.meta as any).env?.VITE_API_BASE || '';
 
 /**
- * ¿Estamos dentro de la app nativa? Se decide en compilación, no husmeando el
- * agente de usuario: la app se compila con su propia variable y así no hay
- * detección frágil que se rompa con la siguiente versión del WebView.
+ * ¿Estamos dentro de la app instalada?
+ *
+ * Se mira en ejecución y no en compilación porque la app carga el mismo bundle
+ * que la web: no hay una compilación aparte en la que marcar una variable.
+ * Capacitor inyecta `window.Capacitor` en su WebView, que es una señal fiable
+ * y no depende del agente de usuario.
  */
-export const IS_NATIVE_APP = (import.meta as any).env?.VITE_NATIVE_APP === '1';
+export const IS_NATIVE_APP =
+  typeof window !== 'undefined' &&
+  (!!(window as any).Capacitor?.isNativePlatform?.() ||
+    (import.meta as any).env?.VITE_NATIVE_APP === '1');
 
 /** Antepone el servidor a una ruta de API. Úsalo en cualquier fetch directo. */
 export function apiUrl(path: string): string {

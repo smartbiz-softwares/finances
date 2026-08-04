@@ -4402,14 +4402,20 @@ function leerApkPublicado() {
   try {
     const info = fs.statSync(apkPath);
     let version = '';
+    let versionCode = 0;
     try {
-      version = JSON.parse(fs.readFileSync(path.join(__dirname, 'apk', 'version.json'), 'utf8')).version || '';
+      const meta = JSON.parse(fs.readFileSync(path.join(__dirname, 'apk', 'version.json'), 'utf8'));
+      version = meta.version || '';
+      // La app compara su propio versionCode con este para saber si hay algo
+      // nuevo que instalar.
+      versionCode = Number(meta.versionCode || 0);
     } catch {
       // Sin version.json solo se informa del tamaño y la fecha.
     }
     return {
       disponible: true,
       version,
+      versionCode,
       bytes: info.size,
       mb: Math.round((info.size / 1024 / 1024) * 10) / 10,
       actualizado: info.mtime.toISOString(),

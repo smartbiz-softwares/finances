@@ -30,9 +30,19 @@ const config: CapacitorConfig = {
   },
 
   server: {
-    // El contenido se sirve desde el propio paquete; solo las llamadas de API
-    // salen a la red.
+    // La interfaz se carga del servidor, no del paquete.
+    //
+    // Empaquetada, cada cambio de la web obligaba a reinstalar el APK: quien lo
+    // tuviera de ayer se quedaba sin lo de hoy. Así, cualquier cambio les llega
+    // al abrir la app, y solo hace falta un APK nuevo cuando cambia algo nativo
+    // —permisos, icono, widget—, que es raro.
+    //
+    // El service worker cachea el contenido, así que después de la primera
+    // apertura sigue funcionando sin conexión. Esa primera vez sí necesita red,
+    // pero la tiene: se acaba de descargar la app.
+    url: 'https://herawallet.app',
     androidScheme: 'https',
+    cleartext: false,
   },
 };
 

@@ -1,5 +1,8 @@
 # HeraWallet — iPhone
 
+> Para Android, ver `APP-ANDROID.md`.
+
+
 No hay app nativa de iOS y no la habrá mientras no exista una cuenta del Apple
 Developer Program (99 $ al año). En iPhone, HeraWallet se instala como PWA:
 Safari la añade a la pantalla de inicio, con su icono y a pantalla completa, sin

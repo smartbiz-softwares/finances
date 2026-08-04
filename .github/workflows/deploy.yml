@@ -128,9 +128,17 @@ jobs:
       - name: Compilar el cliente y armar el APK
         if: steps.decidir.outputs.hace-falta == 'si'
         run: |
+          # El número de ejecución siempre sube, así que sirve de versionCode y
+          # Android reconoce cada publicación como una actualización. El nombre
+          # visible lleva además el commit, para poder rastrear qué se instaló.
+          CODIGO=${{ github.run_number }}
+          NOMBRE="1.$CODIGO ($(git rev-parse --short HEAD))"
+          echo "Compilando versión $NOMBRE (código $CODIGO)"
+
           npm run build:app
           npx cap sync android
-          cd android && ./gradlew --no-daemon assembleDebug
+          cd android && ./gradlew --no-daemon assembleDebug \
+            -PheraVersionCode="$CODIGO" -PheraVersionName="$NOMBRE"
 
       - name: Preparar el APK para publicar
         if: steps.decidir.outputs.hace-falta == 'si'
@@ -138,10 +146,11 @@ jobs:
           mkdir -p apk
           cp android/app/build/outputs/apk/debug/app-debug.apk apk/HeraWallet.apk
 
-          VERSION="$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle || echo '1.0')"
+          # La app compara su versionCode con este para saber si hay algo nuevo.
           cat > apk/version.json <<JSON
           {
-            "version": "$VERSION",
+            "version": "1.${{ github.run_number }}",
+            "versionCode": ${{ github.run_number }},
             "commit": "$(git rev-parse --short HEAD)",
             "publicado": "$(date -Iseconds)"
           }
