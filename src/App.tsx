@@ -99,6 +99,7 @@ import { AvisoActualizacion } from './Actualizacion';
 import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
 import { compartirSesionConWidget, olvidarSesionEnWidget } from './puenteNativo';
 import { CompartirScore } from './CompartirScore';
+import { compacto, dinero as dineroCompacto } from './formato';
 import {
   IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana,
   IconoMicrofono, IconoCamara, IconoIngreso, IconoGasto, IconoEnviar,
@@ -762,7 +763,7 @@ function TokenUsageMeter({ subscription, onUpgrade }: { subscription: any; onUpg
           {subscription.planName || 'Tu plan'}
         </span>
         <span className="text-[10px] font-mono text-text-dim">
-          {isUnlimited ? '∞' : `${balance.toLocaleString()} / ${total.toLocaleString()}`}
+          {isUnlimited ? '∞' : `${compacto(balance)} / ${compacto(total)}`}
         </span>
       </div>
 
@@ -6168,13 +6169,13 @@ export default function App() {
                               { label: 'Suscripciones Activas', val: adminStats?.activeSubscriptions || 0, icon: CheckCircle, color: 'text-success', hint: 'Planes contratados' },
                               { label: 'Ingresos USD (Stripe)', val: `$${stripeUSD.toLocaleString('es-ES', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-brand', hint: 'Pagos en dólares' },
                               { label: 'Ingresos CUP (Cuba)', val: `${cupCUP.toLocaleString('es-ES')} CUP`, icon: Building2, color: 'text-amber-500', hint: 'Transfermóvil aprobados' },
-                              { label: 'Tokens Consumidos', val: (adminStats?.totalTokensConsumed || 0).toLocaleString(), icon: Sparkles, color: 'text-indigo-400', hint: 'Consumo real acumulado' },
+                              { label: 'Tokens Consumidos', val: compacto(adminStats?.totalTokensConsumed || 0), icon: Sparkles, color: 'text-indigo-400', hint: 'Consumo real acumulado' },
                               { label: 'Consultas IA Exec', val: adminStats?.totalLLMQueries || 0, icon: MessageSquare, color: 'text-cyan-400', hint: 'Mensajes procesados' },
                               { label: 'Solicitudes Cuba Pend.', val: adminStats?.pendingCubaRequests || 0, icon: Clock, color: 'text-warning', hint: 'Pendientes de verificar' },
                               { label: 'Solicitudes Cuba Aprob.', val: adminStats?.approvedCubaRequests || 0, icon: CheckCircle2, color: 'text-success', hint: 'Pagos en CUP liquidados' },
                               { label: 'Usuarios Founders', val: foundersCount, icon: Award, color: 'text-purple-400', hint: 'Acceso completo ilimitado' },
                               { label: 'Usuarios Standard', val: standardCount, icon: UserCheck, color: 'text-text-primary', hint: 'Cuentas normales' },
-                              { label: 'Promedio Tokens/Consulta', val: (adminStats?.avgTokensPerQuery || 0).toLocaleString(), icon: Activity, color: 'text-rose-400', hint: 'Consumo por mensaje' },
+                              { label: 'Promedio Tokens/Consulta', val: compacto(adminStats?.avgTokensPerQuery || 0), icon: Activity, color: 'text-rose-400', hint: 'Consumo por mensaje' },
                               { label: 'Proveedores IA Activos', val: adminStats?.activeAiProviders || aiProviders.filter(p => p.isActive === 1).length, icon: DbIcon, color: 'text-emerald-400', hint: 'Modelos conectados' },
                               { label: 'Deudas Registradas', val: adminStats?.totalDebtsLogged || 0, icon: Receipt, color: 'text-amber-400', hint: 'Movimientos de deuda' },
                               { label: 'Cuentas Financieras', val: adminStats?.totalAccounts || 0, icon: Wallet, color: 'text-blue-400', hint: 'Cuentas de usuario' },
@@ -6218,7 +6219,7 @@ export default function App() {
                                     <span className="w-2.5 h-2.5 rounded-full bg-brand"></span> Stripe (${stripeUSD})
                                   </span>
                                   <span className="flex items-center gap-1.5 text-indigo-400 font-medium">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span> Tokens ({(adminStats?.totalTokensConsumed || 0).toLocaleString()})
+                                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span> Tokens ({compacto(adminStats?.totalTokensConsumed || 0)})
                                   </span>
                                 </div>
                               </div>
@@ -6592,7 +6593,7 @@ export default function App() {
                                 <div className="flex items-center justify-between text-[10px] font-mono text-text-dim">
                                   <span>{(realtimeData?.traffic?.[0]?.hour || '').slice(11)}:00</span>
                                   <span>
-                                    {(realtimeData?.traffic || []).reduce((a: number, t: any) => a + t.requests, 0).toLocaleString()} peticiones
+                                    {compacto((realtimeData?.traffic || []).reduce((a: number, t: any) => a + t.requests, 0))} peticiones
                                   </span>
                                   <span>{(realtimeData?.traffic?.[realtimeData.traffic.length - 1]?.hour || '').slice(11)}:00</span>
                                 </div>
@@ -6801,12 +6802,12 @@ export default function App() {
                                       </button>
                                     </td>
                                     <td className="p-3.5 font-mono font-bold text-brand">
-                                      {u.tokensSpent?.toLocaleString() || 0}
+                                      {compacto(u.tokensSpent || 0)}
                                     </td>
                                     <td className="p-3.5 font-mono">
                                       <p className="text-text-primary font-medium">{u.planName}</p>
                                       <p className="text-[10px] text-text-secondary">
-                                        Saldo: {u.role === 'founder' ? '∞' : u.tokenBalance?.toLocaleString()}
+                                        Saldo: {u.role === 'founder' ? '∞' : compacto(u.tokenBalance)}
                                       </p>
                                     </td>
                                     <td className="p-3.5 font-mono text-text-dim text-[11px]">
@@ -7092,7 +7093,7 @@ export default function App() {
                               </div>
                               <div className="text-xs space-y-1 font-mono">
                                 <p><span className="text-text-secondary">Mensual:</span> <strong>${plan.priceMonthly}/mes</strong></p>
-                                <p><span className="text-text-secondary">Tokens:</span> <strong>{plan.tokensCount?.toLocaleString()}</strong></p>
+                                <p><span className="text-text-secondary">Tokens:</span> <strong>{compacto(plan.tokensCount)}</strong></p>
                                 <p><span className="text-text-secondary">Renovación:</span> <strong>Cada {plan.renewIntervalHours} hrs</strong></p>
                               </div>
                               <div className="flex items-center gap-2 pt-2 border-t border-border/60">
@@ -8439,7 +8440,7 @@ export default function App() {
                         id: 'inc',
                         label: 'Ingresos Totales',
                         value: `+${formatCompactNumber(totalInc)}${currencySymbol}`,
-                        fullValue: `+${totalInc.toLocaleString()} ${currencySymbol}`,
+                        fullValue: `+${compacto(totalInc)} ${currencySymbol}`,
                         icon: <TrendingUp size={15} />,
                         colorClass: 'text-success bg-success/10 border-success/20',
                         textClass: 'text-success'
@@ -8448,7 +8449,7 @@ export default function App() {
                         id: 'exp',
                         label: 'Gastos Totales',
                         value: `-${formatCompactNumber(totalExp)}${currencySymbol}`,
-                        fullValue: `-${totalExp.toLocaleString()} ${currencySymbol}`,
+                        fullValue: `-${compacto(totalExp)} ${currencySymbol}`,
                         icon: <TrendingDown size={15} />,
                         colorClass: 'text-error bg-error/10 border-error/20',
                         textClass: 'text-error'
@@ -8516,7 +8517,7 @@ export default function App() {
                               {formatCompactNumber(netBal)}{currencySymbol}
                             </span>
                             <p className="text-[10px] text-text-dim">
-                              ({netBal >= 0 ? '+' : ''}{netBal.toLocaleString()} {currencySymbol})
+                              ({netBal >= 0 ? '+' : ''}{compacto(netBal)} {currencySymbol})
                             </p>
                           </div>
                         </div>
@@ -8625,7 +8626,7 @@ export default function App() {
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-right space-y-1">
                                       <p className={cn("font-mono font-bold text-xs sm:text-sm", isIncome ? "text-success" : "text-text-primary")}>
-                                        {isIncome ? '+' : '-'}{Number(item.amount).toFixed(2)}{currencySymbol}
+                                        {isIncome ? '+' : '-'}{compacto(item.amount)}{currencySymbol}
                                       </p>
                                       <span className={cn(
                                         "inline-block px-2 py-0.5 text-[9px] font-mono font-bold rounded-md uppercase",
@@ -9187,7 +9188,7 @@ export default function App() {
                                 }}
                                 className="px-2.5 py-1.5 rounded-xl bg-surface-hover hover:bg-border text-text-primary text-xs font-medium transition-all active:scale-[0.96] cursor-pointer"
                               >
-                                + Abonar
+                                Abonar
                               </button>
                             </div>
                           </div>
@@ -10180,7 +10181,7 @@ export default function App() {
                               <div className="flex items-center justify-between">
                                 <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Tokens</span>
                                 <span className="font-mono text-xs font-bold text-brand">
-                                  {(userSubscriptionData.subscription.tokenBalance || 0).toLocaleString()} restantes
+                                  {compacto(userSubscriptionData.subscription.tokenBalance || 0)} restantes
                                 </span>
                               </div>
 
@@ -10204,7 +10205,7 @@ export default function App() {
                                   Próxima renovación: {userSubscriptionData.subscription.nextRenewalAt ? new Date(userSubscriptionData.subscription.nextRenewalAt).toLocaleDateString() : 'Próximamente'}
                                 </span>
                                 <span className="font-mono text-text-secondary">
-                                  Total del plan: {computeTokenUsage(userSubscriptionData.subscription).total.toLocaleString()}
+                                  Total del plan: {compacto(computeTokenUsage(userSubscriptionData.subscription).total)}
                                 </span>
                               </div>
                             </div>
@@ -10240,7 +10241,7 @@ export default function App() {
                                   <YAxis stroke="#8B857E" fontSize={10} tickLine={false} width={40} />
                                   <Tooltip
                                     contentStyle={{ backgroundColor: '#2C2C2A', borderColor: '#3A3A38', borderRadius: '12px', fontSize: '11px', color: '#ECE7E1' }}
-                                    formatter={(value: any) => [`${Number(value).toLocaleString()} tokens`, 'Consumo']}
+                                    formatter={(value: any) => [`${compacto(Number(value))} tokens`, 'Consumo']}
                                   />
                                   <Bar dataKey="tokensUsed" fill="#D97757" radius={[6, 6, 0, 0]} />
                                 </BarChart>
@@ -10312,7 +10313,7 @@ export default function App() {
                                         <span>{tx.description}</span>
                                       </td>
                                       <td className="py-3 px-3 text-right font-mono font-bold text-success">
-                                        {tx.tokens > 0 ? `+${tx.tokens?.toLocaleString()}` : tx.tokens?.toLocaleString()}
+                                        {tx.tokens > 0 ? `+${compacto(tx.tokens)}` : compacto(tx.tokens)}
                                       </td>
                                       <td className="py-3 px-3 text-right font-mono font-bold text-text-primary">
                                         ${tx.amountUSD ? Number(tx.amountUSD).toFixed(2) : '0.00'} USD
@@ -10482,7 +10483,7 @@ export default function App() {
                                       {/* Right: Tokens Count & Renewal Interval */}
                                       <div className="text-right space-y-0.5 shrink-0">
                                         <div className="text-xs font-mono font-bold text-brand">
-                                          {plan.tokensCount?.toLocaleString()} Tokens
+                                          {compacto(plan.tokensCount)} Tokens
                                         </div>
                                         <div className="text-[10px] font-mono text-text-secondary">
                                           Renovación c/{plan.renewIntervalHours || 720}h
@@ -10750,7 +10751,7 @@ export default function App() {
                           <div className="space-y-1">
                             <h4 className="text-xs font-semibold text-text-primary">
                               {userSubscriptionData?.subscription
-                                ? `${userSubscriptionData.subscription.planName} • ${userSubscriptionData.subscription.tokenBalance?.toLocaleString()} tokens disponibles`
+                                ? `${userSubscriptionData.subscription.planName} • ${compacto(userSubscriptionData.subscription.tokenBalance)} tokens disponibles`
                                 : 'Tokens y funciones inteligentes'}
                             </h4>
                             <p className="text-[11px] text-text-secondary leading-relaxed">
@@ -12760,7 +12761,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center justify-between text-text-secondary">
                   <span>Tokens conservados:</span>
-                  <span className="font-mono font-bold text-brand">{(userSubscriptionData?.subscription?.tokenBalance || 0).toLocaleString()} Tokens</span>
+                  <span className="font-mono font-bold text-brand">{compacto(userSubscriptionData?.subscription?.tokenBalance || 0)} Tokens</span>
                 </div>
               </div>
 
@@ -12916,7 +12917,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-text-secondary">Tokens incluidos:</span>
-                  <span className="text-xs font-mono font-bold text-brand">+{selectedPlanForCheckout.tokensCount?.toLocaleString()} Tokens</span>
+                  <span className="text-xs font-mono font-bold text-brand">+{compacto(selectedPlanForCheckout.tokensCount)} Tokens</span>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-border/60">
                   <span className="text-xs font-semibold text-text-primary">Total a pagar:</span>
@@ -13264,7 +13265,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3.5 bg-bg border border-border rounded-2xl space-y-1">
                     <p className="text-[10px] uppercase font-mono text-text-dim">Tokens Consumidos</p>
-                    <p className="text-lg font-serif font-bold text-brand">{selectedUserForTelemetry.tokensSpent?.toLocaleString() || 0}</p>
+                    <p className="text-lg font-serif font-bold text-brand">{compacto(selectedUserForTelemetry.tokensSpent || 0)}</p>
                   </div>
                   <div className="p-3.5 bg-bg border border-border rounded-2xl space-y-1">
                     <p className="text-[10px] uppercase font-mono text-text-dim">Consultas IA</p>

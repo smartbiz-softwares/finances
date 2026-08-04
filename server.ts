@@ -4693,21 +4693,62 @@ app.get('/api/widget/resumen', authMiddleware, (req: any, res) => {
   const dia = db.prepare(`
     SELECT
       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS gastos,
+      COALESCE(SUM(CASE WHEN type = 'income'  THEN amount ELSE 0 END), 0) AS ingresos,
       COUNT(*) AS movimientos
     FROM transactions WHERE userId = ? AND date = ?
   `).get(req.userId, hoy) as any;
 
+  // Las tres categorías donde más se va el dinero este mes. El widget las pinta
+  // como barras: en un vistazo se ve dónde está el grueso, que es la pregunta
+  // que uno se hace al mirar el móvil.
+  const top = db.prepare(`
+    SELECT category, SUM(amount) AS total
+    FROM transactions
+    WHERE userId = ? AND type = 'expense' AND date >= ?
+    GROUP BY category ORDER BY total DESC LIMIT 3
+  `).all(req.userId, `${hoy.slice(0, 7)}-01`) as any[];
+
   const { racha, registroHoy } = reglasNotificaciones.calcularRacha(db, req.userId, hoy);
 
-  const formatear = (n: number) =>
-    `${Number(n).toLocaleString('es', { maximumFractionDigits: Math.abs(n) < 1000 ? 2 : 0 })}${simbolo}`;
+  /**
+   * Cifras cortas: en un widget no cabe "1.284.500,00". El formato es el mismo
+   * que usa la app (ver src/formato.ts), para que no se lea distinto según
+   * dónde se mire.
+   */
+  const corto = (n: number): string => {
+    const abs = Math.abs(Number(n) || 0);
+    const signo = n < 0 ? '-' : '';
+    const unidades: [number, string][] = [[1e9, 'MM'], [1e6, 'M'], [1e3, 'k']];
+
+    for (const [limite, sufijo] of unidades) {
+      if (abs < limite) continue;
+      const v = abs / limite;
+      return signo + v.toLocaleString('es', {
+        maximumFractionDigits: v >= 10 ? 0 : 1,
+      }) + sufijo;
+    }
+
+    return signo + abs.toLocaleString('es', {
+      maximumFractionDigits: Math.round(abs * 100) % 100 === 0 ? 0 : 2,
+    });
+  };
+
+  const mayor = Math.max(...top.map((c) => Number(c.total)), 1);
 
   res.json({
-    saldo: formatear(saldo),
-    gastoHoy: formatear(dia?.gastos || 0),
+    saldo: `${corto(saldo)}${simbolo}`,
+    gastoHoy: `${corto(dia?.gastos || 0)}${simbolo}`,
+    ingresoHoy: `${corto(dia?.ingresos || 0)}${simbolo}`,
     movimientos: dia?.movimientos || 0,
     racha,
     registroHoy,
+    // Cada categoría lleva su proporción respecto a la mayor, para que el
+    // widget dibuje las barras sin tener que calcular nada.
+    categorias: top.map((c) => ({
+      nombre: c.category,
+      importe: `${corto(c.total)}${simbolo}`,
+      proporcion: Math.round((Number(c.total) / mayor) * 100),
+    })),
     actualizado: new Date().toISOString(),
   });
 });

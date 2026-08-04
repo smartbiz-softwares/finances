@@ -2,9 +2,12 @@
 <!--
   Widget de pantalla de inicio.
 
-  Jerarquía: el saldo manda, el resto acompaña. Los dos botones ocupan todo el
-  ancho inferior con 48dp de alto porque en una pantalla de inicio se pulsan con
-  el pulgar, a menudo sin mirar.
+  De arriba abajo: hoy (lo que entró y salió), en qué se va el dinero este mes,
+  y el botón para dictar. La racha va en la cabecera, como una insignia.
+
+  Las barras se dibujan con Views de ancho variable en vez de una imagen: un
+  widget no puede ejecutar código de dibujo, pero sí se le puede cambiar el peso
+  a una vista.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_cuerpo"
@@ -12,9 +15,9 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_fondo"
-    android:padding="16dp">
+    android:padding="14dp">
 
-    <!-- Cabecera: marca a la izquierda, racha a la derecha -->
+    <!-- Cabecera: marca, hoy y racha -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -22,20 +25,22 @@
         android:gravity="center_vertical">
 
         <ImageView
-            android:layout_width="15dp"
-            android:layout_height="18dp"
+            android:layout_width="13dp"
+            android:layout_height="16dp"
             android:src="@drawable/widget_marca"
             android:contentDescription="HeraWallet" />
 
         <TextView
+            android:id="@+id/widget_hoy"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="7dp"
-            android:textColor="#8B857E"
-            android:textSize="10sp"
-            android:letterSpacing="0.12"
-            android:text="SALDO" />
+            android:layout_marginStart="8dp"
+            android:textColor="#B4AEA8"
+            android:textSize="12sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
 
         <TextView
             android:id="@+id/widget_racha"
@@ -54,61 +59,192 @@
         android:id="@+id/widget_saldo"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:textColor="#ECE7E1"
-        android:textSize="30sp"
+        android:textSize="26sp"
         android:textStyle="bold"
         android:maxLines="1"
         android:ellipsize="end"
         android:includeFontPadding="false"
         android:text="—" />
 
-    <TextView
-        android:id="@+id/widget_detalle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:textColor="#B4AEA8"
-        android:textSize="12sp"
-        android:maxLines="1"
-        android:ellipsize="end"
-        android:text="" />
-
-    <!-- Acciones abajo, con área de toque cómoda -->
+    <!-- En qué se va el dinero este mes -->
     <LinearLayout
+        android:id="@+id/widget_grafico"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="10dp"
+        android:orientation="vertical">
+
+    <!-- Categoría 1: nombre, barra proporcional e importe -->
+    <LinearLayout
+        android:id="@+id/widget_cat1"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:orientation="horizontal"
-        android:gravity="bottom">
+        android:gravity="center_vertical"
+        android:baselineAligned="false">
 
         <TextView
-            android:id="@+id/widget_dictar"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1.4"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/widget_boton_principal"
-            android:gravity="center"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:drawableStart="@drawable/widget_ic_micro"
-            android:drawablePadding="7dp"
-            android:paddingStart="14dp"
-            android:paddingEnd="14dp"
-            android:text="Dictar" />
+            android:id="@+id/cat1_nombre"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:textColor="#8B857E"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
 
-        <TextView
-            android:id="@+id/widget_live"
+        <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:background="@drawable/widget_boton"
-            android:gravity="center"
+            android:layout_marginHorizontal="7dp"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/cat1_relleno"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_barra_relleno" />
+
+            <View
+                android:id="@+id/cat1_hueco"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="0" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/cat1_importe"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:textColor="#ECE7E1"
-            android:textSize="13sp"
-            android:text="Live" />
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:text="" />
     </LinearLayout>
+
+    <!-- Categoría 2: nombre, barra proporcional e importe -->
+    <LinearLayout
+        android:id="@+id/widget_cat2"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:baselineAligned="false">
+
+        <TextView
+            android:id="@+id/cat2_nombre"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:textColor="#8B857E"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="7dp"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/cat2_relleno"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_barra_relleno" />
+
+            <View
+                android:id="@+id/cat2_hueco"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="0" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/cat2_importe"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#ECE7E1"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:text="" />
+    </LinearLayout>
+
+    <!-- Categoría 3: nombre, barra proporcional e importe -->
+    <LinearLayout
+        android:id="@+id/widget_cat3"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:baselineAligned="false">
+
+        <TextView
+            android:id="@+id/cat3_nombre"
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:textColor="#8B857E"
+            android:textSize="10sp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="7dp"
+            android:orientation="horizontal">
+
+            <View
+                android:id="@+id/cat3_relleno"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="1"
+                android:background="@drawable/widget_barra_relleno" />
+
+            <View
+                android:id="@+id/cat3_hueco"
+                android:layout_width="0dp"
+                android:layout_height="7dp"
+                android:layout_weight="0" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/cat3_importe"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#ECE7E1"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:text="" />
+    </LinearLayout>
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_dictar"
+        android:layout_width="match_parent"
+        android:layout_height="46dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_boton_principal"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:drawableStart="@drawable/widget_ic_micro"
+        android:drawablePadding="8dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="Dictar un gasto" />
 </LinearLayout>

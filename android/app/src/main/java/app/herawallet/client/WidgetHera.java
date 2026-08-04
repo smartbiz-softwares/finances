@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.widget.RemoteViews;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -23,8 +24,8 @@ import java.util.concurrent.Executors;
 /**
  * Widget de pantalla de inicio.
  *
- * Muestra el saldo, lo gastado hoy y la racha, y ofrece dos acciones que no
- * requieren abrir la app: dictar un movimiento y arrancar el Modo Live.
+ * Muestra el saldo, el movimiento de hoy, la racha y las tres categorías donde
+ * más se va el dinero este mes, con un botón para dictar sin abrir la app.
  *
  * Un widget no puede hacer red en el hilo principal ni mantener estado, así que
  * los datos se piden en segundo plano y se pintan cuando llegan. Mientras
@@ -76,36 +77,81 @@ public class WidgetHera extends AppWidgetProvider {
         if (!haySesion) {
             // Sin sesión no se inventan cifras: se invita a entrar.
             vistas.setTextViewText(R.id.widget_saldo, "—");
-            vistas.setTextViewText(R.id.widget_detalle, "Entra en HeraWallet");
+            vistas.setTextViewText(R.id.widget_hoy, "Entra en HeraWallet");
             vistas.setTextViewText(R.id.widget_racha, "");
+            ocultarBarras(vistas);
         } else {
             JSONObject cache = datos != null ? datos : leerCache(contexto);
-            if (cache != null) {
+
+            if (cache == null) {
+                vistas.setTextViewText(R.id.widget_saldo, "…");
+                vistas.setTextViewText(R.id.widget_hoy, "Cargando");
+                vistas.setTextViewText(R.id.widget_racha, "");
+                ocultarBarras(vistas);
+            } else {
                 vistas.setTextViewText(R.id.widget_saldo, cache.optString("saldo", "—"));
 
+                // Lo de hoy: lo que entró y lo que salió, en una línea.
+                String ingreso = cache.optString("ingresoHoy", "");
                 String gasto = cache.optString("gastoHoy", "");
-                int movimientos = cache.optInt("movimientos", 0);
-                vistas.setTextViewText(R.id.widget_detalle,
-                        movimientos == 0
-                                ? "Nada registrado hoy"
-                                : "Hoy: " + gasto);
+                vistas.setTextViewText(R.id.widget_hoy,
+                        cache.optInt("movimientos", 0) == 0
+                                ? "Hoy: nada aún"
+                                : "Hoy  +" + ingreso + "  −" + gasto);
 
                 int racha = cache.optInt("racha", 0);
                 vistas.setTextViewText(R.id.widget_racha,
                         racha > 0 ? racha + (racha == 1 ? " día" : " días") : "");
-            } else {
-                vistas.setTextViewText(R.id.widget_saldo, "…");
-                vistas.setTextViewText(R.id.widget_detalle, "Cargando");
-                vistas.setTextViewText(R.id.widget_racha, "");
+
+                pintarBarras(vistas, cache.optJSONArray("categorias"));
             }
         }
 
         // Tocar el widget abre la app; los botones hacen lo suyo sin abrirla.
         vistas.setOnClickPendingIntent(R.id.widget_cuerpo, abrirApp(contexto, null));
         vistas.setOnClickPendingIntent(R.id.widget_dictar, accion(contexto, ACCION_DICTAR));
-        vistas.setOnClickPendingIntent(R.id.widget_live, accion(contexto, ACCION_LIVE));
 
         gestor.updateAppWidget(id, vistas);
+    }
+
+    /** Cada fila con sus identificadores: contenedor, nombre, barra, hueco e importe. */
+    private static final int[][] FILAS = {
+        {R.id.widget_cat1, R.id.cat1_nombre, R.id.cat1_relleno, R.id.cat1_hueco, R.id.cat1_importe},
+        {R.id.widget_cat2, R.id.cat2_nombre, R.id.cat2_relleno, R.id.cat2_hueco, R.id.cat2_importe},
+        {R.id.widget_cat3, R.id.cat3_nombre, R.id.cat3_relleno, R.id.cat3_hueco, R.id.cat3_importe},
+    };
+
+    /**
+     * Pinta las tres categorías donde más se gasta este mes.
+     *
+     * El ancho sale de repartir el peso entre la barra y el hueco que queda a
+     * su derecha: es lo único que se puede cambiar en un widget, porque ahí no
+     * corre código de dibujo.
+     */
+    private static void pintarBarras(RemoteViews vistas, JSONArray categorias) {
+        for (int i = 0; i < FILAS.length; i++) {
+            int[] fila = FILAS[i];
+            JSONObject categoria = categorias != null ? categorias.optJSONObject(i) : null;
+
+            if (categoria == null) {
+                vistas.setViewVisibility(fila[0], android.view.View.INVISIBLE);
+                continue;
+            }
+
+            vistas.setViewVisibility(fila[0], android.view.View.VISIBLE);
+            vistas.setTextViewText(fila[1], categoria.optString("nombre", ""));
+            vistas.setTextViewText(fila[4], categoria.optString("importe", ""));
+
+            // Un mínimo del 8 % para que la categoría más pequeña siga siendo
+            // visible y no parezca que no hay nada.
+            float proporcion = Math.max(8, Math.min(100, categoria.optInt("proporcion", 0)));
+            vistas.setFloat(fila[2], "setLayoutWeight", proporcion);
+            vistas.setFloat(fila[3], "setLayoutWeight", 100 - proporcion);
+        }
+    }
+
+    private static void ocultarBarras(RemoteViews vistas) {
+        for (int[] fila : FILAS) vistas.setViewVisibility(fila[0], android.view.View.INVISIBLE);
     }
 
     private static PendingIntent abrirApp(Context contexto, String ruta) {
@@ -118,8 +164,8 @@ public class WidgetHera extends AppWidgetProvider {
     }
 
     /**
-     * Las dos acciones abren una actividad transparente: un widget no puede
-     * grabar audio por sí mismo, hace falta algo con ventana aunque no se vea.
+     * Dictar abre una actividad transparente: un widget no puede grabar audio
+     * por sí mismo, hace falta algo con ventana aunque no se vea.
      */
     private static PendingIntent accion(Context contexto, String accion) {
         Intent intent = new Intent(contexto, DictadoActivity.class);
