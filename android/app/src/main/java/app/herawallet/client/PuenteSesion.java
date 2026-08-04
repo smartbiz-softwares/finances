@@ -45,6 +45,18 @@ public class PuenteSesion {
         WidgetHera.actualizarTodos(contexto);
     }
 
+    /**
+     * La web llama a esto cuando cambian los datos que el widget enseña.
+     *
+     * El widget no se entera solo: Android no le deja refrescarse más de una vez
+     * cada media hora. Sin este aviso, un gasto registrado en la app tardaba
+     * hasta 30 minutos en aparecer.
+     */
+    @JavascriptInterface
+    public void refrescarWidget() {
+        WidgetHera.actualizarTodos(contexto);
+    }
+
     /** La web llama a esto al cerrar sesión. */
     @JavascriptInterface
     public void borrarSesion() {

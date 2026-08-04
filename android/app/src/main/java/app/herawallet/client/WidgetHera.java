@@ -66,7 +66,14 @@ public class WidgetHera extends AppWidgetProvider {
         refrescarDatos(contexto);
     }
 
-    /** Repinta todos los widgets colocados. */
+    /**
+     * Repinta todos los widgets colocados y pide datos frescos.
+     *
+     * Antes solo repintaba la caché, así que tras registrar un gasto el widget
+     * volvía a dibujar exactamente las mismas cifras de antes y parecía que no
+     * se enteraba de nada. El repintado va primero para que el cambio de sesión
+     * se note al instante; la petición llega detrás y corrige las cifras.
+     */
     public static void actualizarTodos(Context contexto) {
         AppWidgetManager gestor = AppWidgetManager.getInstance(contexto);
         int[] ids = gestor.getAppWidgetIds(new ComponentName(contexto, WidgetHera.class));
@@ -75,6 +82,8 @@ public class WidgetHera extends AppWidgetProvider {
         for (int id : ids) {
             pintar(contexto, gestor, id, null);
         }
+
+        refrescarDatos(contexto);
     }
 
     private static void pintar(Context contexto, AppWidgetManager gestor, int id, JSONObject datos) {

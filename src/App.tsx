@@ -97,7 +97,7 @@ import { PanelReferidos } from './PanelReferidos';
 import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
 import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
-import { compartirSesionConWidget, olvidarSesionEnWidget } from './puenteNativo';
+import { compartirSesionConWidget, olvidarSesionEnWidget, refrescarWidget } from './puenteNativo';
 import { CompartirScore } from './CompartirScore';
 import { compacto, dinero as dineroCompacto } from './formato';
 import {
@@ -3697,6 +3697,11 @@ export default function App() {
       // Also refresh subscription tokens & token transactions history
       fetchUserSubscription();
       fetchTokenHistory(1);
+
+      // Esta recarga ocurre tras cualquier cambio en los movimientos, que es
+      // justo lo que el widget enseña. Sin avisarle se quedaría con las cifras
+      // viejas hasta su siguiente refresco, que puede tardar media hora.
+      refrescarWidget();
     } catch { } finally {
       setFinanceLoading(false);
     }

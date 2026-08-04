@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Tarjeta de dictado sobre la pantalla de inicio.
+
+  Dos pasos dentro de la misma hoja: primero se graba, después se confirma lo
+  que se entendió. La confirmación vive aquí y no en la app a propósito: el
+  sentido del widget es anotar un gasto sin abrir nada, y mandar al usuario a la
+  app para pulsar "guardar" deshace justo eso.
+
   El aro tras el botón late mientras se graba: sin esa señal no hay forma de
   saber si el micrófono está abierto y la gente suelta antes de tiempo.
 -->
@@ -27,61 +33,197 @@
             android:layout_height="4dp"
             android:background="@drawable/dictado_asa" />
 
-        <TextView
-            android:id="@+id/dictado_estado"
-            android:layout_width="wrap_content"
+        <!-- Paso 1: grabar -->
+        <LinearLayout
+            android:id="@+id/bloque_grabar"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:textColor="#ECE7E1"
-            android:textSize="17sp"
-            android:textStyle="bold"
-            android:text="Mantén pulsado y habla" />
-
-        <TextView
-            android:id="@+id/dictado_ayuda"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:textColor="#B4AEA8"
-            android:textSize="13sp"
-            android:text="Di el gasto y Hera lo anota" />
-
-        <FrameLayout
-            android:layout_width="150dp"
-            android:layout_height="150dp"
-            android:layout_marginTop="26dp">
-
-            <!-- Late hacia fuera mientras graba -->
-            <View
-                android:id="@+id/dictado_aro"
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:layout_gravity="center"
-                android:alpha="0"
-                android:background="@drawable/dictado_aro" />
+            android:orientation="vertical"
+            android:gravity="center_horizontal">
 
             <TextView
-                android:id="@+id/dictado_boton"
-                android:layout_width="112dp"
-                android:layout_height="112dp"
-                android:layout_gravity="center"
-                android:background="@drawable/dictado_circulo"
-                android:gravity="center"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
+                android:id="@+id/dictado_estado"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:textColor="#ECE7E1"
+                android:textSize="17sp"
                 android:textStyle="bold"
-                android:text="Hablar" />
-        </FrameLayout>
+                android:text="Mantén pulsado y habla" />
 
-        <TextView
-            android:id="@+id/dictado_cerrar"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginTop="18dp"
-            android:paddingHorizontal="28dp"
-            android:gravity="center"
-            android:textColor="#8B857E"
-            android:textSize="13sp"
-            android:text="Cancelar" />
+            <TextView
+                android:id="@+id/dictado_ayuda"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:textColor="#B4AEA8"
+                android:textSize="13sp"
+                android:text="Di el gasto y Hera lo anota" />
+
+            <FrameLayout
+                android:layout_width="150dp"
+                android:layout_height="150dp"
+                android:layout_marginTop="26dp">
+
+                <!-- Late hacia fuera mientras graba -->
+                <View
+                    android:id="@+id/dictado_aro"
+                    android:layout_width="120dp"
+                    android:layout_height="120dp"
+                    android:layout_gravity="center"
+                    android:alpha="0"
+                    android:background="@drawable/dictado_aro" />
+
+                <TextView
+                    android:id="@+id/dictado_boton"
+                    android:layout_width="112dp"
+                    android:layout_height="112dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/dictado_circulo"
+                    android:gravity="center"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:text="Hablar" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/dictado_cerrar"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginTop="18dp"
+                android:paddingHorizontal="28dp"
+                android:gravity="center"
+                android:textColor="#8B857E"
+                android:textSize="13sp"
+                android:text="Cancelar" />
+        </LinearLayout>
+
+        <!-- Paso 2: confirmar lo entendido, corrigiendo lo que haga falta -->
+        <LinearLayout
+            android:id="@+id/bloque_confirmar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:paddingTop="20dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#ECE7E1"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:text="Esto es lo que entendí" />
+
+            <TextView
+                android:id="@+id/confirmar_dicho"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#8B857E"
+                android:textSize="12sp"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <!-- Gasto o ingreso: es el error más caro de arrastrar, así que va
+                 primero y a la vista, no escondido en un desplegable. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/confirmar_gasto"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="44dp"
+                    android:gravity="center"
+                    android:background="@drawable/pestana_activa"
+                    android:textColor="#1A1815"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:text="Gasto" />
+
+                <TextView
+                    android:id="@+id/confirmar_ingreso"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="10dp"
+                    android:gravity="center"
+                    android:background="@drawable/pestana_inactiva"
+                    android:textColor="#B4AEA8"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:text="Ingreso" />
+            </LinearLayout>
+
+            <EditText
+                android:id="@+id/confirmar_importe"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/campo_dictado"
+                android:paddingHorizontal="14dp"
+                android:inputType="numberDecimal"
+                android:textColor="#ECE7E1"
+                android:textColorHint="#6E6862"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:hint="Importe"
+                android:autofillHints="" />
+
+            <EditText
+                android:id="@+id/confirmar_categoria"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/campo_dictado"
+                android:paddingHorizontal="14dp"
+                android:inputType="textCapSentences"
+                android:textColor="#ECE7E1"
+                android:textColorHint="#6E6862"
+                android:textSize="15sp"
+                android:hint="Categoría"
+                android:autofillHints="" />
+
+            <EditText
+                android:id="@+id/confirmar_descripcion"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/campo_dictado"
+                android:paddingHorizontal="14dp"
+                android:inputType="textCapSentences"
+                android:textColor="#ECE7E1"
+                android:textColorHint="#6E6862"
+                android:textSize="15sp"
+                android:hint="Concepto"
+                android:autofillHints="" />
+
+            <TextView
+                android:id="@+id/confirmar_guardar"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="18dp"
+                android:gravity="center"
+                android:background="@drawable/boton_guardar"
+                android:textColor="#1A1815"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:text="Guardar" />
+
+            <TextView
+                android:id="@+id/confirmar_repetir"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center"
+                android:textColor="#8B857E"
+                android:textSize="13sp"
+                android:text="Volver a dictar" />
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>

@@ -12,6 +12,7 @@
 interface PuenteAndroid {
   guardarSesion: (token: string, servidor: string) => void;
   borrarSesion: () => void;
+  refrescarWidget?: () => void;
 }
 
 const puente = (): PuenteAndroid | null => {
@@ -31,6 +32,24 @@ export function compartirSesionConWidget(token: string | null) {
   } catch {
     // Un fallo aquí solo significa que el widget se queda sin datos; la app
     // funciona igual.
+  }
+}
+
+/**
+ * Avisa al widget de que los datos cambiaron.
+ *
+ * Android no deja que un widget se refresque por su cuenta más de una vez cada
+ * media hora, así que sin este aviso un gasto recién registrado tardaba hasta
+ * treinta minutos en aparecer en la pantalla de inicio.
+ */
+export function refrescarWidget() {
+  const p = puente();
+  if (!p?.refrescarWidget) return;
+
+  try {
+    p.refrescarWidget();
+  } catch {
+    // Con una versión antigua de la app este método no existe; no pasa nada.
   }
 }
 

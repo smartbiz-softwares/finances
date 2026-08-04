@@ -14,6 +14,7 @@ import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -63,6 +64,12 @@ public class DictadoActivity extends AppCompatActivity {
     private ObjectAnimator latido;
     private long inicioGrabacion;
 
+    // Campos del paso de confirmación.
+    private EditText importe;
+    private EditText categoria;
+    private EditText descripcion;
+    private boolean esIngreso = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -108,7 +115,10 @@ public class DictadoActivity extends AppCompatActivity {
         findViewById(R.id.dictado_cerrar).setOnClickListener(v -> finish());
 
         // Tocar fuera de la tarjeta cierra, como cualquier hoja del sistema.
-        findViewById(R.id.dictado_fondo).setOnClickListener(v -> finish());
+        // Salvo con la confirmación abierta: ahí un roce perdería lo dictado.
+        findViewById(R.id.dictado_fondo).setOnClickListener(v -> {
+            if (findViewById(R.id.bloque_confirmar).getVisibility() != View.VISIBLE) finish();
+        });
 
         if (!tienePermiso()) {
             estado.setText("Necesito el micrófono");
@@ -292,19 +302,23 @@ public class DictadoActivity extends AppCompatActivity {
                 correcto = ok;
 
                 if (ok) {
-                    // Lo dictado no se registra a ciegas: se abre la app con lo
-                    // entendido para confirmarlo o corregirlo. Un micrófono en
-                    // la calle se equivoca, y un ingreso donde iba un gasto
-                    // cuesta más de arreglar que de confirmar.
+                    // Lo dictado no se registra a ciegas: se enseña lo entendido
+                    // para confirmarlo o corregirlo. Un micrófono en la calle se
+                    // equivoca, y un ingreso donde iba un gasto cuesta más de
+                    // arreglar que de confirmar.
                     JSONObject movimiento = datos.optJSONObject("movimiento");
+                    final String dicho = datos.optString("transcripcion", "");
+
                     if (movimiento != null) {
-                        movimiento.put("texto", datos.optString("transcripcion", ""));
-                        abrirConfirmacion(movimiento.toString());
+                        final JSONObject entendido = movimiento;
+                        new Handler(Looper.getMainLooper()).post(
+                                () -> mostrarConfirmacion(entendido, dicho));
                         return;
                     }
-                    // Sin estructura reconocible se lleva el texto al chat.
-                    abrirConfirmacion(new JSONObject()
-                            .put("texto", datos.optString("transcripcion", "")).toString());
+
+                    // Sin cifra reconocible no hay nada que confirmar: se pasa a
+                    // la app, que es donde hay teclado y contexto para rematarlo.
+                    abrirConfirmacion(new JSONObject().put("texto", dicho).toString());
                     return;
                 }
             } catch (Exception e) {
@@ -317,6 +331,150 @@ public class DictadoActivity extends AppCompatActivity {
             new Handler(Looper.getMainLooper()).post(() -> {
                 if (fueBien) Haptica.exito(this);
                 Toast.makeText(this, aMostrar, Toast.LENGTH_LONG).show();
+                finish();
+            });
+        });
+    }
+
+    /**
+     * Enseña lo entendido para revisarlo, sin salir de la hoja.
+     *
+     * Aquí, y no en la app: el sentido del widget es anotar un gasto sin abrir
+     * nada. Mandar a la app solo para pulsar "guardar" deshacía justo eso.
+     */
+    private void mostrarConfirmacion(JSONObject movimiento, String dicho) {
+        enviando = false;
+        Haptica.exito(this);
+
+        findViewById(R.id.bloque_grabar).setVisibility(View.GONE);
+        View panel = findViewById(R.id.bloque_confirmar);
+        panel.setVisibility(View.VISIBLE);
+
+        TextView loDicho = findViewById(R.id.confirmar_dicho);
+        loDicho.setText(dicho.isEmpty() ? "" : "«" + dicho + "»");
+        loDicho.setVisibility(dicho.isEmpty() ? View.GONE : View.VISIBLE);
+
+        importe = findViewById(R.id.confirmar_importe);
+        categoria = findViewById(R.id.confirmar_categoria);
+        descripcion = findViewById(R.id.confirmar_descripcion);
+
+        double cantidad = movimiento.optDouble("amount", 0);
+        // Sin decimales si son cero: escribir encima de "20" es más rápido que
+        // sobre "20.00", y esto se corrige de pie en la calle.
+        importe.setText(cantidad == Math.floor(cantidad)
+                ? String.valueOf((long) cantidad)
+                : String.valueOf(cantidad));
+        categoria.setText(movimiento.optString("category", ""));
+        descripcion.setText(movimiento.optString("description", dicho));
+
+        esIngreso = "income".equals(movimiento.optString("type"));
+        pintarTipo();
+
+        findViewById(R.id.confirmar_gasto).setOnClickListener(v -> {
+            esIngreso = false;
+            Haptica.pulsar(this);
+            pintarTipo();
+        });
+        findViewById(R.id.confirmar_ingreso).setOnClickListener(v -> {
+            esIngreso = true;
+            Haptica.pulsar(this);
+            pintarTipo();
+        });
+
+        findViewById(R.id.confirmar_guardar).setOnClickListener(v -> guardar());
+
+        findViewById(R.id.confirmar_repetir).setOnClickListener(v -> {
+            Haptica.pulsar(this);
+            panel.setVisibility(View.GONE);
+            findViewById(R.id.bloque_grabar).setVisibility(View.VISIBLE);
+            estado.setText("Mantén pulsado y habla");
+            ayuda.setText("Di el gasto y Hera lo anota");
+        });
+    }
+
+    /** El lado elegido se ve lleno; el otro, apagado. */
+    private void pintarTipo() {
+        TextView gasto = findViewById(R.id.confirmar_gasto);
+        TextView ingreso = findViewById(R.id.confirmar_ingreso);
+
+        gasto.setBackgroundResource(esIngreso ? R.drawable.pestana_inactiva : R.drawable.pestana_activa);
+        gasto.setTextColor(esIngreso ? 0xFFB4AEA8 : 0xFF1A1815);
+
+        ingreso.setBackgroundResource(esIngreso ? R.drawable.pestana_activa : R.drawable.pestana_inactiva);
+        ingreso.setTextColor(esIngreso ? 0xFF1A1815 : 0xFFB4AEA8);
+    }
+
+    /** Registra el movimiento con lo que haya en los campos. */
+    private void guardar() {
+        if (enviando) return;
+
+        double cantidad;
+        try {
+            cantidad = Double.parseDouble(importe.getText().toString().replace(',', '.'));
+        } catch (Exception e) {
+            cantidad = 0;
+        }
+        if (cantidad <= 0) {
+            importe.requestFocus();
+            Toast.makeText(this, "Pon un importe", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        enviando = true;
+        Haptica.pulsar(this);
+        TextView boton = findViewById(R.id.confirmar_guardar);
+        boton.setText("Guardando…");
+
+        final double total = cantidad;
+        final String cat = categoria.getText().toString().trim();
+        final String desc = descripcion.getText().toString().trim();
+        final boolean ingreso = esIngreso;
+
+        hilos.execute(() -> {
+            String error = null;
+            try {
+                JSONObject cuerpo = new JSONObject();
+                cuerpo.put("type", ingreso ? "income" : "expense");
+                cuerpo.put("amount", total);
+                cuerpo.put("category", cat.isEmpty() ? (ingreso ? "Ingresos" : "Varios") : cat);
+                cuerpo.put("description", desc);
+
+                // Sin accountId: el servidor usa la primera cuenta del usuario,
+                // que desde el widget es la única elección razonable.
+                URL url = new URL(PuenteSesion.servidor(this) + "/api/finance/transactions");
+                HttpURLConnection conexion = (HttpURLConnection) url.openConnection();
+                conexion.setRequestMethod("POST");
+                conexion.setRequestProperty("Content-Type", "application/json");
+                conexion.setRequestProperty("Authorization", "Bearer " + PuenteSesion.token(this));
+                conexion.setDoOutput(true);
+                conexion.setConnectTimeout(10000);
+                conexion.setReadTimeout(20000);
+
+                try (DataOutputStream salida = new DataOutputStream(conexion.getOutputStream())) {
+                    salida.write(cuerpo.toString().getBytes("UTF-8"));
+                }
+
+                if (conexion.getResponseCode() != 200) error = "No se pudo guardar";
+            } catch (Exception e) {
+                error = "Sin conexión";
+            }
+
+            final String fallo = error;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (fallo != null) {
+                    enviando = false;
+                    boton.setText("Guardar");
+                    Toast.makeText(this, fallo, Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                Haptica.exito(this);
+                // El widget muestra los gastos de hoy: sin esto seguiría con la
+                // cifra de antes hasta el siguiente refresco, que puede tardar
+                // media hora.
+                WidgetHera.actualizarTodos(this);
+                Toast.makeText(this,
+                        (ingreso ? "Ingreso" : "Gasto") + " registrado", Toast.LENGTH_SHORT).show();
                 finish();
             });
         });

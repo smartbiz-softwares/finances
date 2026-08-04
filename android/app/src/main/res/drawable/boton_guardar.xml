@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Acción principal de la confirmación: guardar lo dictado. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#C9A227" />
+    <corners android:radius="14dp" />
+</shape>
