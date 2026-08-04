@@ -25,6 +25,9 @@ public class MainActivity extends BridgeActivity {
 
     private static final int PERMISOS_MEDIOS = 1001;
 
+    /** Avisa de que el widget dejó algo dictado esperando confirmación. */
+    public static final String EXTRA_DICTADO = "hera_dictado";
+
     /** Callback del <input type="file"> mientras el usuario elige. */
     private android.webkit.ValueCallback<android.net.Uri[]> seleccionPendiente;
 
@@ -132,6 +135,29 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+    }
+
+    /**
+     * La app ya estaba abierta y el widget manda algo dictado.
+     *
+     * Como es `singleTask`, aquí no se recrea nada ni se recarga la página: el
+     * WebView sigue exactamente donde estaba. Por eso se le entrega como evento,
+     * que es lo único que la web puede oír sin volver a montarse.
+     */
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        if (intent == null || !intent.getBooleanExtra(EXTRA_DICTADO, false)) return;
+
+        String json = PuenteSesion.recogerDictado(this);
+        if (json == null) return;
+
+        // Como texto JSON: así el contenido dictado no puede romper la
+        // expresión ni colarse como código.
+        String literal = org.json.JSONObject.quote(json);
+        runOnUiThread(() -> getBridge().getWebView().evaluateJavascript(
+                "window.dispatchEvent(new CustomEvent('hera:dictado',{detail:" + literal + "}))",
+                null));
     }
 
     private boolean tienePermiso(String permiso) {

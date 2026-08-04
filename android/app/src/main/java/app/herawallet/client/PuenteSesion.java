@@ -19,6 +19,8 @@ public class PuenteSesion {
     public static final String PREFERENCIAS = "hera_widget";
     public static final String CLAVE_TOKEN = "token";
     public static final String CLAVE_SERVIDOR = "servidor";
+    /** Lo dictado en el widget, esperando a que la web lo recoja. */
+    public static final String CLAVE_DICTADO = "dictado";
 
     private final Context contexto;
 
@@ -48,6 +50,35 @@ public class PuenteSesion {
     public void borrarSesion() {
         preferencias().edit().clear().apply();
         WidgetHera.actualizarTodos(contexto);
+    }
+
+    /**
+     * Lo que se dictó en el widget, o null si no hay nada pendiente.
+     *
+     * La web pregunta por esto al arrancar. No se pasa por la URL porque la app
+     * carga siempre la dirección de la configuración de Capacitor: los
+     * parámetros que se le pongan al Intent no llegan al WebView.
+     *
+     * Se borra al leerlo: si el usuario recarga, no debe volver a salirle la
+     * misma confirmación.
+     */
+    @JavascriptInterface
+    public String dictadoPendiente() {
+        return recogerDictado(contexto);
+    }
+
+    /** Guarda lo dictado hasta que la web pueda recogerlo. */
+    public static void guardarDictado(Context contexto, String json) {
+        contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE)
+                .edit().putString(CLAVE_DICTADO, json).apply();
+    }
+
+    /** Devuelve lo dictado y lo borra de una vez. */
+    public static String recogerDictado(Context contexto) {
+        SharedPreferences p = contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE);
+        String json = p.getString(CLAVE_DICTADO, null);
+        if (json != null) p.edit().remove(CLAVE_DICTADO).apply();
+        return json;
     }
 
     /** Token guardado, o null si no hay sesión. */

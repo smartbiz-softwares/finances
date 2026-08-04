@@ -322,14 +322,25 @@ public class DictadoActivity extends AppCompatActivity {
         });
     }
 
-    /** Abre la app con lo dictado, para confirmarlo o corregirlo. */
+    /**
+     * Abre la app con lo dictado, para confirmarlo o corregirlo.
+     *
+     * Antes esto viajaba como parámetro en la URL del Intent, y no llegaba
+     * nunca: la app carga la dirección fijada en la configuración de Capacitor,
+     * así que el WebView jamás veía ese `?dictado=`. Además MainActivity es
+     * `singleTask`, de modo que con la app ya abierta ni siquiera se recarga.
+     *
+     * Ahora se deja en las preferencias y se avisa por el Intent: si la app
+     * arranca de cero, la web lo recoge al montar; si ya estaba abierta,
+     * MainActivity se lo lanza como evento.
+     */
     private void abrirConfirmacion(String json) {
         new Handler(Looper.getMainLooper()).post(() -> {
             Haptica.exito(this);
             try {
-                String codificado = java.net.URLEncoder.encode(json, "UTF-8");
+                PuenteSesion.guardarDictado(this, json);
                 Intent app = new Intent(this, MainActivity.class);
-                app.setData(Uri.parse(PuenteSesion.servidor(this) + "/?dictado=" + codificado));
+                app.putExtra(MainActivity.EXTRA_DICTADO, true);
                 app.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(app);
             } catch (Exception e) {
