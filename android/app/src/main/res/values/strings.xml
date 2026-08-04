@@ -4,4 +4,5 @@
     <string name="title_activity_main">HeraWallet</string>
     <string name="package_name">app.herawallet.client</string>
     <string name="custom_url_scheme">app.herawallet.client</string>
+    <string name="widget_descripcion">Saldo, gasto del día y dictado rápido</string>
 </resources>

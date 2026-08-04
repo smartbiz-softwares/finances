@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tarjeta de dictado: aparece sobre la pantalla de inicio, sin abrir la app.
+  Se mantiene pulsado el botón para hablar, como un walkie.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/widget_fondo"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/dictado_estado"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#ECE7E1"
+            android:textSize="15sp"
+            android:text="Mantén pulsado y habla" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#B4AEA8"
+            android:textSize="12sp"
+            android:text="Di el gasto y Hera lo anota" />
+
+        <TextView
+            android:id="@+id/dictado_boton"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginTop="24dp"
+            android:background="@drawable/dictado_circulo"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:text="Hablar" />
+
+        <TextView
+            android:id="@+id/dictado_cerrar"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginTop="20dp"
+            android:paddingHorizontal="24dp"
+            android:gravity="center"
+            android:textColor="#B4AEA8"
+            android:textSize="13sp"
+            android:text="Cancelar" />
+    </LinearLayout>
+</LinearLayout>

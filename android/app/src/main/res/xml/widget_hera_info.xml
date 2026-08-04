@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  updatePeriodMillis mínimo es 30 min por decisión de Android; pedir menos no
+  acelera nada y sí gasta batería. El refresco de verdad ocurre cuando la app
+  guarda la sesión o cuando se registra algo desde el propio widget.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_hera"
+    android:previewLayout="@layout/widget_hera"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/widget_descripcion" />

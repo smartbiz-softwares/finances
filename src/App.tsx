@@ -97,6 +97,7 @@ import { PanelReferidos } from './PanelReferidos';
 import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
 import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
+import { compartirSesionConWidget, olvidarSesionEnWidget } from './puenteNativo';
 import {
   IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana,
   IconoMicrofono, IconoCamara, IconoIngreso, IconoGasto, IconoEnviar,
@@ -4310,6 +4311,7 @@ export default function App() {
       });
 
       setToken(data.token);
+      compartirSesionConWidget(data.token);
 
       // El código ya cumplió su función: dejarlo guardado haría que un segundo
       // alta desde el mismo teléfono lo reenviara sin motivo.
@@ -4375,6 +4377,8 @@ export default function App() {
 
       setTimeout(async () => {
         await signOut();
+        // Sin esto el widget seguiría mostrando el saldo de quien acaba de salir.
+        olvidarSesionEnWidget();
         setUserState(null);
         setProfile(null);
         setShowOnboarding(false);

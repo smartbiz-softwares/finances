@@ -30,6 +30,10 @@ public class MainActivity extends BridgeActivity {
 
         pedirPermisosDelSistema();
 
+        // Puente para el widget: la web le entrega el token de sesión, que vive
+        // en el localStorage del WebView y desde Java no se puede leer.
+        getBridge().getWebView().addJavascriptInterface(new PuenteSesion(this), "HeraNativo");
+
         // El WebView pregunta al contenedor si concede lo que pide la web.
         // Solo se conceden micrófono y cámara, y solo si el sistema ya nos los
         // otorgó a nosotros: así el usuario decide una vez, en el diálogo de

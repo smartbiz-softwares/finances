@@ -50,6 +50,31 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!--
+          Dictado desde el widget. Va en su propia tarea y con tema transparente:
+          aparece sobre la pantalla de inicio sin dar la sensación de haber
+          abierto la app.
+        -->
+        <activity
+            android:name=".DictadoActivity"
+            android:exported="false"
+            android:theme="@style/TemaDictado"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
+
+        <!-- Widget de pantalla de inicio -->
+        <receiver
+            android:name=".WidgetHera"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.herawallet.client.REFRESCAR" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_hera_info" />
+        </receiver>
     </application>
 
     <!-- Permissions -->

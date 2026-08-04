@@ -4600,6 +4600,99 @@ notificaciones.montarEndpoints(app, db, authMiddleware);
 referidos.crearTablas(db);
 referidos.montarEndpoints(app, db, authMiddleware, adminAuthMiddleware);
 
+// --- Dictado desde el widget ----------------------------------------------
+//
+// El widget graba y manda el audio aquí; este endpoint transcribe y deja que la
+// IA lo registre, y devuelve una frase corta para el aviso emergente. Se hace
+// en un solo viaje porque desde la pantalla de inicio no hay interfaz donde
+// enseñar pasos intermedios: o se registra, o se dice por qué no.
+app.post('/api/widget/dictado', authMiddleware, async (req: any, res) => {
+  const { audio } = req.body || {};
+  if (!audio) return res.status(400).json({ error: 'Sin audio' });
+
+  const puerto = process.env.PORT || 4000;
+  const base = `http://127.0.0.1:${puerto}`;
+  const autorizacion = String(req.headers.authorization || '');
+
+  try {
+    const transcripcion = await fetch(`${base}/api/transcribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: autorizacion },
+      body: JSON.stringify({ audio }),
+    });
+
+    const datos = await transcripcion.json() as any;
+    if (!transcripcion.ok) {
+      return res.status(transcripcion.status).json({ error: datos?.error || 'No pudimos escuchar tu audio.' });
+    }
+
+    const texto = String(datos?.text || datos?.transcription || '').trim();
+    if (!texto) return res.status(422).json({ error: 'No entendimos lo que dijiste.' });
+
+    const respuesta = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: autorizacion },
+      body: JSON.stringify({ message: texto }),
+    });
+
+    const resultado = await respuesta.json() as any;
+    if (!respuesta.ok) {
+      return res.status(respuesta.status).json({ error: resultado?.error || 'No se pudo registrar.' });
+    }
+
+    // El aviso emergente de Android da para poco: se recorta a algo legible de
+    // un vistazo, y el detalle completo queda en la app.
+    const dicho = String(resultado?.reply || resultado?.message || 'Registrado').trim();
+    const breve = dicho.length > 110 ? `${dicho.slice(0, 107)}…` : dicho;
+
+    res.json({ transcripcion: texto, mensaje: breve });
+  } catch (err: any) {
+    console.error('[widget] fallo en el dictado', err);
+    res.status(500).json({ error: 'No pudimos procesarlo. Inténtalo desde la app.' });
+  }
+});
+
+// --- Resumen para el widget -----------------------------------------------
+//
+// Lo que cabe en una pantalla de inicio: saldo, lo gastado hoy y la racha. Se
+// devuelve ya formateado porque el widget de Android no tiene ni la moneda del
+// usuario ni forma cómoda de aplicar un formato local.
+app.get('/api/widget/resumen', authMiddleware, (req: any, res) => {
+  const usuario = db.prepare('SELECT currency FROM users WHERE id = ?').get(req.userId) as any;
+  const moneda = String(usuario?.currency || 'EUR').toUpperCase();
+  const simbolos: Record<string, string> = {
+    EUR: '€', USD: '$', CUP: 'CUP', MXN: '$', COP: '$', ARS: '$', CLP: '$', PEN: 'S/', DOP: 'RD$',
+  };
+  const simbolo = simbolos[moneda] || '€';
+
+  const hoy = hoyDe(req.userId);
+
+  const saldo = (db.prepare(
+    'SELECT COALESCE(SUM(balance), 0) AS total FROM accounts WHERE userId = ?'
+  ).get(req.userId) as any)?.total || 0;
+
+  const dia = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS gastos,
+      COUNT(*) AS movimientos
+    FROM transactions WHERE userId = ? AND date = ?
+  `).get(req.userId, hoy) as any;
+
+  const { racha, registroHoy } = reglasNotificaciones.calcularRacha(db, req.userId, hoy);
+
+  const formatear = (n: number) =>
+    `${Number(n).toLocaleString('es', { maximumFractionDigits: Math.abs(n) < 1000 ? 2 : 0 })}${simbolo}`;
+
+  res.json({
+    saldo: formatear(saldo),
+    gastoHoy: formatear(dia?.gastos || 0),
+    movimientos: dia?.movimientos || 0,
+    racha,
+    registroHoy,
+    actualizado: new Date().toISOString(),
+  });
+});
+
 // --- Racha y logros -------------------------------------------------------
 logros.crearTablas(db);
 logros.montarEndpoints(app, db, authMiddleware, hoyDe);
