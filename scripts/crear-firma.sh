@@ -30,14 +30,28 @@ if [[ -f "$ALMACEN" || -f "$PROPIEDADES" ]]; then
   exit 1
 fi
 
-command -v keytool >/dev/null || { echo "Falta keytool (viene con el JDK)." >&2; exit 1; }
+# `keytool` viene con el JDK pero rara vez está en el PATH: en el servidor el
+# JDK se usa a través de JAVA_HOME, que es donde se mira primero.
+if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/keytool" ]]; then
+  KEYTOOL="$JAVA_HOME/bin/keytool"
+elif command -v keytool >/dev/null; then
+  KEYTOOL="keytool"
+else
+  # Último recurso: cualquier JDK instalado en el sitio habitual.
+  KEYTOOL="$(find /usr/lib/jvm /opt -maxdepth 3 -name keytool -type f 2>/dev/null | head -1)"
+  [[ -n "$KEYTOOL" ]] || {
+    echo "No encuentro keytool. Viene con el JDK; define JAVA_HOME o instala uno:" >&2
+    echo "  apt install -y openjdk-21-jdk-headless" >&2
+    exit 1
+  }
+fi
 
 # La contraseña se genera sola y queda en firma.properties, que no se sube al
 # repositorio. No hay que recordarla, sí hay que respaldarla.
 CLAVE="$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)"
 
 log "Generando la clave (válida 10.000 días)…"
-keytool -genkeypair -v \
+"$KEYTOOL" -genkeypair -v \
   -keystore "$ALMACEN" \
   -alias hera \
   -keyalg RSA -keysize 4096 -validity 10000 \
