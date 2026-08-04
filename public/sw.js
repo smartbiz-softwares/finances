@@ -83,9 +83,10 @@ self.addEventListener('notificationclick', (evento) => {
   const datos = evento.notification.data || {};
   // Pulsar el botón de registrar lleva directo al dictado: el recordatorio se
   // convierte en el registro, sin pasos intermedios.
-  const destino = evento.action === 'registrar'
-    ? '/?accion=registrar'
-    : (datos.url || '/');
+  let destino = datos.url || '/';
+  if (evento.action === 'registrar') destino = '/?accion=registrar';
+  // El botón de la notificación de versión nueva descarga el archivo directo.
+  else if (evento.action === 'actualizar') destino = '/descargar/HeraWallet.apk';
 
   evento.waitUntil((async () => {
     const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

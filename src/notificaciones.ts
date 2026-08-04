@@ -7,7 +7,7 @@
  * pedirlo es la interfaz, después de que la persona haya registrado algo y
  * entienda para qué sirve.
  */
-import { apiUrl, getToken } from './api';
+import { apiUrl, getToken, IS_NATIVE_APP } from './api';
 
 /** La clave VAPID viaja en base64url y el navegador la quiere en bytes. */
 function claveABytes(base64: string): Uint8Array {
@@ -74,7 +74,12 @@ export async function activarNotificaciones(): Promise<boolean> {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${getToken()}`,
     },
-    body: JSON.stringify({ endpoint: datos.endpoint, keys: datos.keys }),
+    body: JSON.stringify({
+      endpoint: datos.endpoint,
+      keys: datos.keys,
+      // Solo a quien tiene la app instalada le sirve saber que hay un APK nuevo.
+      esApp: IS_NATIVE_APP,
+    }),
   });
 
   return envio.ok;

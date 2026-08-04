@@ -4606,6 +4606,23 @@ logros.montarEndpoints(app, db, authMiddleware, hoyDe);
 
 if (notificaciones.configurarWebPush()) {
   reglasNotificaciones.arrancarPlanificador(db);
+
+  // Aviso de versión nueva. Se hace al arrancar porque es cuando el APK recién
+  // publicado ya está en su sitio: el flujo de despliegue lo sube y reinicia.
+  // Un margen corto evita competir con la carga inicial.
+  setTimeout(async () => {
+    try {
+      const apk = leerApkPublicado();
+      if (!apk.disponible || !apk.versionCode) return;
+
+      const avisadas = await notificaciones.avisarDeVersion(db, apk.versionCode, apk.version || '');
+      if (avisadas > 0) {
+        console.log(`[notificaciones] aviso de la versión ${apk.version} a ${avisadas} usuarios`);
+      }
+    } catch (err) {
+      console.error('[notificaciones] fallo avisando de la versión', err);
+    }
+  }, 20 * 1000);
 }
 
 const PORT = process.env.PORT || 4000;

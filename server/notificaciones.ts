@@ -87,6 +87,10 @@ export function crearTablas(db: any) {
     CREATE INDEX IF NOT EXISTS idx_notif_sent_user ON notification_sent(userId, enviadoEn);
     CREATE INDEX IF NOT EXISTS idx_notif_sent_huella ON notification_sent(userId, huella);
   `);
+
+  // Distingue la app instalada del navegador: el aviso de versión nueva solo
+  // le sirve a quien tiene un APK que actualizar.
+  try { db.exec('ALTER TABLE push_subscriptions ADD COLUMN esApp INTEGER DEFAULT 0'); } catch { }
 }
 
 /** Preferencias del usuario, creándolas con los valores de serie si no existen. */
@@ -225,6 +229,55 @@ export async function enviarSiProcede(
   return true;
 }
 
+/**
+ * Avisa de una versión nueva de la app a quien la tenga instalada.
+ *
+ * Se llama al arrancar el servidor, que es cuando ya está el APK nuevo en su
+ * sitio. Solo se avisa a quien se suscribió *desde la app*: a quien usa la web
+ * no le sirve de nada, porque su interfaz se actualiza sola.
+ *
+ * Como el aviso va por `huella`, publicar dos veces la misma versión no manda
+ * dos notificaciones.
+ */
+export async function avisarDeVersion(
+  db: any,
+  versionCode: number,
+  version: string
+): Promise<number> {
+  if (!versionCode) return 0;
+
+  const huella = `version:${versionCode}`;
+
+  const destinatarios = db.prepare(
+    'SELECT DISTINCT userId FROM push_subscriptions WHERE esApp = 1'
+  ).all() as any[];
+
+  let enviadas = 0;
+
+  for (const { userId } of destinatarios) {
+    // Quien ya recibió el aviso de esta versión no lo recibe otra vez.
+    const previo = db.prepare(
+      'SELECT 1 FROM notification_sent WHERE userId = ? AND huella = ? LIMIT 1'
+    ).get(userId, huella);
+    if (previo) continue;
+
+    const prefs = preferencias(db, userId);
+    if (!prefs.activadas || !prefs.avisos) continue;
+
+    await enviar(db, userId, {
+      tipo: 'version-nueva',
+      titulo: 'Hay una versión nueva de la app',
+      cuerpo: `La ${version} ya está lista para instalar. Toca para descargarla.`,
+      url: '/?actualizar=1',
+      huella,
+      acciones: [{ action: 'actualizar', title: 'Descargar' }],
+    });
+    enviadas++;
+  }
+
+  return enviadas;
+}
+
 export function montarEndpoints(app: Express, db: any, authMiddleware: any) {
   // La clave pública no es secreta: el navegador la necesita para suscribirse.
   app.get('/api/push/clave', (_req, res) => {
@@ -232,7 +285,7 @@ export function montarEndpoints(app: Express, db: any, authMiddleware: any) {
   });
 
   app.post('/api/push/suscribir', authMiddleware, (req: any, res: any) => {
-    const { endpoint, keys } = req.body || {};
+    const { endpoint, keys, esApp } = req.body || {};
     if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return res.status(400).json({ error: 'Suscripción incompleta' });
     }
@@ -240,15 +293,17 @@ export function montarEndpoints(app: Express, db: any, authMiddleware: any) {
     // El endpoint identifica al dispositivo: si vuelve a suscribirse, se
     // actualiza en vez de duplicarse.
     db.prepare(`
-      INSERT INTO push_subscriptions (id, userId, endpoint, p256dh, auth, userAgent, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO push_subscriptions (id, userId, endpoint, p256dh, auth, userAgent, esApp, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(endpoint) DO UPDATE SET
         userId = excluded.userId,
         p256dh = excluded.p256dh,
         auth = excluded.auth,
+        esApp = excluded.esApp,
         fallos = 0
     `).run(crypto.randomUUID(), req.userId, endpoint, keys.p256dh, keys.auth,
-           String(req.headers['user-agent'] || '').slice(0, 200), new Date().toISOString());
+           String(req.headers['user-agent'] || '').slice(0, 200), esApp ? 1 : 0,
+           new Date().toISOString());
 
     preferencias(db, req.userId);
     res.json({ ok: true });

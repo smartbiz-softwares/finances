@@ -96,6 +96,7 @@ import { Referidos } from './Referidos';
 import { PanelReferidos } from './PanelReferidos';
 import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
+import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
 import {
   IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana,
   IconoMicrofono, IconoCamara, IconoIngreso, IconoGasto, IconoEnviar,
@@ -1269,6 +1270,7 @@ export default function App() {
   const [invitacion, setInvitacion] = useState<{ tokens: number; invitadoPor: string | null } | null>(null);
   const [mostrarReferidos, setMostrarReferidos] = useState(false);
   const [mostrarRacha, setMostrarRacha] = useState(false);
+  const [mostrarNotificaciones, setMostrarNotificaciones] = useState(false);
 
   useEffect(() => {
     if (!codigoReferido) return;
@@ -5731,6 +5733,27 @@ export default function App() {
                       <div onMouseDown={(e) => e.stopPropagation()}>
                         <RachaResumen onAbrir={() => { setIsProfileMenuOpen(false); setMostrarRacha(true); }} />
                       </div>
+
+                      {/* Notificaciones */}
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setIsProfileMenuOpen(false);
+                          setMostrarNotificaciones(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-surface-hover text-xs font-medium text-text-primary transition-colors text-left group cursor-pointer"
+                      >
+                        <div className="w-7.5 h-7.5 rounded-xl bg-brand/10 text-brand flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                          <IconoAnimado icono={IconoCampana} size={15} sinToque />
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium text-text-primary">Avisos de Hera</span>
+                          <p className="text-[10px] text-text-secondary">Resúmenes y recordatorios</p>
+                        </div>
+                      </button>
 
                       {/* Invitaciones: aquí es donde la gente ya está mirando
                           su plan y sus tokens, que es cuando gana sentido */}
@@ -11877,6 +11900,43 @@ export default function App() {
 
       {/* Celebración de un logro recién conseguido */}
       <AvisoLogro />
+
+      {/* Ofrecer las notificaciones cuando ya se ha registrado algo */}
+      <OfertaNotificaciones registros={timeline.reduce((n, d) => n + (d.items?.length || 0), 0)} />
+
+      {/* Avisos de Hera */}
+      <AnimatePresence>
+        {mostrarNotificaciones && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setMostrarNotificaciones(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 24 }}
+              transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label="Avisos de Hera"
+              className="w-full sm:max-w-md bg-bg border-t sm:border border-border rounded-t-3xl sm:rounded-3xl p-5 max-h-[88vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-serif font-semibold text-lg text-text-primary">Avisos de Hera</h2>
+                <button
+                  type="button"
+                  onClick={() => setMostrarNotificaciones(false)}
+                  aria-label="Cerrar"
+                  className="p-2 rounded-xl text-text-secondary hover:text-text-primary hover:bg-surface transition-colors active:scale-[0.95]"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <Notificaciones />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Racha y logros */}
       <AnimatePresence>
