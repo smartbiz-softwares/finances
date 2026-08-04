@@ -96,7 +96,11 @@ import { Referidos } from './Referidos';
 import { PanelReferidos } from './PanelReferidos';
 import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
-import { IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana } from './iconos';
+import {
+  IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana,
+  IconoMicrofono, IconoCamara, IconoIngreso, IconoGasto, IconoEnviar,
+  IconoSol, IconoLuna, IconoReloj, IconoGrafico, IconoChispa, IconoHecho,
+} from './iconos';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
@@ -5601,7 +5605,7 @@ export default function App() {
                 className="relative bg-surface hover:bg-surface-hover border border-border/80 hover:border-brand/40 text-text-primary hover:text-brand flex items-center justify-center w-10 h-10 rounded-2xl shadow-xs text-xs font-medium cursor-pointer transition-all active:scale-[0.95] shrink-0 group"
                 title="Centro de Notificaciones"
               >
-                <Bell size={18} strokeWidth={1.8} className="transition-transform duration-200 group-hover:rotate-12" />
+                <IconoAnimado icono={IconoCampana} size={18} strokeWidth={1.8} activo={unreadNotifCount > 0} />
                 {unreadNotifCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-brand text-white font-bold font-mono text-[9px] rounded-full flex items-center justify-center px-1 border-2 border-surface shadow-sm animate-pulse">
                     {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
@@ -5779,7 +5783,7 @@ export default function App() {
                             )}
                             title="Tema claro"
                           >
-                            <Sun size={15} />
+                            <IconoAnimado icono={IconoSol} size={15} activo={theme === 'light'} sinToque />
                           </button>
 
                           <button
@@ -5792,7 +5796,7 @@ export default function App() {
                             )}
                             title="Tema oscuro"
                           >
-                            <Moon size={15} />
+                            <IconoAnimado icono={IconoLuna} size={15} activo={theme === 'dark'} sinToque />
                           </button>
                         </div>
                       </div>
@@ -7417,7 +7421,9 @@ export default function App() {
                               )}
                               title="Dictar por voz"
                             >
-                              {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                              {isRecording
+                                ? <MicOff size={18} />
+                                : <IconoAnimado icono={IconoMicrofono} size={18} />}
                             </button>
                             <button
                               type="button"
@@ -7452,7 +7458,7 @@ export default function App() {
                               </span>
                             ) : (
                               <>
-                                <Send size={14} />
+                                <IconoAnimado icono={IconoEnviar} size={14} />
                                 <span>Consultar</span>
                               </>
                             )}
@@ -7578,7 +7584,11 @@ export default function App() {
                                             "w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0",
                                             msg.data.type === 'income' ? "bg-success/15 text-success" : "bg-error/15 text-error"
                                           )}>
-                                            {msg.data.type === 'income' ? <TrendingUp size={15} /> : <TrendingDown size={15} />}
+                                            <IconoAnimado
+                                              icono={msg.data.type === 'income' ? IconoIngreso : IconoGasto}
+                                              size={15}
+                                              activo
+                                            />
                                           </div>
                                           <div>
                                             <h4 className="font-semibold text-xs text-text-primary">
@@ -8037,7 +8047,9 @@ export default function App() {
                                 )}
                                 title="Dictar por voz"
                               >
-                                {isRecording ? <MicOff size={18} /> : <Mic size={18} />}
+                                {isRecording
+                                  ? <MicOff size={18} />
+                                  : <IconoAnimado icono={IconoMicrofono} size={18} />}
                               </button>
                               <button
                                 type="button"
@@ -8072,7 +8084,7 @@ export default function App() {
                                 </span>
                               ) : (
                                 <>
-                                  <Send size={14} />
+                                  <IconoAnimado icono={IconoEnviar} size={14} />
                                   <span>Consultar</span>
                                 </>
                               )}
@@ -10802,7 +10814,7 @@ export default function App() {
             )}
             title="Inicio / Hera IA"
           >
-            <Sparkles size={18} />
+            <IconoAnimado icono={IconoChispa} size={18} activo={activeTab === 'chat'} sinToque />
           </button>
 
           <button
@@ -10812,7 +10824,7 @@ export default function App() {
               activeTab === 'timeline' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
           >
-            <Clock size={16} />
+            <IconoAnimado icono={IconoReloj} size={16} activo={activeTab === 'timeline'} sinToque />
             <span className="hidden md:inline">Timeline</span>
           </button>
 
@@ -10834,7 +10846,7 @@ export default function App() {
               activeTab === 'reports' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
           >
-            <PieChart size={16} />
+            <IconoAnimado icono={IconoGrafico} size={16} activo={activeTab === 'reports'} sinToque />
             <span className="hidden md:inline">Reportes</span>
           </button>
 
@@ -11982,7 +11994,12 @@ export default function App() {
                         ? "border-success/30 bg-success/10 text-success"
                         : "border-brand/30 bg-brand/10 text-brand"
                     )}>
-                      {getCategoryIcon(txDetalle.category, txDetalle.type, txDetalle.description)}
+                      {/* El detalle se abre a propósito: el icono lo acompaña */}
+                      <IconoAnimado
+                        icono={esIngreso ? IconoIngreso : IconoGasto}
+                        size={19}
+                        activo
+                      />
                     </div>
                     <button
                       type="button"

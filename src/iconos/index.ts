@@ -35,3 +35,27 @@ export { default as IconoEscudo } from './shield-check';
 export { default as IconoAviso } from './triangle-alert-icon';
 export { default as IconoVolumen } from './volume-2-icon';
 export { default as IconoCohete } from './rocket-icon';
+export { default as IconoLuna } from './moon-icon';
+export { default as IconoSol } from './brightness-down-icon';
+export { default as IconoFlechaArriba } from './arrow-narrow-up-icon';
+export { default as IconoFlechaAbajo } from './arrow-narrow-down-icon';
+export { default as IconoDobleCheck } from './double-check-icon';
+export { default as IconoCompartir } from './send-icon';
+export { default as IconoCampanaMuda } from './bell-off-icon';
+export { default as IconoEditar } from './pen-icon';
+export { default as IconoGlobo } from './globe-icon';
+export { default as IconoAmpliar } from './expand-icon';
+
+// Los que la colección de origen no trae; ver `propios.tsx`.
+export {
+  IconoMicrofono,
+  IconoCamara,
+  IconoIngreso,
+  IconoGasto,
+  IconoLlama,
+  IconoTrofeo,
+  IconoRegalo,
+  IconoGrafico,
+  IconoReloj,
+  IconoChispa,
+} from './propios';

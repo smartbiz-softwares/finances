@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Flame, Trophy, Check, X } from 'lucide-react';
-import { IconoAnimado, IconoCelebracion, IconoEstrella } from './iconos';
+import { X } from 'lucide-react';
+import {
+  IconoAnimado, IconoCelebracion, IconoTrofeo, IconoLlama, IconoDobleCheck,
+} from './iconos';
 import { apiUrl, getToken } from './api';
 
 /**
@@ -61,7 +63,7 @@ export const RachaResumen: React.FC<{ onAbrir?: () => void }> = ({ onAbrir }) =>
           encendida ? 'bg-brand/12 text-brand' : 'bg-bg text-text-dim'
         }`}
       >
-        <Flame size={15} />
+        <IconoAnimado icono={IconoLlama} size={15} activo={encendida} />
       </div>
       <div className="flex-1 min-w-0">
         <span className="font-medium text-xs text-text-primary">
@@ -128,7 +130,8 @@ export const Racha: React.FC = () => {
                 : 'bg-bg border-border text-text-dim'
             }`}
           >
-            <Flame size={24} />
+            {/* Arde al abrir si la racha está viva; quieta si está a cero. */}
+            <IconoAnimado icono={IconoLlama} size={24} activo={encendida} />
           </div>
           <div className="min-w-0">
             <p className="font-mono font-bold text-3xl text-text-primary leading-none">
@@ -178,7 +181,7 @@ export const Racha: React.FC = () => {
       >
         <div className="p-5 border-b border-border flex items-center justify-between">
           <h3 className="font-serif font-semibold text-sm text-text-primary flex items-center gap-2">
-            <IconoAnimado icono={IconoEstrella} size={15} className="text-brand" />
+            <IconoAnimado icono={IconoTrofeo} size={15} className="text-brand" />
             Logros
           </h3>
           <span className="font-mono text-xs text-text-secondary">
@@ -187,8 +190,15 @@ export const Racha: React.FC = () => {
         </div>
 
         <ul className="divide-y divide-border">
-          {estado.logros.map((l) => (
-            <li key={l.id} className="p-4 flex items-center gap-3">
+          {estado.logros.map((l, i) => (
+            <motion.li
+              key={l.id}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              // Escalonado corto: la lista entra como una serie, no de golpe.
+              transition={{ duration: 0.25, delay: Math.min(i * 0.035, 0.4), ease: [0.23, 1, 0.32, 1] }}
+              className={`p-4 flex items-center gap-3 ${l.conseguido ? 'bg-success/[0.03]' : ''}`}
+            >
               <div
                 className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border ${
                   l.conseguido
@@ -196,11 +206,16 @@ export const Racha: React.FC = () => {
                     : 'bg-bg border-border text-text-dim'
                 }`}
               >
-                {l.conseguido ? <Check size={15} /> : <Trophy size={14} />}
+                {l.conseguido
+                  ? <IconoAnimado icono={IconoDobleCheck} size={15} />
+                  : <IconoAnimado icono={IconoTrofeo} size={14} sinToque />}
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className={`text-xs ${l.conseguido ? 'text-text-primary' : 'text-text-secondary'}`}>
+                {/* Los conseguidos van tachados: se lee de un vistazo qué queda */}
+                <p className={`text-xs ${
+                  l.conseguido ? 'text-text-secondary line-through decoration-success/50' : 'text-text-secondary'
+                }`}>
                   {l.nombre}
                 </p>
                 <p className="text-[11px] text-text-dim truncate">{l.descripcion}</p>
@@ -221,7 +236,7 @@ export const Racha: React.FC = () => {
                   {l.progreso}/{l.meta}
                 </span>
               )}
-            </li>
+            </motion.li>
           ))}
         </ul>
       </motion.div>
@@ -230,13 +245,27 @@ export const Racha: React.FC = () => {
 };
 
 /**
- * Aviso de logro recién conseguido.
+ * Celebración de un logro recién conseguido.
+ *
+ * Es el único momento en que la app interrumpe para dar una buena noticia, así
+ * que se le da espacio: la tarjeta entra desde abajo con un rebote corto, el
+ * icono estalla y unas chispas salen del centro. Dura poco más de un segundo y
+ * se va sola a los cinco.
+ *
+ * Si hay varios logros a la vez se muestran en cola, uno detrás de otro: dos
+ * celebraciones superpuestas no se leen.
  *
  * Aparece una sola vez: el servidor marca como anunciado lo que entrega, así
- * que recargar la página no repite la celebración.
+ * que recargar la página no repite nada. Y con `prefers-reduced-motion` se
+ * queda todo quieto, sin chispas.
  */
+const CHISPAS = 10;
+
 export const AvisoLogro: React.FC = () => {
   const [cola, setCola] = useState<LogroUI[]>([]);
+  const quieto =
+    typeof window !== 'undefined' &&
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
     fetch(apiUrl('/api/logros/nuevos'), { headers: cabeceras() })
@@ -246,38 +275,103 @@ export const AvisoLogro: React.FC = () => {
   }, []);
 
   const actual = cola[0];
+
+  // Se retira sola: nadie debería tener que cerrar una felicitación.
+  useEffect(() => {
+    if (!actual) return;
+    const t = setTimeout(() => setCola((c) => c.slice(1)), 5000);
+    return () => clearTimeout(t);
+  }, [actual]);
+
   if (!actual) return null;
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       <motion.div
         key={actual.id}
-        initial={{ opacity: 0, y: -16, scale: 0.96 }}
+        initial={{ opacity: 0, y: 40, scale: 0.9 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -16, scale: 0.96 }}
-        transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+        exit={{ opacity: 0, y: 20, scale: 0.96 }}
+        transition={quieto
+          ? { duration: 0.2 }
+          : { type: 'spring', stiffness: 320, damping: 22, mass: 0.8 }}
         role="status"
-        className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[340px] w-[calc(100%-2rem)]
-                   bg-surface border border-brand/30 rounded-2xl p-4 shadow-xl flex items-center gap-3"
+        aria-live="polite"
+        className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-2rem)] max-w-[330px]"
       >
-        <div className="w-10 h-10 rounded-xl bg-brand/12 border border-brand/25 text-brand flex items-center justify-center shrink-0">
-          {/* Se anima sola al aparecer: es el único aviso de la app que celebra
-              algo, y llega sin que nadie lo haya pedido. */}
-          <IconoAnimado icono={IconoCelebracion} size={18} activo />
+        <div className="relative bg-surface border border-brand/30 rounded-3xl p-5 shadow-2xl overflow-hidden">
+          {/* Resplandor de fondo, muy tenue: da calidez sin robar atención */}
+          {!quieto && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: [0, 0.5, 0.25], scale: 1.6 }}
+              transition={{ duration: 1.1, ease: 'easeOut' }}
+              className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-40 rounded-full bg-brand/25 blur-3xl pointer-events-none"
+            />
+          )}
+
+          <div className="relative flex flex-col items-center text-center gap-3">
+            <div className="relative">
+              {/* Chispas: salen del icono en todas direcciones y se apagan */}
+              {!quieto && Array.from({ length: CHISPAS }).map((_, i) => {
+                const angulo = (i / CHISPAS) * Math.PI * 2;
+                return (
+                  <motion.span
+                    key={i}
+                    initial={{ opacity: 0, x: 0, y: 0, scale: 0 }}
+                    animate={{
+                      opacity: [0, 1, 0],
+                      x: Math.cos(angulo) * 46,
+                      y: Math.sin(angulo) * 46,
+                      scale: [0, 1, 0.4],
+                    }}
+                    transition={{ duration: 0.85, delay: 0.12, ease: 'easeOut' }}
+                    className="absolute top-1/2 left-1/2 w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full bg-brand pointer-events-none"
+                  />
+                );
+              })}
+
+              <motion.div
+                initial={{ scale: 0.4, rotate: -20 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={quieto
+                  ? { duration: 0.2 }
+                  : { type: 'spring', stiffness: 400, damping: 14, delay: 0.08 }}
+                className="w-14 h-14 rounded-2xl bg-brand/12 border border-brand/25 text-brand flex items-center justify-center"
+              >
+                <IconoAnimado icono={IconoCelebracion} size={26} activo />
+              </motion.div>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-brand font-mono">
+                Logro conseguido
+              </p>
+              <p className="text-base font-serif font-semibold text-text-primary">
+                {actual.nombre}
+              </p>
+              <p className="text-[11px] text-text-secondary leading-relaxed">
+                {actual.descripcion}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCola((c) => c.slice(1))}
+            aria-label="Cerrar"
+            className="absolute top-3 right-3 p-1.5 rounded-lg text-text-dim hover:text-text-primary transition-colors"
+          >
+            <X size={14} />
+          </button>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-widest text-brand font-mono">Logro</p>
-          <p className="text-sm font-medium text-text-primary truncate">{actual.nombre}</p>
-          <p className="text-[11px] text-text-secondary truncate">{actual.descripcion}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCola((c) => c.slice(1))}
-          aria-label="Cerrar"
-          className="p-1.5 rounded-lg text-text-dim hover:text-text-primary transition-colors shrink-0"
-        >
-          <X size={14} />
-        </button>
+
+        {/* Cuántos quedan por celebrar, si llegaron varios de golpe */}
+        {cola.length > 1 && (
+          <p className="text-[10px] text-text-dim text-center mt-2 font-mono">
+            +{cola.length - 1} más
+          </p>
+        )}
       </motion.div>
     </AnimatePresence>
   );
