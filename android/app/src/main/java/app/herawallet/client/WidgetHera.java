@@ -53,9 +53,17 @@ public class WidgetHera extends AppWidgetProvider {
         super.onReceive(contexto, intent);
 
         String accion = intent.getAction();
-        if (ACCION_REFRESCAR.equals(accion)) {
+        if (ACCION_REFRESCAR.equals(accion)
+                || AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(accion)) {
             refrescarDatos(contexto);
         }
+    }
+
+    @Override
+    public void onEnabled(Context contexto) {
+        super.onEnabled(contexto);
+        // Al colocar el primero conviene tener datos ya, no esperar media hora.
+        refrescarDatos(contexto);
     }
 
     /** Repinta todos los widgets colocados. */
@@ -188,7 +196,17 @@ public class WidgetHera extends AppWidgetProvider {
                 conexion.setConnectTimeout(8000);
                 conexion.setReadTimeout(8000);
 
-                if (conexion.getResponseCode() != 200) return;
+                int codigo = conexion.getResponseCode();
+                if (codigo == 401) {
+                    // La sesión caducó o se cerró en la app.
+                    mostrarEstado(contexto, "Vuelve a entrar en la app");
+                    return;
+                }
+                if (codigo != 200) {
+                    android.util.Log.w("HeraWidget", "El servidor respondió " + codigo);
+                    mostrarEstado(contexto, "No se pudo cargar");
+                    return;
+                }
 
                 StringBuilder cuerpo = new StringBuilder();
                 try (BufferedReader lector = new BufferedReader(
@@ -207,8 +225,27 @@ public class WidgetHera extends AppWidgetProvider {
                     for (int id : ids) pintar(contexto, gestor, id, datos);
                 });
             } catch (Exception e) {
-                // Sin conexión se queda lo último que se supo, que es mejor que
-                // un widget en blanco.
+                android.util.Log.e("HeraWidget", "No se pudo leer el resumen", e);
+                mostrarEstado(contexto, "Sin conexión");
+            }
+        });
+    }
+
+    /** Escribe un mensaje en la línea de detalle, para que el fallo se vea. */
+    private static void mostrarEstado(Context contexto, String mensaje) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            try {
+                AppWidgetManager gestor = AppWidgetManager.getInstance(contexto);
+                int[] ids = gestor.getAppWidgetIds(new ComponentName(contexto, WidgetHera.class));
+
+                for (int id : ids) {
+                    RemoteViews vistas = new RemoteViews(contexto.getPackageName(), R.layout.widget_hera);
+                    vistas.setTextViewText(R.id.widget_hoy, mensaje);
+                    vistas.setOnClickPendingIntent(R.id.widget_cuerpo, abrirApp(contexto, null));
+                    vistas.setOnClickPendingIntent(R.id.widget_dictar, accion(contexto, ACCION_DICTAR));
+                    gestor.partiallyUpdateAppWidget(id, vistas);
+                }
+            } catch (Exception ignorado) {
             }
         });
     }

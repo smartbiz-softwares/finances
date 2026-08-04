@@ -35,6 +35,8 @@ public class PuenteActualizacion {
     private final Handler principal = new Handler(Looper.getMainLooper());
 
     private long descargaEnCurso = -1;
+    /** Tamaño que la web ya conoce, por si el gestor no lo sabe todavía. */
+    private long tamanoEsperado = 0;
 
     public PuenteActualizacion(Context contexto, WebView webView) {
         this.contexto = contexto;
@@ -44,6 +46,20 @@ public class PuenteActualizacion {
     /** Arranca la descarga. La web solo tiene que llamar aquí. */
     @JavascriptInterface
     public void iniciar(String url) {
+        iniciarCon(url, 0);
+    }
+
+    /**
+     * Igual, pero indicando el tamaño total.
+     *
+     * El gestor tarda en conocerlo —devuelve -1 hasta que lee las cabeceras, y
+     * con algunos intermediarios nunca llega a saberlo—, y sin total no hay
+     * porcentaje: la barra se quedaba clavada en 0 %. La web sí lo sabe, porque
+     * el servidor se lo dice al comprobar si hay versión nueva.
+     */
+    @JavascriptInterface
+    public void iniciarCon(String url, double bytesTotales) {
+        tamanoEsperado = (long) bytesTotales;
         // Dos descargas a la vez del mismo archivo se pisarían.
         if (descargaEnCurso != -1) return;
 
@@ -116,7 +132,12 @@ public class PuenteActualizacion {
                     long bajado = iBajado >= 0 ? cursor.getLong(iBajado) : 0;
                     long total = iTotal >= 0 ? cursor.getLong(iTotal) : 0;
 
-                    int porcentaje = total > 0 ? (int) ((bajado * 100) / total) : 0;
+                    // Si el gestor aún no sabe el total, se usa el que dio el
+                    // servidor. Entre los dos siempre hay uno válido.
+                    long referencia = total > 0 ? total : tamanoEsperado;
+                    int porcentaje = referencia > 0
+                            ? (int) Math.min(99, (bajado * 100) / referencia)
+                            : 0;
 
                     if (estado == DownloadManager.STATUS_SUCCESSFUL) {
                         terminar("listo", 100);
@@ -143,6 +164,7 @@ public class PuenteActualizacion {
 
     private void terminar(String estado, int porcentaje) {
         descargaEnCurso = -1;
+        tamanoEsperado = 0;
         avisar(estado, porcentaje);
     }
 

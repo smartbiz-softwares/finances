@@ -28,12 +28,15 @@ interface Publicada {
   version?: string;
   versionCode?: number;
   mb?: number;
+  bytes?: number;
 }
 
 type Fase = 'ofrecida' | 'empezando' | 'descargando' | 'pausada' | 'listo' | 'error';
 
 interface PuenteActualizar {
   iniciar: (url: string) => void;
+  /** Con el tamaño total, para que la barra avance desde el primer momento. */
+  iniciarCon?: (url: string, bytes: number) => void;
   instalarDescargado: () => boolean;
 }
 
@@ -79,7 +82,10 @@ export const AvisoActualizacion: React.FC = () => {
 
     if (p) {
       setFase('empezando');
-      p.iniciar(urlDelApk());
+      // Se le pasa el tamaño porque el gestor de Android tarda en conocerlo, y
+      // sin total la barra se queda clavada en 0 %.
+      if (p.iniciarCon && nueva?.bytes) p.iniciarCon(urlDelApk(), nueva.bytes);
+      else p.iniciar(urlDelApk());
       return;
     }
 
@@ -135,7 +141,8 @@ export const AvisoActualizacion: React.FC = () => {
           const p = puente();
           if (p) {
             setFase('empezando');
-            p.iniciar(urlDelApk());
+            if (p.iniciarCon && publicada.bytes) p.iniciarCon(urlDelApk(), publicada.bytes);
+            else p.iniciar(urlDelApk());
           }
         }
       } catch {
