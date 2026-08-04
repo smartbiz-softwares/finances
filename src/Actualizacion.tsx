@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Download, X } from 'lucide-react';
+import { IconoAnimado, IconoActualizar } from './iconos';
 import { apiUrl, IS_NATIVE_APP } from './api';
 
 /**
@@ -83,7 +84,8 @@ export const AvisoActualizacion: React.FC = () => {
                    bg-surface border border-border rounded-2xl p-4 shadow-xl flex items-center gap-3"
       >
         <div className="w-10 h-10 rounded-xl bg-brand/12 border border-brand/25 text-brand flex items-center justify-center shrink-0">
-          <Download size={17} />
+          {/* Gira al aparecer: el aviso llega solo y conviene que se note. */}
+          <IconoAnimado icono={IconoActualizar} size={17} activo />
         </div>
 
         <div className="min-w-0 flex-1">

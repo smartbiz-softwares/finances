@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Flame, Trophy, Check, X } from 'lucide-react';
+import { IconoAnimado, IconoCelebracion, IconoEstrella } from './iconos';
 import { apiUrl, getToken } from './api';
 
 /**
@@ -177,7 +178,7 @@ export const Racha: React.FC = () => {
       >
         <div className="p-5 border-b border-border flex items-center justify-between">
           <h3 className="font-serif font-semibold text-sm text-text-primary flex items-center gap-2">
-            <Trophy size={15} className="text-brand" />
+            <IconoAnimado icono={IconoEstrella} size={15} className="text-brand" />
             Logros
           </h3>
           <span className="font-mono text-xs text-text-secondary">
@@ -260,7 +261,9 @@ export const AvisoLogro: React.FC = () => {
                    bg-surface border border-brand/30 rounded-2xl p-4 shadow-xl flex items-center gap-3"
       >
         <div className="w-10 h-10 rounded-xl bg-brand/12 border border-brand/25 text-brand flex items-center justify-center shrink-0">
-          <Trophy size={18} />
+          {/* Se anima sola al aparecer: es el único aviso de la app que celebra
+              algo, y llega sin que nadie lo haya pedido. */}
+          <IconoAnimado icono={IconoCelebracion} size={18} activo />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-widest text-brand font-mono">Logro</p>

@@ -96,6 +96,7 @@ import { Referidos } from './Referidos';
 import { PanelReferidos } from './PanelReferidos';
 import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
+import { IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana } from './iconos';
 import { motion, AnimatePresence } from 'motion/react';
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPieChart, Pie, ComposedChart, ReferenceLine, ReferenceArea, XAxis, YAxis, Tooltip, Cell } from 'recharts';
 import { cn } from './lib/utils';
@@ -10822,7 +10823,7 @@ export default function App() {
               activeTab === 'accounts' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
             )}
           >
-            <Wallet size={16} />
+            <IconoAnimado icono={IconoTarjeta} size={16} activo={activeTab === 'accounts'} sinToque />
             <span className="hidden md:inline">Cuentas</span>
           </button>
 
@@ -10845,7 +10846,7 @@ export default function App() {
             )}
             title="Metas & Ahorros"
           >
-            <Target size={16} />
+            <IconoAnimado icono={IconoMeta} size={16} activo={activeTab === 'goals'} sinToque />
             <span className="hidden md:inline">Metas</span>
           </button>
 
@@ -10857,7 +10858,7 @@ export default function App() {
             )}
             title="Salud Financiera & Score Hera"
           >
-            <ShieldCheck size={16} />
+            <IconoAnimado icono={IconoEscudo} size={16} activo={activeTab === 'health'} sinToque />
             <span className="hidden md:inline">Salud Financiera</span>
           </button>
 

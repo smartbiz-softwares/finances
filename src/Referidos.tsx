@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Gift, Copy, Check, Share2, Users } from 'lucide-react';
+import { IconoAnimado, IconoCopiar, IconoWhatsapp } from './iconos';
 import { apiUrl, getToken } from './api';
 
 /**
@@ -149,7 +150,9 @@ export const Referidos: React.FC<{ onCerrar?: () => void }> = () => {
             </p>
           </div>
           <span className="w-9 h-9 rounded-xl flex items-center justify-center text-text-secondary group-hover:text-brand transition-colors">
-            {copiado ? <Check size={16} className="text-success" /> : <Copy size={16} />}
+            {copiado
+              ? <Check size={16} className="text-success" />
+              : <IconoAnimado icono={IconoCopiar} size={16} />}
           </span>
         </button>
 
@@ -158,7 +161,7 @@ export const Referidos: React.FC<{ onCerrar?: () => void }> = () => {
           onClick={compartir}
           className="w-full py-3.5 rounded-2xl bg-brand text-white text-sm font-medium flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
         >
-          <Share2 size={16} />
+          <IconoAnimado icono={IconoWhatsapp} size={16} />
           Compartir mi enlace
         </button>
 
