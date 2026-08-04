@@ -37,8 +37,10 @@ if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/keytool" ]]; then
 elif command -v keytool >/dev/null; then
   KEYTOOL="keytool"
 else
-  # Último recurso: cualquier JDK instalado en el sitio habitual.
-  KEYTOOL="$(find /usr/lib/jvm /opt -maxdepth 3 -name keytool -type f 2>/dev/null | head -1)"
+  # Último recurso: cualquier JDK instalado en los sitios habituales. El `|| true`
+  # es necesario: si alguna de esas carpetas no existe, `find` sale con error y
+  # `set -e` mataría el script antes de poder explicar qué falta.
+  KEYTOOL="$(find /usr/lib/jvm /opt ~/.jdks -maxdepth 3 -name keytool -type f 2>/dev/null | head -1 || true)"
   [[ -n "$KEYTOOL" ]] || {
     echo "No encuentro keytool. Viene con el JDK; define JAVA_HOME o instala uno:" >&2
     echo "  apt install -y openjdk-21-jdk-headless" >&2
