@@ -47,6 +47,14 @@ public class PuenteActualizacion {
         // Dos descargas a la vez del mismo archivo se pisarían.
         if (descargaEnCurso != -1) return;
 
+        // El gestor solo acepta http y https. Una ruta relativa —lo que devuelve
+        // la app cuando se sirve desde su propio origen— la rechaza, y el
+        // síntoma era un "revisa tu conexión" con la conexión perfecta.
+        if (url == null || !(url.startsWith("http://") || url.startsWith("https://"))) {
+            avisar("error", 0);
+            return;
+        }
+
         try {
             File previo = new File(
                     contexto.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), NOMBRE_ARCHIVO);
@@ -73,6 +81,9 @@ public class PuenteActualizacion {
             vigilar(gestor);
         } catch (Exception e) {
             descargaEnCurso = -1;
+            // El motivo real se pierde en la interfaz, pero en el registro sí
+            // queda: sin esto, un fallo de configuración parece de red.
+            android.util.Log.e("HeraActualizar", "No se pudo encolar la descarga de " + url, e);
             avisar("error", 0);
         }
     }

@@ -42,6 +42,19 @@ const puente = (): PuenteActualizar | null => {
   return p && typeof p.iniciar === 'function' ? p : null;
 };
 
+/**
+ * Dirección completa del APK.
+ *
+ * El gestor de descargas de Android necesita una URL absoluta: una ruta como
+ * "/descargar/HeraWallet.apk" no tiene esquema y la rechaza sin más. El
+ * navegador sí la resuelve contra el origen, y por eso el fallo solo se veía
+ * dentro de la app.
+ */
+const urlDelApk = () => {
+  const ruta = apiUrl('/descargar/HeraWallet.apk');
+  return /^https?:\/\//i.test(ruta) ? ruta : `${window.location.origin}${ruta}`;
+};
+
 export const AvisoActualizacion: React.FC = () => {
   const [nueva, setNueva] = useState<Publicada | null>(null);
   const [fase, setFase] = useState<Fase>('ofrecida');
@@ -66,13 +79,13 @@ export const AvisoActualizacion: React.FC = () => {
 
     if (p) {
       setFase('empezando');
-      p.iniciar(apiUrl('/descargar/HeraWallet.apk'));
+      p.iniciar(urlDelApk());
       return;
     }
 
     // Navegador: descarga normal, sin avance que enseñar.
     const enlace = document.createElement('a');
-    enlace.href = apiUrl('/descargar/HeraWallet.apk');
+    enlace.href = urlDelApk();
     enlace.download = 'HeraWallet.apk';
     enlace.click();
     posponer();
@@ -122,7 +135,7 @@ export const AvisoActualizacion: React.FC = () => {
           const p = puente();
           if (p) {
             setFase('empezando');
-            p.iniciar(apiUrl('/descargar/HeraWallet.apk'));
+            p.iniciar(urlDelApk());
           }
         }
       } catch {
