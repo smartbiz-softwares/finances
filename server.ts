@@ -18,6 +18,7 @@ import * as notificaciones from './server/notificaciones.ts';
 import * as reglasNotificaciones from './server/reglas.ts';
 import * as referidos from './server/referidos.ts';
 import * as logros from './server/logros.ts';
+import * as apertura from './server/apertura.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -4599,6 +4600,24 @@ notificaciones.montarEndpoints(app, db, authMiddleware);
 // --- Referidos ------------------------------------------------------------
 referidos.crearTablas(db);
 referidos.montarEndpoints(app, db, authMiddleware, adminAuthMiddleware);
+
+// --- Apertura de la conversación ------------------------------------------
+//
+// Hera dice algo al abrir el chat en vez de esperar. Una pantalla en blanco es
+// el mayor freno que hay: la gente no sabe qué preguntar y se va.
+app.get('/api/hera/apertura', authMiddleware, (req: any, res) => {
+  try {
+    res.json(apertura.componer(db, req.userId, hoyDe(req.userId)));
+  } catch (err) {
+    console.error('[apertura] fallo al componer', err);
+    // Que falle esto no puede dejar el chat sin nada que decir.
+    res.json({
+      texto: '¿Qué quieres saber de tus cuentas hoy?',
+      sugerencias: ['¿Cómo voy este mes?', 'Registrar un gasto'],
+      motivo: 'general',
+    });
+  }
+});
 
 // --- Dictado desde el widget ----------------------------------------------
 //

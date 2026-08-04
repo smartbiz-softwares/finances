@@ -98,6 +98,7 @@ import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
 import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
 import { compartirSesionConWidget, olvidarSesionEnWidget } from './puenteNativo';
+import { CompartirScore } from './CompartirScore';
 import {
   IconoAnimado, IconoTarjeta, IconoMeta, IconoEscudo, IconoCampana,
   IconoMicrofono, IconoCamara, IconoIngreso, IconoGasto, IconoEnviar,
@@ -1272,6 +1273,10 @@ export default function App() {
   const [mostrarReferidos, setMostrarReferidos] = useState(false);
   const [mostrarRacha, setMostrarRacha] = useState(false);
   const [mostrarNotificaciones, setMostrarNotificaciones] = useState(false);
+
+  // Lo que Hera dice al abrir el chat, sacado de sus datos reales. Una pantalla
+  // en blanco es el mayor freno: la gente no sabe qué preguntar y se va.
+  const [apertura, setApertura] = useState<{ texto: string; sugerencias: string[] } | null>(null);
 
   useEffect(() => {
     if (!codigoReferido) return;
@@ -4367,6 +4372,17 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (!user || chatMessages.length > 0) return;
+
+    fetch(apiUrl('/api/hera/apertura'), {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => r.json())
+      .then(setApertura)
+      .catch(() => { /* Sin apertura se queda el saludo de siempre. */ });
+  }, [user, chatMessages.length]);
+
   const handleLogout = async () => {
     setIsProfileMenuOpen(false);
     setShowLogoutModal(true);
@@ -7362,8 +7378,8 @@ export default function App() {
                         <div className="text-brand [filter:drop-shadow(0_6px_14px_rgba(217,119,87,0.28))]">
                           <HeraWalletLogo size="lg" showText={false} />
                         </div>
-                        <h1 className="text-3xl sm:text-4xl font-serif font-semibold tracking-tight text-text-primary max-w-lg leading-tight mt-2">
-                          {(() => {
+                        <h1 className="text-2xl sm:text-3xl font-serif font-semibold tracking-tight text-text-primary max-w-xl leading-snug mt-2">
+                          {apertura?.texto || (() => {
                             const hour = new Date().getHours();
                             const userName = profile?.displayName || user?.displayName;
                             const nameStr = userName && userName !== user?.phone ? `, ${userName.split(' ')[0]}` : '';
@@ -7503,13 +7519,24 @@ export default function App() {
                         transition={{ duration: 0.28, delay: 0.16, ease: [0.23, 1, 0.32, 1] }}
                         className="flex flex-wrap items-center justify-center gap-2 max-w-xl"
                       >
-                        {suggestionPills.map((pill) => (
+                        {/* Las sugerencias que vienen con la apertura responden a lo
+                            que está pasando en sus cuentas ahora, así que mandan
+                            sobre las genéricas. */}
+                        {(apertura?.sugerencias?.length
+                          ? apertura.sugerencias.map((texto, i) => ({
+                              key: `apertura-${i}`,
+                              label: texto,
+                              query: texto,
+                              icon: null as any,
+                            }))
+                          : suggestionPills
+                        ).map((pill: any) => (
                           <button
                             key={pill.key}
                             onClick={() => sendChatMessage(pill.query)}
                             className="px-4 py-2 rounded-2xl bg-surface hover:bg-surface-hover border border-border text-text-primary text-xs font-medium flex items-center gap-2 shadow-xs transition-all cursor-pointer active:scale-[0.97]"
                           >
-                            <pill.icon size={14} className="text-brand" />
+                            {pill.icon && <pill.icon size={14} className="text-brand" />}
                             <span>{pill.label}</span>
                           </button>
                         ))}
@@ -9292,6 +9319,16 @@ export default function App() {
                           Calculado en tiempo real evaluando tus ingresos, gastos, nivel de deudas, cuentas y consistencia de ahorro.
                         </p>
                       </div>
+
+                      {/* Compartir: solo con un score de verdad detrás. La
+                          imagen enseña el número y nada más, nunca saldos. */}
+                      {overview?.scoreReady && (overview?.healthScore ?? 0) > 0 && (
+                        <CompartirScore
+                          score={overview.healthScore}
+                          nombre={profile?.displayName?.split(' ')[0]}
+                          desglose={Object.values(overview?.scoreBreakdown || {}) as any[]}
+                        />
+                      )}
                     </motion.div>
 
                     {/* 5-Pillar Score Breakdown Details */}
