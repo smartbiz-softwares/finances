@@ -39,6 +39,10 @@ public class MainActivity extends BridgeActivity {
         // es fiable y no distingue intensidades.
         getBridge().getWebView().addJavascriptInterface(new Haptica(this), "HeraVibrar");
 
+        // Actualización sin salir de la app: descarga, avance real e instalación.
+        getBridge().getWebView().addJavascriptInterface(
+                new PuenteActualizacion(this, getBridge().getWebView()), "HeraActualizar");
+
         // El WebView no descarga nada por su cuenta: un enlace con `download`
         // se queda en nada, sin progreso ni aviso. Se delega en el gestor de
         // descargas de Android, que sí muestra progreso y avisa al terminar.

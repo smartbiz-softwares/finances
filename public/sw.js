@@ -85,8 +85,10 @@ self.addEventListener('notificationclick', (evento) => {
   // convierte en el registro, sin pasos intermedios.
   let destino = datos.url || '/';
   if (evento.action === 'registrar') destino = '/?accion=registrar';
-  // El botón de la notificación de versión nueva descarga el archivo directo.
-  else if (evento.action === 'actualizar') destino = '/descargar/HeraWallet.apk';
+  // El botón de versión nueva abre la app, que se encarga de descargar con
+  // avance visible e instalar al terminar. Enviar al archivo directo dejaba al
+  // usuario en el navegador, sin saber qué hacer con lo descargado.
+  else if (evento.action === 'actualizar') destino = '/?actualizar=1';
 
   evento.waitUntil((async () => {
     const ventanas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

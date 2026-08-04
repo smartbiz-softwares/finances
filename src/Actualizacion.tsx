@@ -1,18 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Download, X } from 'lucide-react';
-import { IconoAnimado, IconoActualizar } from './iconos';
+import { X } from 'lucide-react';
+import { IconoAnimado, IconoActualizar, IconoHecho, IconoAviso } from './iconos';
 import { apiUrl, IS_NATIVE_APP } from './api';
+import { pulso, exito } from './haptica';
 
 /**
- * Aviso de que hay una versión nueva de la app.
+ * Aviso de versión nueva de la app.
  *
- * La interfaz se carga del servidor, así que los cambios de la web llegan solos
- * al abrir. Esto es solo para lo que sí requiere reinstalar: permisos nuevos,
- * el icono, el widget. Va a saltar pocas veces, y por eso puede permitirse
- * interrumpir cuando salta.
+ * Dentro de la app la actualización va entera desde aquí: se pulsa una vez, se
+ * ve el avance real y al terminar se abre el instalador solo. Antes esto era un
+ * enlace que abría el navegador y ahí se perdía el hilo —ni progreso, ni saber
+ * qué hacer con el archivo al final—.
  *
- * No es obligatorio: se puede posponer, y no se vuelve a insistir con la misma
+ * En el navegador no hay puente nativo, así que se cae a una descarga normal,
+ * que es todo lo que se puede hacer allí.
+ *
+ * El aviso no es obligatorio: se pospone y no vuelve a insistir con la misma
  * versión hasta el día siguiente. Una app que bloquea hasta actualizar es una
  * app que se desinstala.
  */
@@ -26,40 +30,53 @@ interface Publicada {
   mb?: number;
 }
 
+type Fase = 'ofrecida' | 'empezando' | 'descargando' | 'pausada' | 'listo' | 'error';
+
+interface PuenteActualizar {
+  iniciar: (url: string) => void;
+  instalarDescargado: () => boolean;
+}
+
+const puente = (): PuenteActualizar | null => {
+  const p = (window as any)?.HeraActualizar;
+  return p && typeof p.iniciar === 'function' ? p : null;
+};
+
 export const AvisoActualizacion: React.FC = () => {
   const [nueva, setNueva] = useState<Publicada | null>(null);
-  const [descargando, setDescargando] = useState(false);
+  const [fase, setFase] = useState<Fase>('ofrecida');
+  const [porcentaje, setPorcentaje] = useState(0);
 
+  // El avance lo manda la parte nativa mientras descarga.
   useEffect(() => {
-    if (!IS_NATIVE_APP) return;
+    const alAvanzar = (e: Event) => {
+      const detalle = (e as CustomEvent).detail || {};
+      setFase(detalle.estado as Fase);
+      setPorcentaje(Number(detalle.porcentaje) || 0);
+      if (detalle.estado === 'listo') exito();
+    };
 
-    (async () => {
-      try {
-        // El plugin solo existe dentro de la app; se carga aquí para que la web
-        // no arrastre el código.
-        const { App } = await import('@capacitor/app');
-        const info = await App.getInfo();
-        const instalada = Number(info.build || 0);
-
-        const res = await fetch(apiUrl('/api/app/latest'));
-        const publicada: Publicada = await res.json();
-
-        if (!publicada?.disponible || !publicada.versionCode) return;
-        if (publicada.versionCode <= instalada) return;
-
-        // Posponer vale por un día: al siguiente se vuelve a ofrecer.
-        try {
-          const pospuesta = JSON.parse(localStorage.getItem(CLAVE_POSPUESTO) || '{}');
-          const hoy = new Date().toISOString().slice(0, 10);
-          if (pospuesta.version === publicada.versionCode && pospuesta.dia === hoy) return;
-        } catch { /* Sin almacenamiento se muestra igual. */ }
-
-        setNueva(publicada);
-      } catch {
-        // Sin conexión o fuera de la app: no se avisa de nada.
-      }
-    })();
+    window.addEventListener('hera-descarga', alAvanzar);
+    return () => window.removeEventListener('hera-descarga', alAvanzar);
   }, []);
+
+  const descargar = () => {
+    pulso();
+    const p = puente();
+
+    if (p) {
+      setFase('empezando');
+      p.iniciar(apiUrl('/descargar/HeraWallet.apk'));
+      return;
+    }
+
+    // Navegador: descarga normal, sin avance que enseñar.
+    const enlace = document.createElement('a');
+    enlace.href = apiUrl('/descargar/HeraWallet.apk');
+    enlace.download = 'HeraWallet.apk';
+    enlace.click();
+    posponer();
+  };
 
   const posponer = () => {
     try {
@@ -71,7 +88,72 @@ export const AvisoActualizacion: React.FC = () => {
     setNueva(null);
   };
 
+  useEffect(() => {
+    if (!IS_NATIVE_APP) return;
+
+    (async () => {
+      try {
+        const { App } = await import('@capacitor/app');
+        const info = await App.getInfo();
+        const instalada = Number(info.build || 0);
+
+        const res = await fetch(apiUrl('/api/app/latest'));
+        const publicada: Publicada = await res.json();
+
+        if (!publicada?.disponible || !publicada.versionCode) return;
+        if (publicada.versionCode <= instalada) return;
+
+        // Si se llega desde la notificación, se empieza sin volver a preguntar:
+        // ya se pulsó "Descargar" allí, y pedirlo dos veces sobra.
+        const desdeNotificacion =
+          new URLSearchParams(window.location.search).get('actualizar') === '1';
+
+        if (!desdeNotificacion) {
+          try {
+            const pospuesta = JSON.parse(localStorage.getItem(CLAVE_POSPUESTO) || '{}');
+            const hoy = new Date().toISOString().slice(0, 10);
+            if (pospuesta.version === publicada.versionCode && pospuesta.dia === hoy) return;
+          } catch { /* Sin almacenamiento se muestra igual. */ }
+        }
+
+        setNueva(publicada);
+
+        if (desdeNotificacion) {
+          const p = puente();
+          if (p) {
+            setFase('empezando');
+            p.iniciar(apiUrl('/descargar/HeraWallet.apk'));
+          }
+        }
+      } catch {
+        // Sin conexión o fuera de la app: no se avisa de nada.
+      }
+    })();
+  }, []);
+
   if (!nueva) return null;
+
+  const enMarcha = fase === 'empezando' || fase === 'descargando' || fase === 'pausada';
+
+  const titulo = {
+    ofrecida: 'Hay una versión nueva',
+    empezando: 'Preparando la descarga',
+    descargando: 'Descargando…',
+    pausada: 'Descarga en pausa',
+    listo: 'Listo para instalar',
+    error: 'No se pudo descargar',
+  }[fase];
+
+  const detalle = {
+    ofrecida: `${nueva.version ? `Versión ${nueva.version}` : 'Actualización disponible'}${nueva.mb ? ` · ${nueva.mb} MB` : ''}`,
+    empezando: 'Un momento',
+    descargando: nueva.mb
+      ? `${(nueva.mb * porcentaje / 100).toFixed(1)} de ${nueva.mb} MB`
+      : `${porcentaje}%`,
+    pausada: 'Esperando conexión',
+    listo: 'Confirma la instalación para terminar',
+    error: 'Revisa tu conexión e inténtalo otra vez',
+  }[fase];
 
   return (
     <AnimatePresence>
@@ -81,50 +163,85 @@ export const AvisoActualizacion: React.FC = () => {
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
         role="status"
+        aria-live="polite"
         className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-2rem)] max-w-[380px]
-                   bg-surface border border-border rounded-2xl p-4 shadow-xl flex items-center gap-3"
+                   bg-surface border border-border rounded-2xl shadow-xl overflow-hidden"
       >
-        <div className="w-10 h-10 rounded-xl bg-brand/12 border border-brand/25 text-brand flex items-center justify-center shrink-0">
-          {/* Gira al aparecer: el aviso llega solo y conviene que se note. */}
-          <IconoAnimado icono={IconoActualizar} size={17} activo />
+        <div className="p-4 flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+            fase === 'error'
+              ? 'bg-warning/10 border-warning/25 text-warning'
+              : 'bg-brand/12 border-brand/25 text-brand'
+          }`}>
+            <IconoAnimado
+              icono={fase === 'listo' ? IconoHecho : fase === 'error' ? IconoAviso : IconoActualizar}
+              size={17}
+              activo
+            />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-text-primary">{titulo}</p>
+            <p className="text-[11px] text-text-secondary truncate">{detalle}</p>
+          </div>
+
+          {fase === 'ofrecida' && (
+            <>
+              <button
+                type="button"
+                onClick={descargar}
+                className="shrink-0 px-3.5 py-2 rounded-xl bg-brand text-white text-xs font-medium transition-transform active:scale-[0.97]"
+              >
+                Actualizar
+              </button>
+              <button
+                type="button"
+                onClick={posponer}
+                aria-label="Ahora no"
+                className="shrink-0 p-1.5 rounded-lg text-text-dim hover:text-text-primary transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </>
+          )}
+
+          {fase === 'descargando' && (
+            <span className="shrink-0 font-mono text-xs text-brand tabular-nums">
+              {porcentaje}%
+            </span>
+          )}
+
+          {fase === 'error' && (
+            <button
+              type="button"
+              onClick={descargar}
+              className="shrink-0 px-3.5 py-2 rounded-xl bg-brand text-white text-xs font-medium transition-transform active:scale-[0.97]"
+            >
+              Reintentar
+            </button>
+          )}
+
+          {fase === 'listo' && (
+            <button
+              type="button"
+              onClick={() => puente()?.instalarDescargado()}
+              className="shrink-0 px-3.5 py-2 rounded-xl bg-brand text-white text-xs font-medium transition-transform active:scale-[0.97]"
+            >
+              Instalar
+            </button>
+          )}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-text-primary">Hay una versión nueva</p>
-          <p className="text-[11px] text-text-secondary truncate">
-            {descargando
-              ? 'Mira la barra de notificaciones'
-              : <>
-                  {nueva.version ? `Versión ${nueva.version}` : 'Actualización disponible'}
-                  {nueva.mb ? ` · ${nueva.mb} MB` : ''}
-                </>}
-          </p>
-        </div>
-
-        <a
-          href={apiUrl('/descargar/HeraWallet.apk')}
-          download
-          onClick={() => {
-            // Dentro de la app la descarga la lleva Android, con su propia
-            // barra de progreso; aquí solo se confirma que el toque hizo algo.
-            setDescargando(true);
-            setTimeout(posponer, 2500);
-          }}
-          className="shrink-0 px-3.5 py-2 rounded-xl bg-brand text-white text-xs font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
-          aria-live="polite"
-        >
-          {descargando ? 'Descargando…' : 'Actualizar'}
-        </a>
-
-        {!descargando && (
-          <button
-            type="button"
-            onClick={posponer}
-            aria-label="Ahora no"
-            className="shrink-0 p-1.5 rounded-lg text-text-dim hover:text-text-primary transition-colors"
-          >
-            <X size={14} />
-          </button>
+        {/* Barra de avance real, no una animación decorativa */}
+        {enMarcha && (
+          <div className="h-1 bg-bg">
+            <motion.div
+              className="h-full bg-brand"
+              initial={{ width: 0 }}
+              animate={{ width: `${porcentaje}%` }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            />
+          </div>
         )}
       </motion.div>
     </AnimatePresence>
