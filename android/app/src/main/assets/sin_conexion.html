@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sin conexión</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 32px 28px calc(32px + env(safe-area-inset-bottom));
+    background: #1A1815;
+    color: #ECE7E1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    text-align: center;
+  }
+  .aro {
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    border: 2px solid #39352F;
+    display: grid;
+    place-items: center;
+    margin-bottom: 6px;
+  }
+  .aro svg { width: 38px; height: 38px; stroke: #C9A227; }
+  h1 { margin: 0; font-size: 19px; font-weight: 700; }
+  p { margin: 0; font-size: 14px; line-height: 1.5; color: #B4AEA8; max-width: 30ch; }
+  button {
+    margin-top: 10px;
+    padding: 14px 34px;
+    border: 0;
+    border-radius: 14px;
+    background: #C9A227;
+    color: #1A1815;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+  }
+  button:disabled { opacity: .55; }
+  /* Late despacio mientras se espera a que vuelva la red: sin ese movimiento
+     la pantalla parece congelada. */
+  .esperando .aro { animation: latir 1.8s ease-in-out infinite; }
+  @keyframes latir { 50% { border-color: #C9A227; } }
+  @media (prefers-reduced-motion: reduce) { .esperando .aro { animation: none; } }
+</style>
+</head>
+<body class="esperando">
+  <div class="aro">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round">
+      <path d="M2 8.8a16 16 0 0 1 20 0M5 12.5a11 11 0 0 1 14 0M8.5 16.2a6 6 0 0 1 7 0"/>
+      <line x1="12" y1="20" x2="12" y2="20"/>
+      <line x1="3" y1="3" x2="21" y2="21"/>
+    </svg>
+  </div>
+  <h1>Sin conexión</h1>
+  <p>Tus datos están a salvo. En cuanto vuelva la red seguimos donde lo dejaste.</p>
+  <button id="reintentar">Reintentar</button>
+
+<script>
+  var boton = document.getElementById('reintentar');
+
+  function reintentar() {
+    boton.disabled = true;
+    boton.textContent = 'Conectando…';
+    // La parte nativa sabe a qué dirección volver; si no estuviera, se recarga
+    // a pelo, que en el navegador es lo correcto.
+    if (window.HeraConexion && window.HeraConexion.reintentar) window.HeraConexion.reintentar();
+    else location.reload();
+    setTimeout(function () {
+      boton.disabled = false;
+      boton.textContent = 'Reintentar';
+    }, 4000);
+  }
+
+  boton.addEventListener('click', reintentar);
+
+  // El navegador avisa en cuanto hay red otra vez: no hay que esperar a que
+  // nadie pulse nada.
+  window.addEventListener('online', reintentar);
+</script>
+</body>
+</html>

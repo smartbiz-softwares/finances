@@ -7,6 +7,7 @@ import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -27,6 +28,9 @@ public class MainActivity extends BridgeActivity {
 
     /** Avisa de que el widget dejó algo dictado esperando confirmación. */
     public static final String EXTRA_DICTADO = "hera_dictado";
+
+    /** Si se está enseñando la pantalla de sin conexión. */
+    private volatile boolean sinConexion = false;
 
     /** Callback del <input type="file"> mientras el usuario elige. */
     private android.webkit.ValueCallback<android.net.Uri[]> seleccionPendiente;
@@ -63,6 +67,10 @@ public class MainActivity extends BridgeActivity {
         // Compartir imágenes: navigator.share con archivos no funciona en el
         // WebView, y sin esto el compartir acababa como una descarga fallida.
         getBridge().getWebView().addJavascriptInterface(new PuenteCompartir(this), "HeraCompartir");
+
+        // Sin red, una pantalla que explique lo que pasa en vez del error gris
+        // del sistema.
+        prepararPantallaSinConexion();
 
         // El WebView no descarga nada por su cuenta: un enlace con `download`
         // se queda en nada, sin progreso ni aviso. Se delega en el gestor de
@@ -158,6 +166,70 @@ public class MainActivity extends BridgeActivity {
         runOnUiThread(() -> getBridge().getWebView().evaluateJavascript(
                 "window.dispatchEvent(new CustomEvent('hera:dictado',{detail:" + literal + "}))",
                 null));
+    }
+
+    /**
+     * Pantalla propia cuando no hay red, en vez de la del sistema.
+     *
+     * La interfaz se carga del servidor, así que sin conexión el WebView
+     * enseñaba su página de error gris con un `net::ERR_...`, que no dice nada
+     * y parece que la app se rompió. El service worker cubre parte de los
+     * casos, pero no el primero de todos: si aún no ha tomado el control, no
+     * hay nada que servir.
+     *
+     * Se reintenta solo en cuanto vuelve la red. Nadie debería tener que pulsar
+     * un botón para eso.
+     */
+    private void prepararPantallaSinConexion() {
+        android.webkit.WebView vista = getBridge().getWebView();
+
+        vista.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public void reintentar() {
+                runOnUiThread(MainActivity.this::volverAlServidor);
+            }
+        }, "HeraConexion");
+
+        vista.setWebViewClient(new com.getcapacitor.BridgeWebViewClient(getBridge()) {
+            @Override
+            public void onReceivedError(android.webkit.WebView v,
+                                        android.webkit.WebResourceRequest peticion,
+                                        android.webkit.WebResourceError error) {
+                super.onReceivedError(v, peticion, error);
+
+                // Solo la navegación principal: que falle una imagen o una
+                // fuente no justifica tapar la app entera.
+                if (peticion == null || !peticion.isForMainFrame()) return;
+
+                sinConexion = true;
+                v.loadUrl("file:///android_asset/sin_conexion.html");
+            }
+        });
+
+        // Cuando el sistema recupera la red, se vuelve solo.
+        try {
+            android.net.ConnectivityManager redes =
+                    (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (redes == null) return;
+
+            redes.registerDefaultNetworkCallback(
+                    new android.net.ConnectivityManager.NetworkCallback() {
+                        @Override
+                        public void onAvailable(@NonNull android.net.Network red) {
+                            if (!sinConexion) return;
+                            runOnUiThread(MainActivity.this::volverAlServidor);
+                        }
+                    });
+        } catch (Exception e) {
+            // Sin aviso automático queda el botón de reintentar.
+            android.util.Log.w("HeraConexion", "No se pudo vigilar la red", e);
+        }
+    }
+
+    /** Vuelve a cargar la interfaz desde el servidor. */
+    private void volverAlServidor() {
+        sinConexion = false;
+        getBridge().getWebView().loadUrl(PuenteSesion.servidor(this));
     }
 
     private boolean tienePermiso(String permiso) {
