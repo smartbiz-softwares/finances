@@ -61,8 +61,6 @@ public class MainActivity extends BridgeActivity {
         // WebView, y sin esto el compartir acababa como una descarga fallida.
         getBridge().getWebView().addJavascriptInterface(new PuenteCompartir(this), "HeraCompartir");
 
-        pedirPermisoNotificaciones();
-
         // El WebView no descarga nada por su cuenta: un enlace con `download`
         // se queda en nada, sin progreso ni aviso. Se delega en el gestor de
         // descargas de Android, que sí muestra progreso y avisa al terminar.
@@ -136,28 +134,21 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
-    /**
-     * Desde Android 13 las notificaciones necesitan permiso explícito. Sin él,
-     * el sistema las descarta en silencio y nadie se entera de por qué no
-     * llegan.
-     */
-    private void pedirPermisoNotificaciones() {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return;
-
-        if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS")
-                != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{"android.permission.POST_NOTIFICATIONS"}, 1002);
-        }
-    }
-
     private boolean tienePermiso(String permiso) {
         return ContextCompat.checkSelfPermission(this, permiso) == PackageManager.PERMISSION_GRANTED;
     }
 
     /**
-     * Pide micrófono y cámara al arrancar. Android los concede por diálogo del
-     * sistema; el WebView solo puede repartir lo que la app ya tiene.
+     * Pide de una vez todos los permisos que la app necesita.
+     *
+     * Van juntos a propósito: dos llamadas seguidas a `requestPermissions` en el
+     * mismo arranque hacen que Android descarte la segunda sin llegar a
+     * mostrarla, y era el motivo de que el de notificaciones no apareciera
+     * nunca.
+     *
+     * Android los presenta uno detrás de otro, y negar alguno no impide usar el
+     * resto de la app: sin micrófono se sigue escribiendo, sin notificaciones se
+     * usa igual.
      */
     private void pedirPermisosDelSistema() {
         java.util.List<String> pendientes = new java.util.ArrayList<>();
@@ -167,6 +158,20 @@ public class MainActivity extends BridgeActivity {
         }
         if (!tienePermiso(Manifest.permission.CAMERA)) {
             pendientes.add(Manifest.permission.CAMERA);
+        }
+
+        // Desde Android 13 las notificaciones necesitan permiso explícito; sin
+        // él el sistema las descarta en silencio y no hay forma de saber por qué
+        // no llegan.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (!tienePermiso("android.permission.POST_NOTIFICATIONS")) {
+                pendientes.add("android.permission.POST_NOTIFICATIONS");
+            }
+            if (!tienePermiso("android.permission.READ_MEDIA_IMAGES")) {
+                pendientes.add("android.permission.READ_MEDIA_IMAGES");
+            }
+        } else if (!tienePermiso(Manifest.permission.READ_EXTERNAL_STORAGE)) {
+            pendientes.add(Manifest.permission.READ_EXTERNAL_STORAGE);
         }
 
         if (!pendientes.isEmpty()) {

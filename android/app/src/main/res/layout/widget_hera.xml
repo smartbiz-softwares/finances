@@ -77,7 +77,9 @@
         android:layout_marginTop="10dp"
         android:orientation="vertical">
 
-    <!-- Categoría 1: nombre, barra proporcional e importe -->
+    <!-- Categoría 1. La barra es un ProgressBar y no un View con peso:
+         RemoteViews no admite Views genéricas ni cambiar el peso de un layout,
+         y ese era el motivo de que el widget no se pudiera añadir. -->
     <LinearLayout
         android:id="@+id/widget_cat1"
         android:layout_width="match_parent"
@@ -89,7 +91,7 @@
 
         <TextView
             android:id="@+id/cat1_nombre"
-            android:layout_width="60dp"
+            android:layout_width="58dp"
             android:layout_height="wrap_content"
             android:textColor="#8B857E"
             android:textSize="10sp"
@@ -97,26 +99,16 @@
             android:ellipsize="end"
             android:text="" />
 
-        <LinearLayout
+        <ProgressBar
+            android:id="@+id/cat1_barra"
+            style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="7dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="7dp"
-            android:orientation="horizontal">
-
-            <View
-                android:id="@+id/cat1_relleno"
-                android:layout_width="0dp"
-                android:layout_height="7dp"
-                android:layout_weight="1"
-                android:background="@drawable/widget_barra_relleno" />
-
-            <View
-                android:id="@+id/cat1_hueco"
-                android:layout_width="0dp"
-                android:layout_height="7dp"
-                android:layout_weight="0" />
-        </LinearLayout>
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_barra_progreso" />
 
         <TextView
             android:id="@+id/cat1_importe"
@@ -128,7 +120,9 @@
             android:text="" />
     </LinearLayout>
 
-    <!-- Categoría 2: nombre, barra proporcional e importe -->
+    <!-- Categoría 2. La barra es un ProgressBar y no un View con peso:
+         RemoteViews no admite Views genéricas ni cambiar el peso de un layout,
+         y ese era el motivo de que el widget no se pudiera añadir. -->
     <LinearLayout
         android:id="@+id/widget_cat2"
         android:layout_width="match_parent"
@@ -140,7 +134,7 @@
 
         <TextView
             android:id="@+id/cat2_nombre"
-            android:layout_width="60dp"
+            android:layout_width="58dp"
             android:layout_height="wrap_content"
             android:textColor="#8B857E"
             android:textSize="10sp"
@@ -148,26 +142,16 @@
             android:ellipsize="end"
             android:text="" />
 
-        <LinearLayout
+        <ProgressBar
+            android:id="@+id/cat2_barra"
+            style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="7dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="7dp"
-            android:orientation="horizontal">
-
-            <View
-                android:id="@+id/cat2_relleno"
-                android:layout_width="0dp"
-                android:layout_height="7dp"
-                android:layout_weight="1"
-                android:background="@drawable/widget_barra_relleno" />
-
-            <View
-                android:id="@+id/cat2_hueco"
-                android:layout_width="0dp"
-                android:layout_height="7dp"
-                android:layout_weight="0" />
-        </LinearLayout>
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_barra_progreso" />
 
         <TextView
             android:id="@+id/cat2_importe"
@@ -179,7 +163,9 @@
             android:text="" />
     </LinearLayout>
 
-    <!-- Categoría 3: nombre, barra proporcional e importe -->
+    <!-- Categoría 3. La barra es un ProgressBar y no un View con peso:
+         RemoteViews no admite Views genéricas ni cambiar el peso de un layout,
+         y ese era el motivo de que el widget no se pudiera añadir. -->
     <LinearLayout
         android:id="@+id/widget_cat3"
         android:layout_width="match_parent"
@@ -191,7 +177,7 @@
 
         <TextView
             android:id="@+id/cat3_nombre"
-            android:layout_width="60dp"
+            android:layout_width="58dp"
             android:layout_height="wrap_content"
             android:textColor="#8B857E"
             android:textSize="10sp"
@@ -199,26 +185,16 @@
             android:ellipsize="end"
             android:text="" />
 
-        <LinearLayout
+        <ProgressBar
+            android:id="@+id/cat3_barra"
+            style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="7dp"
             android:layout_weight="1"
             android:layout_marginHorizontal="7dp"
-            android:orientation="horizontal">
-
-            <View
-                android:id="@+id/cat3_relleno"
-                android:layout_width="0dp"
-                android:layout_height="7dp"
-                android:layout_weight="1"
-                android:background="@drawable/widget_barra_relleno" />
-
-            <View
-                android:id="@+id/cat3_hueco"
-                android:layout_width="0dp"
-                android:layout_height="7dp"
-                android:layout_weight="0" />
-        </LinearLayout>
+            android:max="100"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_barra_progreso" />
 
         <TextView
             android:id="@+id/cat3_importe"

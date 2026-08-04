@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Barra del gráfico: canal apagado y relleno en el color de la marca. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <solid android:color="#2C2C2A" />
+            <corners android:radius="99dp" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <solid android:color="#D97757" />
+                <corners android:radius="99dp" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

@@ -114,11 +114,11 @@ public class WidgetHera extends AppWidgetProvider {
         gestor.updateAppWidget(id, vistas);
     }
 
-    /** Cada fila con sus identificadores: contenedor, nombre, barra, hueco e importe. */
+    /** Cada fila con sus identificadores: contenedor, nombre, barra e importe. */
     private static final int[][] FILAS = {
-        {R.id.widget_cat1, R.id.cat1_nombre, R.id.cat1_relleno, R.id.cat1_hueco, R.id.cat1_importe},
-        {R.id.widget_cat2, R.id.cat2_nombre, R.id.cat2_relleno, R.id.cat2_hueco, R.id.cat2_importe},
-        {R.id.widget_cat3, R.id.cat3_nombre, R.id.cat3_relleno, R.id.cat3_hueco, R.id.cat3_importe},
+        {R.id.widget_cat1, R.id.cat1_nombre, R.id.cat1_barra, R.id.cat1_importe},
+        {R.id.widget_cat2, R.id.cat2_nombre, R.id.cat2_barra, R.id.cat2_importe},
+        {R.id.widget_cat3, R.id.cat3_nombre, R.id.cat3_barra, R.id.cat3_importe},
     };
 
     /**
@@ -140,13 +140,12 @@ public class WidgetHera extends AppWidgetProvider {
 
             vistas.setViewVisibility(fila[0], android.view.View.VISIBLE);
             vistas.setTextViewText(fila[1], categoria.optString("nombre", ""));
-            vistas.setTextViewText(fila[4], categoria.optString("importe", ""));
+            vistas.setTextViewText(fila[3], categoria.optString("importe", ""));
 
             // Un mínimo del 8 % para que la categoría más pequeña siga siendo
             // visible y no parezca que no hay nada.
-            float proporcion = Math.max(8, Math.min(100, categoria.optInt("proporcion", 0)));
-            vistas.setFloat(fila[2], "setLayoutWeight", proporcion);
-            vistas.setFloat(fila[3], "setLayoutWeight", 100 - proporcion);
+            int proporcion = Math.max(8, Math.min(100, categoria.optInt("proporcion", 0)));
+            vistas.setProgressBar(fila[2], 100, proporcion, false);
         }
     }
 
