@@ -98,6 +98,8 @@ import { Racha, RachaResumen, AvisoLogro } from './Racha';
 import { AvisoActualizacion } from './Actualizacion';
 import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
 import { compartirSesionConWidget, olvidarSesionEnWidget, refrescarWidget } from './puenteNativo';
+import Presupuestos from './Presupuestos';
+import Recurrentes from './Recurrentes';
 import { CompartirScore } from './CompartirScore';
 import { compacto, dinero as dineroCompacto } from './formato';
 import {
@@ -9182,6 +9184,23 @@ export default function App() {
                       <span>Nueva Meta / Fondo</span>
                     </button>
                   </div>
+
+                  {/* Los topes van antes que las metas: cuánto puedo gastar se
+                      decide todos los días; cuánto quiero ahorrar, una vez. */}
+                  <Presupuestos
+                    simbolo={currencySymbol}
+                    categorias={Array.from(new Set(timeline.filter((t: any) => t.type === 'expense').map((t: any) => t.category))).filter(Boolean) as string[]}
+                    alCambiar={loadUserData}
+                    mostrarAviso={showToast}
+                  />
+
+                  {/* Los recurrentes van junto a los topes: son la parte del
+                      gasto que ya está decidida antes de empezar el mes. */}
+                  <Recurrentes
+                    simbolo={currencySymbol}
+                    alRegistrar={(texto) => { setChatInput(texto); setActiveTab('chat'); }}
+                    mostrarAviso={showToast}
+                  />
 
                   {financeLoading && goals.length === 0 && (
                     <SkeletonCards count={2} className="grid-cols-1 md:grid-cols-2" />

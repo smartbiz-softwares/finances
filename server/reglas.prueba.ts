@@ -9,6 +9,8 @@
 import Database from 'better-sqlite3';
 import * as N from './notificaciones.ts';
 import * as M from './mensajes.ts';
+import * as P from './presupuestos.ts';
+import * as R from './recurrentes.ts';
 import { candidatos, calcularRacha } from './reglas.ts';
 
 let fallos = 0;
@@ -27,7 +29,7 @@ function comprobar(descripcion: string, condicion: boolean, detalle?: any) {
 function baseDePrueba() {
   const db = new Database(':memory:');
   db.exec(`
-    CREATE TABLE users (id TEXT PRIMARY KEY, currency TEXT);
+    CREATE TABLE users (id TEXT PRIMARY KEY, currency TEXT, createdAt TEXT);
     CREATE TABLE transactions (
       id TEXT PRIMARY KEY, userId TEXT, accountId TEXT, type TEXT,
       amount REAL, category TEXT, description TEXT, date TEXT
@@ -42,6 +44,8 @@ function baseDePrueba() {
     );
   `);
   N.crearTablas(db);
+  P.crearTablas(db);
+  R.crearTablas(db);
   db.prepare("INSERT INTO users (id, currency) VALUES ('u1', 'EUR')").run();
   return db;
 }
@@ -205,13 +209,59 @@ console.log('\nAusencia');
 {
   const db = baseDePrueba();
   gasto(db, '2026-07-29', 15);
-  const alSeptimoDia = candidatos(db, { id: 'u1', currency: 'EUR' }, enHabana('2026-08-05T12:00:00'));
-  comprobar('a los siete días exactos se avisa una vez',
-    alSeptimoDia.some((c) => c.tipo === 'vuelve'));
+  const usuario = { id: 'u1', currency: 'EUR' };
+  const vuelve = (cuando: string) =>
+    candidatos(db, usuario, enHabana(cuando)).find((c) => c.tipo === 'vuelve');
 
-  const alOctavo = candidatos(db, { id: 'u1', currency: 'EUR' }, enHabana('2026-08-06T12:00:00'));
-  comprobar('al octavo día ya no se insiste',
-    !alOctavo.some((c) => c.tipo === 'vuelve'));
+  comprobar('a los seis días todavía no', !vuelve('2026-08-04T12:00:00'));
+  comprobar('a los siete se avisa', !!vuelve('2026-08-05T12:00:00'));
+
+  // El tramo existe porque el planificador solo pasa dentro de la franja de
+  // cada persona: exigir el día exacto perdía a quien lo tuviera apagado.
+  comprobar('dentro del tramo se sigue pudiendo avisar', !!vuelve('2026-08-07T12:00:00'));
+  comprobar('la huella es la misma en todo el tramo',
+    vuelve('2026-08-05T12:00:00')?.huella === vuelve('2026-08-07T12:00:00')?.huella,
+    [vuelve('2026-08-05T12:00:00')?.huella, vuelve('2026-08-07T12:00:00')?.huella]);
+
+  comprobar('pasado el tramo se calla', !vuelve('2026-08-12T12:00:00'));
+  comprobar('al segundo intento vuelve', !!vuelve('2026-08-19T12:00:00'));
+  comprobar('y el tercero es a los 45', !!vuelve('2026-09-12T12:00:00'));
+  comprobar('después ya no se insiste más', !vuelve('2026-10-20T12:00:00'));
+}
+
+{
+  // Quien se dio de alta y nunca registró nada es a quien más fácil se
+  // recupera, y antes se quedaba fuera por no tener ninguna transacción.
+  const db = baseDePrueba();
+  db.prepare("UPDATE users SET createdAt = '2026-07-29T10:00:00.000Z' WHERE id = 'u1'").run();
+
+  const sinNada = candidatos(db,
+    { id: 'u1', currency: 'EUR', createdAt: '2026-07-29T10:00:00.000Z' },
+    enHabana('2026-08-05T12:00:00'));
+  comprobar('a quien nunca registró nada también se le escribe',
+    sinNada.some((c) => c.tipo === 'vuelve'));
+}
+
+// --- Presupuestos ----------------------------------------------------------
+console.log('\nPresupuesto al 80 %');
+{
+  const db = baseDePrueba();
+  db.prepare(`INSERT INTO budgets (id, userId, category, amount, creadoEn)
+              VALUES ('b1', 'u1', 'Restaurantes', 100, '2026-08-01')`).run();
+
+  const sinGasto = candidatos(db, { id: 'u1', currency: 'EUR' }, enHabana('2026-08-05T12:00:00'));
+  comprobar('sin gasto no avisa', !sinGasto.some((c) => c.tipo === 'presupuesto'));
+
+  gasto(db, '2026-08-03', 50, 'Restaurantes');
+  const aMitad = candidatos(db, { id: 'u1', currency: 'EUR' }, enHabana('2026-08-05T12:00:00'));
+  comprobar('a mitad de tope tampoco', !aMitad.some((c) => c.tipo === 'presupuesto'));
+
+  gasto(db, '2026-08-04', 35, 'Restaurantes');
+  const al85 = candidatos(db, { id: 'u1', currency: 'EUR' }, enHabana('2026-08-05T12:00:00'))
+    .find((c) => c.tipo === 'presupuesto');
+  comprobar('pasado el 80 % sí avisa', !!al85);
+  comprobar('el aviso dice cuánto queda', !!al85 && /15/.test(al85.cuerpo), al85?.cuerpo);
+  comprobar('y cuántos días de mes faltan', !!al85 && /26 días/.test(al85.cuerpo), al85?.cuerpo);
 }
 
 console.log(`\n${pruebas - fallos}/${pruebas} pruebas correctas`);

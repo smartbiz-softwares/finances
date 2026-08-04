@@ -302,9 +302,11 @@ export function inactivo(userId: string, fecha: string, dias: number, pendiente:
   gastosUltimos?: number;
   metaCerca?: string;
   simbolo?: string;
+  /** Intento al que corresponde el aviso: 7, 21 o 45 días. */
+  hito?: number;
 }) {
   const r = aleatorio(`${userId}|${fecha}|inactivo`);
-  const { metaCerca, simbolo = '€', gastosUltimos } = pendiente;
+  const { metaCerca, simbolo = '€', gastosUltimos, hito } = pendiente;
 
   const titulos = [
     `${dias} días sin pasarte por aquí`,
@@ -316,5 +318,96 @@ export function inactivo(userId: string, fecha: string, dias: number, pendiente:
   if (metaCerca) cuerpo = `Tu meta "${metaCerca}" sigue avanzando. Un repaso rápido y la ves clara.`;
   else if (gastosUltimos) cuerpo = `Se te han quedado ${dinero(gastosUltimos, simbolo)} sin clasificar. Un minuto y queda ordenado.`;
 
-  return { titulo: elegir(titulos, r), cuerpo, huella: `inactivo:${dias}` };
+  // La huella va por hito y no por días: el aviso se busca dentro de un tramo
+  // de varios días, y con los días dentro se mandaría uno cada jornada.
+  return { titulo: elegir(titulos, r), cuerpo, huella: `inactivo:${hito ?? dias}` };
+}
+
+// --- Presupuestos ----------------------------------------------------------
+
+/**
+ * Aviso de que una categoría se acerca a su tope o ya se pasó.
+ *
+ * Se dicen las dos cifras y los días que quedan de mes: sin eso el aviso es un
+ * regaño, y con eso es una decisión que se puede tomar ("me quedan 12 € para
+ * nueve días").
+ */
+export function presupuestoCerca(opciones: {
+  userId: string;
+  fecha: string;
+  categoria: string;
+  gastado: number;
+  tope: number;
+  proporcion: number;
+  diasRestantes: number;
+  simbolo?: string;
+}) {
+  const { userId, fecha, categoria, gastado, tope, proporcion, diasRestantes, simbolo = '€' } = opciones;
+  const r = aleatorio(`${userId}|${fecha}|presupuesto|${categoria}`);
+  const porcentaje = Math.round(proporcion * 100);
+  const restante = tope - gastado;
+
+  if (proporcion > 1) {
+    const titulos = [
+      `Te pasaste en ${categoria}`,
+      `${categoria} por encima del tope`,
+      `${categoria}: presupuesto agotado`,
+    ];
+    return {
+      titulo: elegir(titulos, r),
+      cuerpo: `Llevas ${dinero(gastado, simbolo)} de los ${dinero(tope, simbolo)} que te pusiste. `
+        + (diasRestantes > 0
+          ? `Quedan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'} de mes.`
+          : 'El mes se acaba hoy.'),
+      huella: `presupuesto:${categoria}:${fecha.slice(0, 7)}:pasado`,
+    };
+  }
+
+  const titulos = [
+    `${porcentaje} % de tu tope en ${categoria}`,
+    `${categoria} se acerca al límite`,
+    `Ojo con ${categoria}`,
+  ];
+
+  return {
+    titulo: elegir(titulos, r),
+    cuerpo: `Te quedan ${dinero(restante, simbolo)} para `
+      + (diasRestantes > 0
+        ? `${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'} de mes.`
+        : 'lo que queda de mes.'),
+    huella: `presupuesto:${categoria}:${fecha.slice(0, 7)}:80`,
+  };
+}
+
+// --- Gastos recurrentes ----------------------------------------------------
+
+/**
+ * Un recibo que se esperaba y no ha aparecido.
+ *
+ * No se afirma que falte: puede haberse pagado y no estar anotado, o haberse
+ * cancelado. Se pregunta, que es lo único honesto cuando el dato no lo tenemos.
+ */
+export function recurrentePendiente(opciones: {
+  userId: string;
+  fecha: string;
+  descripcion: string;
+  importe: number;
+  diasTarde: number;
+  simbolo?: string;
+}) {
+  const { userId, fecha, descripcion, importe, diasTarde, simbolo = '€' } = opciones;
+  const r = aleatorio(`${userId}|${fecha}|recurrente|${descripcion}`);
+
+  const titulos = [
+    `¿Pagaste ${descripcion}?`,
+    `${descripcion} no aparece este mes`,
+    `Falta el registro de ${descripcion}`,
+  ];
+
+  return {
+    titulo: elegir(titulos, r),
+    cuerpo: `Suele ser ${dinero(importe, simbolo)} y lleva ${diasTarde} ${diasTarde === 1 ? 'día' : 'días'} de retraso. `
+      + 'Si ya lo pagaste, anótalo; si lo cancelaste, dínoslo y dejamos de preguntar.',
+    huella: `recurrente:${descripcion}:${fecha.slice(0, 7)}`,
+  };
 }

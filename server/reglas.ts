@@ -11,6 +11,8 @@
  */
 import * as N from './notificaciones.ts';
 import * as M from './mensajes.ts';
+import * as P from './presupuestos.ts';
+import * as R from './recurrentes.ts';
 
 const SIMBOLOS: Record<string, string> = {
   EUR: '€', USD: '$', CUP: 'CUP', MXN: '$', COP: '$', ARS: '$', CLP: '$', PEN: 'S/', DOP: 'RD$',
@@ -232,19 +234,96 @@ export function candidatos(db: any, usuario: any, ahora = new Date()): Candidato
     }
   }
 
-  // 6. Vuelta tras una ausencia larga. Una sola vez, y solo a los 7 días justos:
-  //    insistir cada día a quien ya se fue es la mejor forma de perderlo del todo.
+  // 5 bis. Presupuesto que se acerca a su tope.
+  //
+  //   Va por delante de los resúmenes del día porque es lo único de la lista
+  //   sobre lo que todavía se puede actuar: al 80 % quedan días de mes y margen
+  //   para cambiar algo. Un resumen se puede leer mañana; esto no.
+  if (prefs.avisos && hora >= 10) {
+    // Días que quedan de mes: sin ese dato el aviso es un regaño, y con él es
+    // una decisión ("me quedan 12 € para nueve días").
+    const ultimoDia = new Date(Date.UTC(fechaHoy.getUTCFullYear(), mes, 0)).getUTCDate();
+    const diasRestantes = ultimoDia - diaMes;
+
+    for (const p of P.paraAvisar(db, usuario.id, hoy)) {
+      lista.push({
+        prioridad: 4,
+        tipo: 'presupuesto',
+        url: '/?tab=goals',
+        ...M.presupuestoCerca({
+          userId: usuario.id,
+          fecha: hoy,
+          categoria: p.category,
+          gastado: p.gastado,
+          tope: p.amount,
+          proporcion: p.proporcion,
+          diasRestantes,
+          simbolo,
+        }),
+      });
+    }
+  }
+
+  // 5 ter. Un recibo habitual que no ha aparecido.
+  //
+  //   Solo el más atrasado: soltar cinco preguntas de golpe es la manera de que
+  //   no se conteste ninguna. La huella lleva el mes, así que cada recibo se
+  //   pregunta una vez por ciclo.
+  if (prefs.avisos && hora >= 12) {
+    const atrasado = R.pendientes(db, usuario.id, hoy)
+      .sort((a, b) => b.retraso - a.retraso)[0];
+
+    if (atrasado) {
+      lista.push({
+        prioridad: 5,
+        tipo: 'recurrente',
+        url: '/?tab=timeline',
+        ...M.recurrentePendiente({
+          userId: usuario.id,
+          fecha: hoy,
+          descripcion: atrasado.descripcion,
+          importe: atrasado.importe,
+          diasTarde: atrasado.retraso,
+          simbolo,
+        }),
+      });
+    }
+  }
+
+  // 6. Vuelta tras una ausencia larga.
+  //
+  //    Tres intentos y se para: insistir cada día a quien ya se fue es la mejor
+  //    forma de perderlo del todo. El tercero es el último; si a los mes y
+  //    medio no ha vuelto, seguir escribiendo solo molesta.
+  //
+  //    Se mira por tramos y no por el día exacto: el planificador solo pasa
+  //    dentro de la franja horaria de cada persona, así que exigir "el día 7
+  //    justo" perdía a cualquiera que ese día tuviera el móvil apagado. La
+  //    huella lleva el hito, no los días, para que el tramo no repita el aviso.
   if (prefs.avisos && hora >= 11) {
     const ultima = db.prepare(
       'SELECT MAX(date) AS d FROM transactions WHERE userId = ?'
     ).get(usuario.id) as any;
 
-    if (ultima?.d) {
+    // Quien nunca registró nada también se pierde, y es a quien más fácil se
+    // recupera: cuenta desde que se dio de alta.
+    const referencia = ultima?.d
+      || String(usuario.createdAt || '').slice(0, 10)
+      || null;
+
+    if (referencia) {
       const diasFuera = Math.round(
-        (Date.parse(`${hoy}T12:00:00Z`) - Date.parse(`${ultima.d}T12:00:00Z`)) / 86400000
+        (Date.parse(`${hoy}T12:00:00Z`) - Date.parse(`${referencia}T12:00:00Z`)) / 86400000
       );
 
-      if (diasFuera === 7 || diasFuera === 21) {
+      const HITOS = [
+        { hito: 7, desde: 7, hasta: 10 },
+        { hito: 21, desde: 21, hasta: 25 },
+        { hito: 45, desde: 45, hasta: 50 },
+      ];
+      const tramo = HITOS.find((h) => diasFuera >= h.desde && diasFuera <= h.hasta);
+
+      if (tramo) {
         const meta = db.prepare(`
           SELECT name FROM goals WHERE userId = ?
           ORDER BY (currentAmount * 1.0 / NULLIF(targetAmount, 0)) DESC LIMIT 1
@@ -254,7 +333,9 @@ export function candidatos(db: any, usuario: any, ahora = new Date()): Candidato
           prioridad: 7,
           tipo: 'vuelve',
           url: '/?tab=timeline',
-          ...M.inactivo(usuario.id, hoy, diasFuera, { metaCerca: meta?.name, simbolo }),
+          ...M.inactivo(usuario.id, hoy, diasFuera, {
+            metaCerca: meta?.name, simbolo, hito: tramo.hito,
+          }),
         });
       }
     }
@@ -277,7 +358,7 @@ export async function pasada(db: any, ahora = new Date()): Promise<number> {
   // Solo quien tenga al menos un dispositivo suscrito: sin push, el mensaje
   // quedaría solo en la campana y no traería a nadie de vuelta.
   const usuarios = db.prepare(`
-    SELECT u.id, u.currency FROM users u
+    SELECT u.id, u.currency, u.createdAt FROM users u
     WHERE EXISTS (SELECT 1 FROM push_subscriptions p WHERE p.userId = u.id)
   `).all() as any[];
 

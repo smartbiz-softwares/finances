@@ -20,6 +20,8 @@ import * as referidos from './server/referidos.ts';
 import * as logros from './server/logros.ts';
 import * as apertura from './server/apertura.ts';
 import { extraerMovimiento } from './server/extraer.ts';
+import * as presupuestos from './server/presupuestos.ts';
+import * as recurrentes from './server/recurrentes.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -4601,6 +4603,81 @@ notificaciones.montarEndpoints(app, db, authMiddleware);
 // --- Referidos ------------------------------------------------------------
 referidos.crearTablas(db);
 referidos.montarEndpoints(app, db, authMiddleware, adminAuthMiddleware);
+
+// --- Presupuestos ---------------------------------------------------------
+presupuestos.crearTablas(db);
+
+/** Presupuestos con lo que se lleva gastado este mes. */
+app.get('/api/finance/budgets', authMiddleware, (req: any, res) => {
+  res.json(presupuestos.estado(db, req.userId, hoyDe(req.userId)));
+});
+
+/**
+ * Crea o cambia el tope de una categoría.
+ *
+ * Una categoría solo puede tener un presupuesto, así que se sobrescribe en vez
+ * de acumular: quien vuelve a mandar "Comida" está corrigiendo el tope, no
+ * pidiendo un segundo.
+ */
+app.post('/api/finance/budgets', authMiddleware, (req: any, res) => {
+  const category = String(req.body?.category || '').trim();
+  const amount = Number(req.body?.amount);
+
+  if (!category) return res.status(400).json({ error: 'Falta la categoría' });
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'El tope tiene que ser mayor que cero' });
+  }
+
+  const ahora = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO budgets (id, userId, category, amount, creadoEn, actualizadoEn)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT (userId, category)
+    DO UPDATE SET amount = excluded.amount, actualizadoEn = excluded.actualizadoEn
+  `).run(randomUUID(), req.userId, category, amount, ahora, ahora);
+
+  logAudit(req.userId, 'set_budget', `Presupuesto de ${category}: ${amount}`);
+  res.json({ success: true, presupuestos: presupuestos.estado(db, req.userId, hoyDe(req.userId)) });
+});
+
+// --- Gastos recurrentes ---------------------------------------------------
+recurrentes.crearTablas(db);
+
+/** Lo que se repite en el histórico, con lo que ya está pendiente aparte. */
+app.get('/api/finance/recurring', authMiddleware, (req: any, res) => {
+  const hoy = hoyDe(req.userId);
+  res.json({
+    detectados: recurrentes.detectar(db, req.userId, hoy),
+    pendientes: recurrentes.pendientes(db, req.userId, hoy),
+  });
+});
+
+/**
+ * Confirma o descarta un patrón detectado.
+ *
+ * Descartar importa tanto como confirmar: sin memoria de lo rechazado, la misma
+ * sugerencia volvería cada vez y la lista dejaría de mirarse.
+ */
+app.post('/api/finance/recurring/decidir', authMiddleware, (req: any, res) => {
+  const clave = String(req.body?.clave || '').trim();
+  const decision = req.body?.decision;
+
+  if (!clave) return res.status(400).json({ error: 'Falta el identificador' });
+  if (decision !== 'confirmado' && decision !== 'descartado') {
+    return res.status(400).json({ error: 'Decisión no válida' });
+  }
+
+  recurrentes.decidir(db, req.userId, clave, decision);
+  res.json({ success: true, detectados: recurrentes.detectar(db, req.userId, hoyDe(req.userId)) });
+});
+
+app.delete('/api/finance/budgets/:id', authMiddleware, (req: any, res) => {
+  const r = db.prepare('DELETE FROM budgets WHERE id = ? AND userId = ?')
+    .run(req.params.id, req.userId);
+
+  if (r.changes === 0) return res.status(404).json({ error: 'No existe ese presupuesto' });
+  res.json({ success: true });
+});
 
 // --- Apertura de la conversación ------------------------------------------
 //
