@@ -132,8 +132,18 @@ export function revisar(db: any, userId: string, hoy: string): Logro[] {
   return nuevos;
 }
 
-/** Estado completo para pintar la pantalla de logros. */
+/**
+ * Estado completo para pintar la pantalla de logros.
+ *
+ * Revisa antes de leer, y esto no es un detalle: si solo se concedieran al
+ * registrar un movimiento, quien ya tenía cincuenta de antes vería cero, y los
+ * logros de metas o cuentas no se darían nunca, porque crear una meta no pasa
+ * por ahí. Revisando aquí, abrir la pantalla pone al día lo que corresponda sea
+ * cual sea el motivo.
+ */
 export function estado(db: any, userId: string, hoy: string) {
+  revisar(db, userId, hoy);
+
   const avance = progreso(db, userId, hoy);
   const conseguidos = new Map(
     (db.prepare('SELECT logroId, conseguidoEn FROM user_achievements WHERE userId = ?')

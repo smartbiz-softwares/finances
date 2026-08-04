@@ -1373,7 +1373,10 @@ export default function App() {
   const [otpError, setOtpError] = useState('');
   const [otpTimer, setOtpTimer] = useState(0);
   const [otpStatus, setOtpStatus] = useState<'typing' | 'error' | 'success'>('typing');
-  const [phonePrefix, setPhonePrefix] = useState('+53');
+  // Estados Unidos como punto de partida: es donde está el foco, y se ve
+  // mientras la detección por IP responde o si no llega a responder. En cuanto
+  // se sabe el país de verdad, se cambia.
+  const [phonePrefix, setPhonePrefix] = useState('+1');
   const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);

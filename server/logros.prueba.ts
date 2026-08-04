@@ -153,5 +153,34 @@ console.log('\nEstado');
   comprobar('sabe que hoy ya registró', est.registroHoy === true);
 }
 
+// --- Datos anteriores al sistema de logros --------------------------------
+console.log('\nPuesta al día');
+{
+  const db = baseDePrueba();
+  // Alguien que ya llevaba tiempo usando la app antes de que existieran los
+  // logros: nunca pasó por una revisión, y aun así debe verlos.
+  diasSeguidos(db, '2026-08-10', 12);
+  const sinRevisarNunca = db.prepare('SELECT COUNT(*) n FROM user_achievements').get() as any;
+  comprobar('parte sin ningún logro concedido', sinRevisarNunca.n === 0, sinRevisarNunca);
+
+  const est = L.estado(db, 'u1', '2026-08-10');
+  comprobar('abrir la pantalla se los concede', est.conseguidos >= 3, est.conseguidos);
+  comprobar('incluye los de racha ya superados',
+    est.logros.find((l) => l.id === 'racha-7')?.conseguido === true);
+}
+{
+  const db = baseDePrueba();
+  // Los logros de metas y cuentas no pasan por el alta de una transacción.
+  db.prepare("INSERT INTO goals (id,userId,name,targetAmount,currentAmount) VALUES ('g1','u1','Casa',100,100)").run();
+  db.prepare("INSERT INTO accounts (id,userId,name,balance) VALUES ('a1','u1','Efectivo',0)").run();
+
+  const est = L.estado(db, 'u1', '2026-08-10');
+  comprobar('una meta creada sin registrar nada cuenta',
+    est.logros.find((l) => l.id === 'primera-meta')?.conseguido === true);
+  comprobar('una cuenta creada sin registrar nada cuenta',
+    est.logros.find((l) => l.id === 'primera-cuenta')?.conseguido === true);
+  comprobar('el total de conseguidos los incluye', est.conseguidos >= 3, est.conseguidos);
+}
+
 console.log(`\n${pruebas - fallos}/${pruebas} pruebas correctas`);
 process.exit(fallos > 0 ? 1 : 0);
