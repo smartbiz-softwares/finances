@@ -1,59 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Tarjeta de dictado: aparece sobre la pantalla de inicio, sin abrir la app.
-  Se mantiene pulsado el botón para hablar, como un walkie.
+  Tarjeta de dictado sobre la pantalla de inicio.
+  El aro tras el botón late mientras se graba: sin esa señal no hay forma de
+  saber si el micrófono está abierto y la gente suelta antes de tiempo.
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/dictado_fondo"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
+    android:layout_height="match_parent">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
         android:orientation="vertical"
-        android:gravity="center"
-        android:background="@drawable/widget_fondo"
-        android:padding="24dp">
+        android:gravity="center_horizontal"
+        android:background="@drawable/dictado_hoja"
+        android:paddingTop="14dp"
+        android:paddingBottom="34dp"
+        android:paddingHorizontal="28dp"
+        android:clickable="true"
+        android:focusable="true">
+
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:background="@drawable/dictado_asa" />
 
         <TextView
             android:id="@+id/dictado_estado"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
             android:textColor="#ECE7E1"
-            android:textSize="15sp"
+            android:textSize="17sp"
+            android:textStyle="bold"
             android:text="Mantén pulsado y habla" />
 
         <TextView
+            android:id="@+id/dictado_ayuda"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="5dp"
             android:textColor="#B4AEA8"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:text="Di el gasto y Hera lo anota" />
 
-        <TextView
-            android:id="@+id/dictado_boton"
-            android:layout_width="96dp"
-            android:layout_height="96dp"
-            android:layout_marginTop="24dp"
-            android:background="@drawable/dictado_circulo"
-            android:gravity="center"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:text="Hablar" />
+        <FrameLayout
+            android:layout_width="150dp"
+            android:layout_height="150dp"
+            android:layout_marginTop="26dp">
+
+            <!-- Late hacia fuera mientras graba -->
+            <View
+                android:id="@+id/dictado_aro"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:layout_gravity="center"
+                android:alpha="0"
+                android:background="@drawable/dictado_aro" />
+
+            <TextView
+                android:id="@+id/dictado_boton"
+                android:layout_width="112dp"
+                android:layout_height="112dp"
+                android:layout_gravity="center"
+                android:background="@drawable/dictado_circulo"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:text="Hablar" />
+        </FrameLayout>
 
         <TextView
             android:id="@+id/dictado_cerrar"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginTop="20dp"
-            android:paddingHorizontal="24dp"
+            android:layout_marginTop="18dp"
+            android:paddingHorizontal="28dp"
             android:gravity="center"
-            android:textColor="#B4AEA8"
+            android:textColor="#8B857E"
             android:textSize="13sp"
             android:text="Cancelar" />
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

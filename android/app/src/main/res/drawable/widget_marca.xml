@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La H de HeraWallet, en pequeño para la cabecera del widget. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="15dp"
+    android:height="18dp"
+    android:viewportWidth="44"
+    android:viewportHeight="54">
+    <path
+        android:fillColor="#D97757"
+        android:pathData="M0,11a11,11 0 0 1 11,-11a11,11 0 0 1 11,11v32a11,11 0 0 0 11,11a11,11 0 0 0 11,-11v-32a11,11 0 0 0 -11,-11a11,11 0 0 0 -11,11v32a11,11 0 0 1 -11,11a11,11 0 0 1 -11,-11z" />
+</vector>

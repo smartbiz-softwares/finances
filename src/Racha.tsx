@@ -5,6 +5,7 @@ import {
   IconoAnimado, IconoCelebracion, IconoTrofeo, IconoLlama, IconoDobleCheck,
 } from './iconos';
 import { apiUrl, getToken } from './api';
+import { exito } from './haptica';
 
 /**
  * Racha y logros.
@@ -270,7 +271,12 @@ export const AvisoLogro: React.FC = () => {
   useEffect(() => {
     fetch(apiUrl('/api/logros/nuevos'), { headers: cabeceras() })
       .then((r) => r.json())
-      .then((d) => setCola(d.logros || []))
+      .then((d) => {
+        const logros = d.logros || [];
+        setCola(logros);
+        // Un logro se celebra también en la mano.
+        if (logros.length > 0) exito();
+      })
       .catch(() => { /* Sin celebración si falla. */ });
   }, []);
 

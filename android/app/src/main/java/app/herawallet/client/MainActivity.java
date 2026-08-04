@@ -35,6 +35,10 @@ public class MainActivity extends BridgeActivity {
         // en el localStorage del WebView y desde Java no se puede leer.
         getBridge().getWebView().addJavascriptInterface(new PuenteSesion(this), "HeraNativo");
 
+        // Vibración de respuesta al tacto. El navigator.vibrate del WebView no
+        // es fiable y no distingue intensidades.
+        getBridge().getWebView().addJavascriptInterface(new Haptica(this), "HeraVibrar");
+
         // El WebView no descarga nada por su cuenta: un enlace con `download`
         // se queda en nada, sin progreso ni aviso. Se delega en el gestor de
         // descargas de Android, que sí muestra progreso y avisa al terminar.

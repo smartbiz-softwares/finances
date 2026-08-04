@@ -1,6 +1,8 @@
 package app.herawallet.client;
 
 import android.Manifest;
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.MediaRecorder;
@@ -9,11 +11,14 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.ComponentActivity;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -33,15 +38,15 @@ import java.util.concurrent.Executors;
 /**
  * Dictado desde el widget, sin abrir la app.
  *
- * Un widget no puede grabar audio: necesita una actividad. Esta se muestra como
- * una tarjeta pequeña sobre la pantalla de inicio, graba mientras se mantiene
- * pulsado, envía y se cierra sola. La sensación buscada es la de un walkie:
- * pulsar, hablar, soltar.
+ * Extiende AppCompatActivity y no ComponentActivity: el tema es un
+ * `Theme.AppCompat`, y con una actividad que no lo sea la pantalla ni siquiera
+ * llega a montarse. Ese era el motivo de que el botón no grabara nada.
  *
- * El Modo Live sí abre la app: es una conversación, no un apunte suelto, y no
- * tiene sentido sostenerla desde una ventana flotante.
+ * Se mantiene pulsado para hablar, como un walkie. El aro que rodea el botón
+ * late mientras graba: sin esa señal no hay forma de saber si el micrófono está
+ * abierto, y la gente suelta antes de tiempo.
  */
-public class DictadoActivity extends ComponentActivity {
+public class DictadoActivity extends AppCompatActivity {
 
     private static final int PERMISO_MICROFONO = 2001;
     private static final ExecutorService hilos = Executors.newSingleThreadExecutor();
@@ -49,16 +54,23 @@ public class DictadoActivity extends ComponentActivity {
     private MediaRecorder grabadora;
     private File archivo;
     private boolean grabando = false;
+    private boolean enviando = false;
+
     private TextView estado;
+    private TextView ayuda;
+    private View boton;
+    private View aro;
+    private ObjectAnimator latido;
+    private long inicioGrabacion;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // El Modo Live no se resuelve aquí: se delega en la app.
+        // El Modo Live es una conversación: se delega en la app.
         if (WidgetHera.ACCION_LIVE.equals(getIntent().getAction())) {
             Intent app = new Intent(this, MainActivity.class);
-            app.setData(Uri.parse("https://herawallet.app/?modo=live"));
+            app.setData(Uri.parse(PuenteSesion.servidor(this) + "/?modo=live"));
             app.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             startActivity(app);
             finish();
@@ -72,16 +84,20 @@ public class DictadoActivity extends ComponentActivity {
         }
 
         setContentView(R.layout.actividad_dictado);
-        estado = findViewById(R.id.dictado_estado);
 
-        View boton = findViewById(R.id.dictado_boton);
+        estado = findViewById(R.id.dictado_estado);
+        ayuda = findViewById(R.id.dictado_ayuda);
+        boton = findViewById(R.id.dictado_boton);
+        aro = findViewById(R.id.dictado_aro);
+
         boton.setOnTouchListener((v, evento) -> {
             switch (evento.getActionMasked()) {
-                case android.view.MotionEvent.ACTION_DOWN:
+                case MotionEvent.ACTION_DOWN:
                     empezar();
                     return true;
-                case android.view.MotionEvent.ACTION_UP:
-                case android.view.MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.performClick();
                     parar();
                     return true;
                 default:
@@ -91,24 +107,49 @@ public class DictadoActivity extends ComponentActivity {
 
         findViewById(R.id.dictado_cerrar).setOnClickListener(v -> finish());
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
+        // Tocar fuera de la tarjeta cierra, como cualquier hoja del sistema.
+        findViewById(R.id.dictado_fondo).setOnClickListener(v -> finish());
+
+        if (!tienePermiso()) {
+            estado.setText("Necesito el micrófono");
+            ayuda.setText("Concede el permiso para poder dictar");
             ActivityCompat.requestPermissions(this,
                     new String[]{Manifest.permission.RECORD_AUDIO}, PERMISO_MICROFONO);
         }
     }
 
-    private void empezar() {
-        if (grabando) return;
+    private boolean tienePermiso() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+    }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                != PackageManager.PERMISSION_GRANTED) {
-            estado.setText("Falta el permiso de micrófono");
+    @Override
+    public void onRequestPermissionsResult(int codigo, @NonNull String[] permisos,
+                                           @NonNull int[] resultados) {
+        super.onRequestPermissionsResult(codigo, permisos, resultados);
+        if (codigo != PERMISO_MICROFONO) return;
+
+        if (resultados.length > 0 && resultados[0] == PackageManager.PERMISSION_GRANTED) {
+            estado.setText("Mantén pulsado y habla");
+            ayuda.setText("Di el gasto y Hera lo anota");
+        } else {
+            estado.setText("Sin micrófono no puedo escucharte");
+            ayuda.setText("Puedes concederlo en los ajustes del teléfono");
+        }
+    }
+
+    private void empezar() {
+        if (grabando || enviando) return;
+
+        if (!tienePermiso()) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.RECORD_AUDIO}, PERMISO_MICROFONO);
             return;
         }
 
         try {
             archivo = new File(getCacheDir(), "dictado.m4a");
+            if (archivo.exists()) archivo.delete();
 
             grabadora = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     ? new MediaRecorder(this)
@@ -120,40 +161,90 @@ public class DictadoActivity extends ComponentActivity {
             // 16 kHz mono es lo que espera la transcripción; más resolución solo
             // engorda el envío por una red que puede ser lenta.
             grabadora.setAudioSamplingRate(16000);
+            grabadora.setAudioEncodingBitRate(64000);
             grabadora.setAudioChannels(1);
             grabadora.setOutputFile(archivo.getAbsolutePath());
             grabadora.prepare();
             grabadora.start();
 
             grabando = true;
+            inicioGrabacion = System.currentTimeMillis();
+
+            Haptica.pulsar(this);
             estado.setText("Escuchando…");
+            ayuda.setText("Suelta cuando termines");
+            animarAro(true);
         } catch (Exception e) {
-            estado.setText("No se pudo grabar");
             grabando = false;
+            estado.setText("No se pudo abrir el micrófono");
+            ayuda.setText("Puede estar en uso por otra app");
+            liberar();
         }
     }
 
     private void parar() {
         if (!grabando) return;
         grabando = false;
+        animarAro(false);
+
+        // Menos de medio segundo no es una frase, es un toque sin querer.
+        boolean muyCorto = System.currentTimeMillis() - inicioGrabacion < 500;
 
         try {
             grabadora.stop();
-            grabadora.release();
-            grabadora = null;
         } catch (Exception e) {
-            estado.setText("No se pudo grabar");
+            // Parar antes de que llegue a grabar nada lanza excepción; el
+            // archivo queda inservible y se descarta.
+            muyCorto = true;
+        } finally {
+            liberar();
+        }
+
+        if (muyCorto || archivo == null || archivo.length() < 1500) {
+            estado.setText("Mantén pulsado mientras hablas");
+            ayuda.setText("Suéltalo solo al terminar la frase");
             return;
         }
 
-        if (archivo == null || archivo.length() < 2000) {
-            // Menos de eso es un toque accidental, no una frase.
-            estado.setText("Mantén pulsado y habla");
-            return;
-        }
-
+        Haptica.pulsar(this);
+        enviando = true;
         estado.setText("Enviando…");
+        ayuda.setText("Un momento");
         enviar();
+    }
+
+    private void liberar() {
+        if (grabadora == null) return;
+        try {
+            grabadora.release();
+        } catch (Exception ignorado) {
+        }
+        grabadora = null;
+    }
+
+    /** El aro late mientras se graba, para que se vea que está escuchando. */
+    private void animarAro(boolean encender) {
+        if (latido != null) {
+            latido.cancel();
+            latido = null;
+        }
+
+        if (!encender) {
+            aro.setAlpha(0f);
+            aro.setScaleX(1f);
+            aro.setScaleY(1f);
+            return;
+        }
+
+        aro.setAlpha(1f);
+        latido = ObjectAnimator.ofPropertyValuesHolder(aro,
+                android.animation.PropertyValuesHolder.ofFloat("scaleX", 1f, 1.35f),
+                android.animation.PropertyValuesHolder.ofFloat("scaleY", 1f, 1.35f),
+                android.animation.PropertyValuesHolder.ofFloat("alpha", 0.85f, 0f));
+        latido.setDuration(1100);
+        latido.setRepeatCount(ValueAnimator.INFINITE);
+        latido.setInterpolator(new LinearInterpolator());
+        latido.start();
     }
 
     private void enviar() {
@@ -161,11 +252,12 @@ public class DictadoActivity extends ComponentActivity {
 
         hilos.execute(() -> {
             String mensaje;
+            boolean correcto = false;
+
             try {
                 byte[] audio = new byte[(int) aEnviar.length()];
                 try (FileInputStream entrada = new FileInputStream(aEnviar)) {
-                    int leidos = entrada.read(audio);
-                    if (leidos <= 0) throw new Exception("audio vacío");
+                    if (entrada.read(audio) <= 0) throw new Exception("audio vacío");
                 }
 
                 JSONObject cuerpo = new JSONObject();
@@ -180,14 +272,14 @@ public class DictadoActivity extends ComponentActivity {
                 conexion.setRequestProperty("Authorization", "Bearer " + PuenteSesion.token(this));
                 conexion.setDoOutput(true);
                 conexion.setConnectTimeout(10000);
-                conexion.setReadTimeout(30000);
+                conexion.setReadTimeout(45000);
 
                 try (DataOutputStream salida = new DataOutputStream(conexion.getOutputStream())) {
                     salida.write(cuerpo.toString().getBytes("UTF-8"));
                 }
 
-                StringBuilder respuesta = new StringBuilder();
                 boolean ok = conexion.getResponseCode() == 200;
+                StringBuilder respuesta = new StringBuilder();
                 try (BufferedReader lector = new BufferedReader(new InputStreamReader(
                         ok ? conexion.getInputStream() : conexion.getErrorStream()))) {
                     String linea;
@@ -195,17 +287,20 @@ public class DictadoActivity extends ComponentActivity {
                 }
 
                 JSONObject datos = new JSONObject(respuesta.toString());
-                mensaje = ok
-                        ? datos.optString("mensaje", "Registrado")
-                        : datos.optString("error", "No se pudo registrar");
+                mensaje = ok ? datos.optString("mensaje", "Registrado")
+                             : datos.optString("error", "No se pudo registrar");
+                correcto = ok;
 
                 if (ok) WidgetHera.actualizarTodos(this);
             } catch (Exception e) {
-                mensaje = "Sin conexión. Inténtalo luego.";
+                mensaje = "Sin conexión. Inténtalo desde la app.";
             }
 
             final String aMostrar = mensaje;
+            final boolean fueBien = correcto;
+
             new Handler(Looper.getMainLooper()).post(() -> {
+                if (fueBien) Haptica.exito(this);
                 Toast.makeText(this, aMostrar, Toast.LENGTH_LONG).show();
                 finish();
             });
@@ -215,16 +310,16 @@ public class DictadoActivity extends ComponentActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Si la ventana pierde el foco a media grabación, se descarta: dejarla
-        // viva en segundo plano grabaría sin que nadie lo sepa.
+        // Si la ventana pierde el foco a media grabación se descarta: dejar el
+        // micrófono abierto en segundo plano sin que nadie lo sepa no vale.
         if (grabando) {
             grabando = false;
+            animarAro(false);
             try {
                 grabadora.stop();
-                grabadora.release();
             } catch (Exception ignorado) {
             }
-            grabadora = null;
+            liberar();
         }
     }
 }

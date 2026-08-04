@@ -3,6 +3,11 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import {IS_NATIVE_APP} from './api';
+import {activarHapticaGlobal} from './haptica';
+
+// Vibración al tocar en toda la app, en un solo sitio: engancharla botón a
+// botón se olvida en el siguiente que se añada.
+activarHapticaGlobal();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

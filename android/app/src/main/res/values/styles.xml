@@ -21,7 +21,7 @@
     </style>
 
     <!-- Ventana transparente: la tarjeta flota sobre la pantalla de inicio. -->
-    <style name="TemaDictado" parent="Theme.AppCompat.Dialog">
+    <style name="TemaDictado" parent="Theme.AppCompat.NoActionBar">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowNoTitle">true</item>
