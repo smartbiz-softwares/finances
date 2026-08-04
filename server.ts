@@ -4642,34 +4642,82 @@ app.post('/api/widget/dictado', authMiddleware, async (req: any, res) => {
 
     const datos = await transcripcion.json() as any;
     if (!transcripcion.ok) {
-      return res.status(transcripcion.status).json({ error: datos?.error || 'No pudimos escuchar tu audio.' });
+      return res.status(transcripcion.status).json({
+        error: datos?.error || 'No pudimos escuchar tu audio.',
+      });
     }
 
     const texto = String(datos?.text || datos?.transcription || '').trim();
     if (!texto) return res.status(422).json({ error: 'No entendimos lo que dijiste.' });
 
-    const respuesta = await fetch(`${base}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: autorizacion },
-      body: JSON.stringify({ message: texto }),
+    // Se extrae la estructura pero **no se registra**: lo dictado se confirma
+    // en la app, donde se puede corregir el tipo, el importe o la categoría.
+    // Registrar a ciegas lo que entendió un micrófono en la calle acaba
+    // metiendo un ingreso donde iba un gasto, y eso cuesta más de arreglar que
+    // de confirmar.
+    const analisis = extraerMovimiento(texto);
+
+    res.json({
+      transcripcion: texto,
+      movimiento: analisis,
+      mensaje: analisis
+        ? `${analisis.type === 'income' ? 'Ingreso' : 'Gasto'} de ${analisis.amount}: confirma en la app`
+        : 'Ábrelo en la app para completarlo',
     });
-
-    const resultado = await respuesta.json() as any;
-    if (!respuesta.ok) {
-      return res.status(respuesta.status).json({ error: resultado?.error || 'No se pudo registrar.' });
-    }
-
-    // El aviso emergente de Android da para poco: se recorta a algo legible de
-    // un vistazo, y el detalle completo queda en la app.
-    const dicho = String(resultado?.reply || resultado?.message || 'Registrado').trim();
-    const breve = dicho.length > 110 ? `${dicho.slice(0, 107)}…` : dicho;
-
-    res.json({ transcripcion: texto, mensaje: breve });
   } catch (err: any) {
     console.error('[widget] fallo en el dictado', err);
     res.status(500).json({ error: 'No pudimos procesarlo. Inténtalo desde la app.' });
   }
 });
+
+/**
+ * Saca importe, tipo y categoría de una frase dictada.
+ *
+ * Se hace con reglas y no con la IA a propósito: es instantáneo, no gasta
+ * tokens y acierta en la forma en que la gente dicta de verdad ("gasté 20 en
+ * comida"). Lo que no logre deducir se deja vacío para que se complete en la
+ * app, que es donde hay teclado.
+ */
+function extraerMovimiento(texto: string): {
+  type: 'income' | 'expense';
+  amount: number;
+  category: string;
+  description: string;
+} | null {
+  const limpio = texto.toLowerCase();
+
+  // Se admiten "20", "20,50" y "20.50"; el separador decimal varía según quién
+  // dicte y qué transcriba.
+  const numero = limpio.match(/(\d+(?:[.,]\d{1,2})?)/);
+  if (!numero) return null;
+
+  const amount = Number(numero[1].replace(',', '.'));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const esIngreso = /\b(cobr|ingres|recib|me pagaron|me dieron|entr[oó]|gan[eé])/.test(limpio);
+
+  const categorias: [RegExp, string][] = [
+    [/\b(comida|comí|almuerzo|cena|desayuno|restaurante|pizza|café)\b/, 'Restaurantes'],
+    [/\b(super|mercado|compra|tienda|víveres|viveres)\b/, 'Supermercado'],
+    [/\b(gasolina|combustible|nafta|gasoil|taxi|bus|guagua|transporte|uber)\b/, 'Transporte'],
+    [/\b(luz|agua|internet|teléfono|telefono|móvil|movil|recarga|factura|alquiler|renta)\b/, 'Servicios'],
+    [/\b(ropa|zapatos|camisa|pantal[oó]n)\b/, 'Ropa'],
+    [/\b(salario|sueldo|n[oó]mina|paga)\b/, 'Salario'],
+    [/\b(medicina|farmacia|m[eé]dico|doctor|consulta)\b/, 'Salud'],
+  ];
+
+  const categoria = categorias.find(([patron]) => patron.test(limpio))?.[1]
+    || (esIngreso ? 'Ingresos' : 'Varios');
+
+  return {
+    type: esIngreso ? 'income' : 'expense',
+    amount,
+    category: categoria,
+    // La frase entera como descripción: es lo que la persona dijo, y le va a
+    // sonar más que cualquier resumen que hiciéramos por ella.
+    description: texto.charAt(0).toUpperCase() + texto.slice(1),
+  };
+}
 
 // --- Resumen para el widget -----------------------------------------------
 //

@@ -287,11 +287,26 @@ public class DictadoActivity extends AppCompatActivity {
                 }
 
                 JSONObject datos = new JSONObject(respuesta.toString());
-                mensaje = ok ? datos.optString("mensaje", "Registrado")
-                             : datos.optString("error", "No se pudo registrar");
+                mensaje = ok ? datos.optString("mensaje", "Listo")
+                             : datos.optString("error", "No se pudo procesar");
                 correcto = ok;
 
-                if (ok) WidgetHera.actualizarTodos(this);
+                if (ok) {
+                    // Lo dictado no se registra a ciegas: se abre la app con lo
+                    // entendido para confirmarlo o corregirlo. Un micrófono en
+                    // la calle se equivoca, y un ingreso donde iba un gasto
+                    // cuesta más de arreglar que de confirmar.
+                    JSONObject movimiento = datos.optJSONObject("movimiento");
+                    if (movimiento != null) {
+                        movimiento.put("texto", datos.optString("transcripcion", ""));
+                        abrirConfirmacion(movimiento.toString());
+                        return;
+                    }
+                    // Sin estructura reconocible se lleva el texto al chat.
+                    abrirConfirmacion(new JSONObject()
+                            .put("texto", datos.optString("transcripcion", "")).toString());
+                    return;
+                }
             } catch (Exception e) {
                 mensaje = "Sin conexión. Inténtalo desde la app.";
             }
@@ -304,6 +319,23 @@ public class DictadoActivity extends AppCompatActivity {
                 Toast.makeText(this, aMostrar, Toast.LENGTH_LONG).show();
                 finish();
             });
+        });
+    }
+
+    /** Abre la app con lo dictado, para confirmarlo o corregirlo. */
+    private void abrirConfirmacion(String json) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            Haptica.exito(this);
+            try {
+                String codificado = java.net.URLEncoder.encode(json, "UTF-8");
+                Intent app = new Intent(this, MainActivity.class);
+                app.setData(Uri.parse(PuenteSesion.servidor(this) + "/?dictado=" + codificado));
+                app.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(app);
+            } catch (Exception e) {
+                Toast.makeText(this, "Ábrelo en la app para completarlo", Toast.LENGTH_LONG).show();
+            }
+            finish();
         });
     }
 

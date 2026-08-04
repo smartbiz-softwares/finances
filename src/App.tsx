@@ -4384,6 +4384,50 @@ export default function App() {
       .catch(() => { /* Sin apertura se queda el saludo de siempre. */ });
   }, [user, chatMessages.length]);
 
+  // Lo dictado desde el widget llega en la URL y se convierte en una acción
+  // pendiente: la misma tarjeta de confirmación que usa el escaneo de recibos,
+  // donde se puede corregir el tipo, el importe o la categoría antes de guardar.
+  useEffect(() => {
+    if (!user) return;
+
+    const parametro = new URLSearchParams(window.location.search).get('dictado');
+    if (!parametro) return;
+
+    // Se limpia la URL en cuanto se lee: recargar no debe repetir el registro.
+    window.history.replaceState({}, '', window.location.pathname);
+
+    try {
+      const dictado = JSON.parse(decodeURIComponent(parametro));
+      setActiveTab('chat');
+
+      if (!dictado?.amount) {
+        // No se entendió una cifra: se deja el texto en el cuadro para que lo
+        // termine a mano, en vez de descartar lo que dijo.
+        setChatInput(dictado?.texto || '');
+        showToast('Completa el registro y envíalo', 'info');
+        return;
+      }
+
+      setChatMessages((prev) => [...prev, {
+        id: `${Date.now()}-dictado`,
+        role: 'assistant',
+        content: `Esto es lo que entendí:\n\n**Concepto**: ${dictado.description}\n**Importe**: ${dictado.amount}\n**Tipo**: ${dictado.type === 'income' ? 'Ingreso' : 'Gasto'}\n**Categoría**: ${dictado.category}\n\nRevísalo y confirma para guardarlo.`,
+        type: 'pending_action',
+        data: {
+          actionType: 'create_transaction',
+          type: dictado.type,
+          amount: dictado.amount,
+          category: dictado.category,
+          description: dictado.description,
+          accountId: accounts[0]?.id || '',
+          accountName: accounts[0]?.name || 'Cuenta Principal',
+        },
+      }]);
+    } catch {
+      showToast('No pudimos leer lo que dictaste', 'error');
+    }
+  }, [user, accounts]);
+
   const handleLogout = async () => {
     setIsProfileMenuOpen(false);
     setShowLogoutModal(true);
