@@ -151,7 +151,25 @@ export const CompartirScore: React.FC<Props> = (props) => {
       if (!imagen) throw new Error();
 
       const archivo = new File([imagen], 'mi-score-hera.png', { type: 'image/png' });
-      const texto = `Mi Score Hera es ${Math.round(props.score)}/100. Llevo mis cuentas con HeraWallet: le hablas y ella las anota.`;
+      const texto = `Mi Score Hera es ${Math.round(props.score)}/100. Llevo mis cuentas con HeraWallet: le hablas y ella las anota. https://herawallet.app`;
+
+      // Dentro de la app se usa el selector del sistema por la vía nativa:
+      // navigator.share con archivos no funciona en el WebView de Android, y al
+      // fallar acababa intentando descargar la imagen.
+      const nativo = (window as any)?.HeraCompartir;
+      if (nativo && typeof nativo.imagen === 'function') {
+        const base64 = await new Promise<string>((resolver) => {
+          const lector = new FileReader();
+          lector.onload = () => resolver(String(lector.result));
+          lector.readAsDataURL(imagen);
+        });
+
+        if (nativo.imagen(base64, texto, 'mi-score-hera.png')) {
+          setEstado('hecho');
+          setTimeout(() => setEstado('listo'), 2200);
+          return;
+        }
+      }
 
       // Compartir el archivo solo funciona en móvil; en escritorio se descarga,
       // que es lo que se puede hacer allí.

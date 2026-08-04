@@ -25,6 +25,20 @@ public class MainActivity extends BridgeActivity {
 
     private static final int PERMISOS_MEDIOS = 1001;
 
+    /** Callback del <input type="file"> mientras el usuario elige. */
+    private android.webkit.ValueCallback<android.net.Uri[]> seleccionPendiente;
+
+    private final androidx.activity.result.ActivityResultLauncher<android.content.Intent> seleccionArchivos =
+            registerForActivityResult(
+                    new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                    resultado -> {
+                        if (seleccionPendiente == null) return;
+                        seleccionPendiente.onReceiveValue(
+                                android.webkit.WebChromeClient.FileChooserParams.parseResult(
+                                        resultado.getResultCode(), resultado.getData()));
+                        seleccionPendiente = null;
+                    });
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -43,11 +57,24 @@ public class MainActivity extends BridgeActivity {
         getBridge().getWebView().addJavascriptInterface(
                 new PuenteActualizacion(this, getBridge().getWebView()), "HeraActualizar");
 
+        // Compartir imágenes: navigator.share con archivos no funciona en el
+        // WebView, y sin esto el compartir acababa como una descarga fallida.
+        getBridge().getWebView().addJavascriptInterface(new PuenteCompartir(this), "HeraCompartir");
+
+        pedirPermisoNotificaciones();
+
         // El WebView no descarga nada por su cuenta: un enlace con `download`
         // se queda en nada, sin progreso ni aviso. Se delega en el gestor de
         // descargas de Android, que sí muestra progreso y avisa al terminar.
         getBridge().getWebView().setDownloadListener(
                 (url, agente, disposicion, tipo, tamano) -> {
+                    // Los blob: y data: son archivos que la propia app acaba de
+                    // fabricar —una imagen para compartir, por ejemplo—. El
+                    // gestor de descargas no los entiende, y mandárselos daba un
+                    // "no se pudo iniciar la descarga" cuando lo que se quería
+                    // era otra cosa.
+                    if (url == null || url.startsWith("blob:") || url.startsWith("data:")) return;
+
                     if (!DescargaApp.descargar(this, url)) {
                         Toast.makeText(this, "No se pudo iniciar la descarga",
                                 Toast.LENGTH_LONG).show();
@@ -83,7 +110,45 @@ public class MainActivity extends BridgeActivity {
                     }
                 });
             }
+
+            /**
+             * Sin esto, un <input type="file"> no abre nada: el WebView no trae
+             * selector propio. Era el motivo de que no se pudiera adjuntar un
+             * archivo en el chat.
+             */
+            @Override
+            public boolean onShowFileChooser(android.webkit.WebView vista,
+                                             android.webkit.ValueCallback<android.net.Uri[]> callback,
+                                             FileChooserParams parametros) {
+                // Si quedaba uno pendiente se cancela: dejarlo colgado bloquea
+                // el campo para siempre.
+                if (seleccionPendiente != null) seleccionPendiente.onReceiveValue(null);
+                seleccionPendiente = callback;
+
+                try {
+                    seleccionArchivos.launch(parametros.createIntent());
+                    return true;
+                } catch (Exception e) {
+                    seleccionPendiente = null;
+                    return false;
+                }
+            }
         });
+    }
+
+    /**
+     * Desde Android 13 las notificaciones necesitan permiso explícito. Sin él,
+     * el sistema las descarta en silencio y nadie se entera de por qué no
+     * llegan.
+     */
+    private void pedirPermisoNotificaciones() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU) return;
+
+        if (ContextCompat.checkSelfPermission(this, "android.permission.POST_NOTIFICATIONS")
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{"android.permission.POST_NOTIFICATIONS"}, 1002);
+        }
     }
 
     private boolean tienePermiso(String permiso) {
