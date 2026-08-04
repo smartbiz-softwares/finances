@@ -6,6 +6,7 @@ import { ToolRegistry } from '../tools/toolRegistry.ts';
 import { LearningPipeline } from '../learning/learningPipeline.ts';
 import { AuditLogger } from '../observability/auditLogger.ts';
 import { eventBus } from '../eventBus.ts';
+import { llamarDeepSeek, ErrorDeepSeek } from './deepseek.ts';
 
 /** Techo de tokens de salida por llamada al modelo. */
 const MAX_COMPLETION_TOKENS = 2000;
@@ -140,27 +141,14 @@ MODO VOZ EN VIVO (prioridad máxima): tu respuesta será leída en voz alta.
     // --- CAPA 2: REASONER / TOOL CALLING LOOP ---
     while (iterations < maxIterations) {
       try {
-        const response = await fetch('https://api.deepseek.com/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${deepseekApiKey.trim()}`
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: messages,
-            tools: availableTools,
-            tool_choice: 'auto',
-            // Techo de coste por respuesta: sin esto la salida no tiene límite.
-            max_tokens: MAX_COMPLETION_TOKENS
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`DeepSeek API error status: ${response.status}`);
-        }
-
-        const data = await response.json() as any;
+        const data = await llamarDeepSeek({
+          model: 'deepseek-chat',
+          messages: messages,
+          tools: availableTools,
+          tool_choice: 'auto',
+          // Techo de coste por respuesta: sin esto la salida no tiene límite.
+          max_tokens: MAX_COMPLETION_TOKENS
+        }, deepseekApiKey) as any;
 
         // Consumo real de esta llamada. Se acumula aunque después falle el
         // parseo: el modelo ya facturó estos tokens.
@@ -231,8 +219,20 @@ MODO VOZ EN VIVO (prioridad máxima): tu respuesta será leída en voz alta.
           break;
         }
       } catch (err: any) {
-        console.error('[AgentOrchestrator] Error durante la llamada a DeepSeek:', err);
-        finalReplyText = 'Lo sentimos, ocurrió una interrupción en el servidor de inteligencia financiera. Por favor inténtalo de nuevo.';
+        if (err instanceof ErrorDeepSeek) {
+          console.error(`[AgentOrchestrator] DeepSeek ${err.status} (usuario ${userId}): ${err.detalle}`);
+          finalReplyText = err.mensajeParaUsuario;
+        } else {
+          console.error('[AgentOrchestrator] Error durante la llamada a DeepSeek:', err);
+          finalReplyText = 'Lo sentimos, ocurrió una interrupción en el servidor de inteligencia financiera. Por favor inténtalo de nuevo.';
+        }
+
+        // Si ya se ejecutó una escritura antes del fallo, el dato SÍ está
+        // guardado. Callarlo hace que el usuario lo registre otra vez y acabe
+        // con el movimiento duplicado.
+        if (executedWriteCalls.size > 0) {
+          finalReplyText += '\n\nEso sí: lo que me pediste ya quedó guardado, no hace falta que lo repitas.';
+        }
         break;
       }
     }
