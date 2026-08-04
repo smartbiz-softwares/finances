@@ -28,6 +28,7 @@ interface Publicada {
 
 export const AvisoActualizacion: React.FC = () => {
   const [nueva, setNueva] = useState<Publicada | null>(null);
+  const [descargando, setDescargando] = useState(false);
 
   useEffect(() => {
     if (!IS_NATIVE_APP) return;
@@ -91,28 +92,40 @@ export const AvisoActualizacion: React.FC = () => {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-text-primary">Hay una versión nueva</p>
           <p className="text-[11px] text-text-secondary truncate">
-            {nueva.version ? `Versión ${nueva.version}` : 'Actualización disponible'}
-            {nueva.mb ? ` · ${nueva.mb} MB` : ''}
+            {descargando
+              ? 'Mira la barra de notificaciones'
+              : <>
+                  {nueva.version ? `Versión ${nueva.version}` : 'Actualización disponible'}
+                  {nueva.mb ? ` · ${nueva.mb} MB` : ''}
+                </>}
           </p>
         </div>
 
         <a
           href={apiUrl('/descargar/HeraWallet.apk')}
           download
-          onClick={posponer}
-          className="shrink-0 px-3.5 py-2 rounded-xl bg-brand text-white text-xs font-medium transition-transform active:scale-[0.97]"
+          onClick={() => {
+            // Dentro de la app la descarga la lleva Android, con su propia
+            // barra de progreso; aquí solo se confirma que el toque hizo algo.
+            setDescargando(true);
+            setTimeout(posponer, 2500);
+          }}
+          className="shrink-0 px-3.5 py-2 rounded-xl bg-brand text-white text-xs font-medium transition-transform active:scale-[0.97] disabled:opacity-60"
+          aria-live="polite"
         >
-          Actualizar
+          {descargando ? 'Descargando…' : 'Actualizar'}
         </a>
 
-        <button
-          type="button"
-          onClick={posponer}
-          aria-label="Ahora no"
-          className="shrink-0 p-1.5 rounded-lg text-text-dim hover:text-text-primary transition-colors"
-        >
-          <X size={14} />
-        </button>
+        {!descargando && (
+          <button
+            type="button"
+            onClick={posponer}
+            aria-label="Ahora no"
+            className="shrink-0 p-1.5 rounded-lg text-text-dim hover:text-text-primary transition-colors"
+          >
+            <X size={14} />
+          </button>
+        )}
       </motion.div>
     </AnimatePresence>
   );

@@ -3,6 +3,8 @@
 
     <!-- Hablar con el servidor de herawallet.app -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Instalar la actualización descargada sin salir de la app. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Dictado por voz y Modo Live -->

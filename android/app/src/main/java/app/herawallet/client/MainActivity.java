@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -33,6 +34,17 @@ public class MainActivity extends BridgeActivity {
         // Puente para el widget: la web le entrega el token de sesión, que vive
         // en el localStorage del WebView y desde Java no se puede leer.
         getBridge().getWebView().addJavascriptInterface(new PuenteSesion(this), "HeraNativo");
+
+        // El WebView no descarga nada por su cuenta: un enlace con `download`
+        // se queda en nada, sin progreso ni aviso. Se delega en el gestor de
+        // descargas de Android, que sí muestra progreso y avisa al terminar.
+        getBridge().getWebView().setDownloadListener(
+                (url, agente, disposicion, tipo, tamano) -> {
+                    if (!DescargaApp.descargar(this, url)) {
+                        Toast.makeText(this, "No se pudo iniciar la descarga",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
 
         // El WebView pregunta al contenedor si concede lo que pide la web.
         // Solo se conceden micrófono y cámara, y solo si el sistema ya nos los
