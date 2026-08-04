@@ -1,5 +1,21 @@
 apply plugin: 'com.android.application'
 
+// --- Firma de publicación ---------------------------------------------------
+//
+// Android solo deja instalar una actualización encima de otra si las dos están
+// firmadas con la misma clave; si no, falla con "conflicto con un paquete". La
+// clave de depuración no sirve para esto: se genera sola en cada máquina, así
+// que un APK compilado en el servidor y otro en un portátil ya no se reconocen.
+//
+// Los datos de la clave viven en `android/firma.properties`, que no se sube al
+// repositorio. Sin ese archivo se firma con la de depuración, suficiente para
+// probar en local pero nunca para publicar.
+def archivoFirma = rootProject.file('firma.properties')
+def datosFirma = new Properties()
+if (archivoFirma.exists()) {
+    archivoFirma.withInputStream { datosFirma.load(it) }
+}
+
 android {
     namespace = "app.herawallet.client"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -20,8 +36,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        publicacion {
+            if (archivoFirma.exists()) {
+                storeFile rootProject.file(datosFirma['almacen'])
+                storePassword datosFirma['claveAlmacen']
+                keyAlias datosFirma['alias']
+                keyPassword datosFirma['claveClave']
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig archivoFirma.exists() ? signingConfigs.publicacion : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

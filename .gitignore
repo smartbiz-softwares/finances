@@ -18,3 +18,9 @@ android/local.properties
 android/.idea/
 android/app/release/
 apk/
+
+# Clave de firma de la app: irreemplazable y privada. Se genera con
+# scripts/crear-firma.sh y se respalda fuera del repositorio.
+android/firma.properties
+android/*.jks
+*.keystore

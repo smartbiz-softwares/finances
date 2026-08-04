@@ -21,8 +21,19 @@ cd "$RAIZ"
 
 DESTINO="$RAIZ/apk"
 APK_PUBLICADO="$DESTINO/HeraWallet.apk"
-APK_COMPILADO="$RAIZ/android/app/build/outputs/apk/debug/app-debug.apk"
 SELLO="$DESTINO/.ultimo-commit"
+
+# Con clave propia se compila `release`, que es lo que permite instalar una
+# actualización encima de la anterior. Sin ella se compila `debug`, que sirve
+# para probar pero cuya firma cambia de una máquina a otra. Ver
+# `scripts/crear-firma.sh`.
+if [[ -f "$RAIZ/android/firma.properties" ]]; then
+  VARIANTE="Release"
+  APK_COMPILADO="$RAIZ/android/app/build/outputs/apk/release/app-release.apk"
+else
+  VARIANTE="Debug"
+  APK_COMPILADO="$RAIZ/android/app/build/outputs/apk/debug/app-debug.apk"
+fi
 
 FORZAR=0
 [[ "${1:-}" == "--forzar" ]] && FORZAR=1
@@ -70,7 +81,20 @@ npm run build:app
 log "Sincronizando con el proyecto Android…"
 npx cap sync android
 
-log "Armando el APK…"
+log "Armando el APK ($VARIANTE)…"
+
+if [[ "$VARIANTE" == "Debug" ]]; then
+  aviso "Sin android/firma.properties: el APK se firma con la clave de depuración."
+  aviso "Quien ya tenga la app no podrá actualizar. Ejecuta scripts/crear-firma.sh."
+fi
+
+# --- Número de versión ----------------------------------------------------
+#
+# Android solo reconoce una actualización si `versionCode` sube. Se usa el
+# número de commits: sube solo, no hay que acordarse de tocarlo, y coincide con
+# la historia del repositorio.
+VERSION_CODE="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
+VERSION="1.$VERSION_CODE"
 
 # `gradlew` necesita descargarse Gradle la primera vez; si el servidor no tiene
 # salida a internet o ya hay un Gradle instalado, se usa el del sistema.
@@ -85,10 +109,16 @@ gradle_de() {
 # Gradle cachea los recursos ya fusionados y no se entera de los que se borran,
 # así que un cambio de iconos puede fallar con "resource not found" hasta que se
 # limpia. Se reintenta una vez en limpio antes de darlo por perdido.
-if ! gradle_de --quiet assembleDebug; then
+armar() {
+  gradle_de --quiet "assemble$VARIANTE" \
+    -PheraVersionCode="$VERSION_CODE" \
+    -PheraVersionName="$VERSION"
+}
+
+if ! armar; then
   aviso "Falló el primer intento; limpiando y reintentando…"
   gradle_de --quiet clean
-  gradle_de --quiet assembleDebug
+  armar
 fi
 
 [[ -f "$APK_COMPILADO" ]] || { aviso "Gradle terminó pero no encuentro $APK_COMPILADO"; exit 1; }
@@ -101,10 +131,12 @@ mkdir -p "$DESTINO"
 cp "$APK_COMPILADO" "$APK_PUBLICADO.tmp"
 mv "$APK_PUBLICADO.tmp" "$APK_PUBLICADO"
 
-VERSION="$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle || echo '1.0')"
+# La app compara su propio versionCode con este para saber si hay algo nuevo.
+# Sin este campo, el aviso de actualización no aparece nunca.
 cat > "$DESTINO/version.json" <<JSON
 {
   "version": "$VERSION",
+  "versionCode": $VERSION_CODE,
   "commit": "$COMMIT",
   "publicado": "$(date -Iseconds)"
 }
