@@ -309,16 +309,14 @@ public class DictadoActivity extends AppCompatActivity {
                     JSONObject movimiento = datos.optJSONObject("movimiento");
                     final String dicho = datos.optString("transcripcion", "");
 
-                    if (movimiento != null) {
-                        final JSONObject entendido = movimiento;
-                        new Handler(Looper.getMainLooper()).post(
-                                () -> mostrarConfirmacion(entendido, dicho));
-                        return;
-                    }
-
-                    // Sin cifra reconocible no hay nada que confirmar: se pasa a
-                    // la app, que es donde hay teclado y contexto para rematarlo.
-                    abrirConfirmacion(new JSONObject().put("texto", dicho).toString());
+                    // Aunque no se entendiera la cifra se abre igual el paso de
+                    // confirmación, con el importe vacío. Mandar a la app por
+                    // una cifra que falta era peor: el teclado está aquí
+                    // también, y allí el usuario se quedaba mirando sin saber
+                    // qué había pasado con lo que acababa de decir.
+                    final JSONObject entendido = movimiento != null ? movimiento : new JSONObject();
+                    new Handler(Looper.getMainLooper()).post(
+                            () -> mostrarConfirmacion(entendido, dicho));
                     return;
                 }
             } catch (Exception e) {
@@ -359,11 +357,18 @@ public class DictadoActivity extends AppCompatActivity {
         descripcion = findViewById(R.id.confirmar_descripcion);
 
         double cantidad = movimiento.optDouble("amount", 0);
-        // Sin decimales si son cero: escribir encima de "20" es más rápido que
-        // sobre "20.00", y esto se corrige de pie en la calle.
-        importe.setText(cantidad == Math.floor(cantidad)
-                ? String.valueOf((long) cantidad)
-                : String.valueOf(cantidad));
+        if (cantidad <= 0) {
+            // No se entendió: el campo se deja vacío y con el foco puesto, para
+            // escribirlo sin tener que buscarlo.
+            importe.setText("");
+            importe.requestFocus();
+        } else {
+            // Sin decimales si son cero: escribir encima de "20" es más rápido
+            // que sobre "20.00", y esto se corrige de pie en la calle.
+            importe.setText(cantidad == Math.floor(cantidad)
+                    ? String.valueOf((long) cantidad)
+                    : String.valueOf(cantidad));
+        }
         categoria.setText(movimiento.optString("category", ""));
         descripcion.setText(movimiento.optString("description", dicho));
 

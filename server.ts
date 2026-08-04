@@ -19,6 +19,7 @@ import * as reglasNotificaciones from './server/reglas.ts';
 import * as referidos from './server/referidos.ts';
 import * as logros from './server/logros.ts';
 import * as apertura from './server/apertura.ts';
+import { extraerMovimiento } from './server/extraer.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -4669,55 +4670,6 @@ app.post('/api/widget/dictado', authMiddleware, async (req: any, res) => {
     res.status(500).json({ error: 'No pudimos procesarlo. Inténtalo desde la app.' });
   }
 });
-
-/**
- * Saca importe, tipo y categoría de una frase dictada.
- *
- * Se hace con reglas y no con la IA a propósito: es instantáneo, no gasta
- * tokens y acierta en la forma en que la gente dicta de verdad ("gasté 20 en
- * comida"). Lo que no logre deducir se deja vacío para que se complete en la
- * app, que es donde hay teclado.
- */
-function extraerMovimiento(texto: string): {
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  description: string;
-} | null {
-  const limpio = texto.toLowerCase();
-
-  // Se admiten "20", "20,50" y "20.50"; el separador decimal varía según quién
-  // dicte y qué transcriba.
-  const numero = limpio.match(/(\d+(?:[.,]\d{1,2})?)/);
-  if (!numero) return null;
-
-  const amount = Number(numero[1].replace(',', '.'));
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-
-  const esIngreso = /\b(cobr|ingres|recib|me pagaron|me dieron|entr[oó]|gan[eé])/.test(limpio);
-
-  const categorias: [RegExp, string][] = [
-    [/\b(comida|comí|almuerzo|cena|desayuno|restaurante|pizza|café)\b/, 'Restaurantes'],
-    [/\b(super|mercado|compra|tienda|víveres|viveres)\b/, 'Supermercado'],
-    [/\b(gasolina|combustible|nafta|gasoil|taxi|bus|guagua|transporte|uber)\b/, 'Transporte'],
-    [/\b(luz|agua|internet|teléfono|telefono|móvil|movil|recarga|factura|alquiler|renta)\b/, 'Servicios'],
-    [/\b(ropa|zapatos|camisa|pantal[oó]n)\b/, 'Ropa'],
-    [/\b(salario|sueldo|n[oó]mina|paga)\b/, 'Salario'],
-    [/\b(medicina|farmacia|m[eé]dico|doctor|consulta)\b/, 'Salud'],
-  ];
-
-  const categoria = categorias.find(([patron]) => patron.test(limpio))?.[1]
-    || (esIngreso ? 'Ingresos' : 'Varios');
-
-  return {
-    type: esIngreso ? 'income' : 'expense',
-    amount,
-    category: categoria,
-    // La frase entera como descripción: es lo que la persona dijo, y le va a
-    // sonar más que cualquier resumen que hiciéramos por ella.
-    description: texto.charAt(0).toUpperCase() + texto.slice(1),
-  };
-}
 
 // --- Resumen para el widget -----------------------------------------------
 //
