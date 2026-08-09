@@ -1,0 +1,18 @@
+# HeraWallet - Intelligent AI Financial Assistant
+
+> HeraWallet is a modern, privacy-focused personal finance management platform powered by artificial intelligence. Available in Spanish and English.
+
+## Overview
+- Website: https://herawallet.app
+- Spanish Landing: https://herawallet.app/es/
+- English Landing: https://herawallet.app/en/
+
+## Core Capabilities
+- Voice & Photo Expense Logging: Natural language voice input and OCR receipt scanning.
+- Smart Budgeting & Predictions: Predictive monthly spending score and automated insights.
+- Privacy-First Design: No direct bank access required, 100% encrypted & private data.
+- Multi-Platform Support: Web Progressive Web App (PWA), Android App, Responsive Web.
+
+## Public Resources
+- Sitemap: https://herawallet.app/sitemap.xml
+- Web App Manifest: https://herawallet.app/manifest.webmanifest

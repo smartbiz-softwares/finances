@@ -4447,7 +4447,15 @@ app.get('/descargar/HeraWallet.apk', (_req, res) => {
   res.download(apkPath, 'HeraWallet.apk');
 });
 
-app.use(express.static(distPath));
+app.use(express.static(distPath, {
+  maxAge: '1y',
+  immutable: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html') || filePath.endsWith('.webmanifest')) {
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    }
+  }
+}));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   res.sendFile(path.join(distPath, 'index.html'));

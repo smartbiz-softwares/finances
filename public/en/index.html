@@ -683,6 +683,9 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
   position:absolute;width:120%;aspect-ratio:1;left:-10%;top:-8%;z-index:0;pointer-events:none;
   background:radial-gradient(circle at 50% 45%,var(--brand-tint) 0%,transparent 62%);
   filter:blur(6px);
+  contain:layout paint;
+  will-change:transform;
+  transform:translateZ(0);
 }
 /* ---------- Mockup de teléfono ---------- */
 .phone{
@@ -746,7 +749,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
 .goal__t{font-size:.72rem;font-weight:500}
 .goal__p{font-family:var(--mono);font-size:.72rem;color:var(--brand-text)}
 .bar{height:5px;border-radius:99px;background:var(--surface-2);margin-top:9px;overflow:hidden}
-.bar>i{display:block;height:100%;border-radius:99px;background:var(--brand);width:0;transition:width 1.4s cubic-bezier(.22,.61,.36,1)}
+.bar>i{display:block;height:100%;border-radius:99px;background:var(--brand);width:100%;transform-origin:left;transform:scaleX(0);will-change:transform;transition:transform 1.4s cubic-bezier(.22,.61,.36,1)}
 .goal__sub{font-family:var(--mono);font-size:.58rem;color:var(--ink-2);margin-top:8px;letter-spacing:.03em}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .chip{
@@ -916,7 +919,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
 .goalrow__n{font-family:var(--mono);font-size:.86rem;font-variant-numeric:tabular-nums;color:var(--ink-2)}
 .goalrow__n b{color:var(--ink);font-weight:500}
 .goalrow__bar{grid-column:1/-1;height:6px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin-top:4px}
-.goalrow__bar>i{display:block;height:100%;border-radius:99px;background:var(--brand);width:0;transition:width 1.5s cubic-bezier(.22,.61,.36,1)}
+.goalrow__bar>i{display:block;height:100%;border-radius:99px;background:var(--brand);width:100%;transform-origin:left;transform:scaleX(0);will-change:transform;transition:transform 1.5s cubic-bezier(.22,.61,.36,1)}
 .goalrow__bar>i.soft{background:color-mix(in srgb,var(--brand) 45%,var(--surface-2))}
 .goalrow__m{grid-column:1/-1;font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;color:var(--ink-2)}
 
@@ -1350,7 +1353,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
               <div class="appbar__tools" aria-hidden="true">
                 <span class="appbar__tool"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
                 <span class="appbar__tool"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M10.5 20a2 2 0 0 0 3 0"/></svg></span>
-                <span class="appbar__tool appbar__tool--me"><img src="/assets/av-5fee57c5.png" width="23" height="23" alt=""></span>
+                <span class="appbar__tool appbar__tool--me"><img src="/assets/av-5fee57c5.webp" width="23" height="23" alt=""></span>
               </div>
             </div>
 
@@ -1833,21 +1836,21 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
       <article class="card quote rv" data-d="1" data-tilt>
         <p>“I spent three years trying to save with a spreadsheet. Hera messaged me on a Sunday and told me exactly what was going on.”</p>
         <div class="who">
-          <img src="/assets/av-5fee57c5.png" width="38" height="38" alt="" loading="lazy" decoding="async">
+          <img src="/assets/av-5fee57c5.webp" width="38" height="38" alt="" loading="lazy" decoding="async">
           <div><b>First Last</b><span>Freelancer · Miami</span></div>
         </div>
       </article>
       <article class="card quote rv" data-d="2" data-tilt>
         <p>“I invoice in three different currencies. It's the first time I actually understand what I make in a month.”</p>
         <div class="who">
-          <img src="/assets/av-5fee57c5.png" width="38" height="38" alt="" loading="lazy" decoding="async">
+          <img src="/assets/av-5fee57c5.webp" width="38" height="38" alt="" loading="lazy" decoding="async">
           <div><b>First Last</b><span>Designer · Austin</span></div>
         </div>
       </article>
       <article class="card quote rv" data-d="3" data-tilt>
         <p>“I dictate expenses while walking. Two weeks in, that feeling of not knowing where the money went was gone.”</p>
         <div class="who">
-          <img src="/assets/av-5fee57c5.png" width="38" height="38" alt="" loading="lazy" decoding="async">
+          <img src="/assets/av-5fee57c5.webp" width="38" height="38" alt="" loading="lazy" decoding="async">
           <div><b>First Last</b><span>Founder · Chicago</span></div>
         </div>
       </article>
@@ -2038,7 +2041,8 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
     $$('[data-fill]', scope).forEach(function (b) {
       if (b.dataset.done) return;
       b.dataset.done = '1';
-      b.style.width = b.dataset.fill + '%';
+      var val = (parseFloat(b.dataset.fill) || 0) / 100;
+      b.style.transform = 'scaleX(' + val + ')';
     });
   }
   function gauge(scope) {
@@ -2138,7 +2142,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
         s.classList.add('on');
         $$('.chip', s).forEach(function (c) { c.classList.add('on'); });
       });
-      if (bar) bar.style.width = bar.dataset.fill + '%';
+      if (bar) { bar.style.transform = 'scaleX(' + ((parseFloat(bar.dataset.fill) || 0) / 100) + ')'; }
       if (push) push.classList.add('on');
       return;
     }
@@ -2152,7 +2156,7 @@ html:not([data-theme="dark"]) .icon-moon{display:none}
         });
       }, at[i] || 3200);
     });
-    setTimeout(function () { if (bar) bar.style.width = bar.dataset.fill + '%'; }, 1650);
+    setTimeout(function () { if (bar) { bar.style.transform = 'scaleX(' + ((parseFloat(bar.dataset.fill) || 0) / 100) + ')'; } }, 1650);
     setTimeout(function () { if (composer) composer.classList.add('pulse'); }, 3400);
     setTimeout(function () { if (push) push.classList.add('on'); }, 3900);
   }
