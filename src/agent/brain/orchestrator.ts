@@ -21,9 +21,25 @@ export interface AgentUsage {
   llmCalls: number;
 }
 
+/**
+ * Por qué se quedó sin respuesta el cerebro DeepSeek. Lo consume el endpoint de
+ * chat para decidir si puede responder con el proveedor de respaldo.
+ */
+export interface FalloProveedor {
+  /** Código HTTP de DeepSeek, o 0 si no hubo respuesta. */
+  status: number;
+  /** Escrituras ya ejecutadas antes del fallo (tools de creación/borrado). */
+  escriturasEjecutadas: number;
+}
+
 export interface AgentResult {
   text: string;
   usage: AgentUsage;
+  /**
+   * Presente solo si la respuesta es un mensaje de error, no una respuesta
+   * real. Quien llama puede entonces reintentar con otro proveedor.
+   */
+  fallo?: FalloProveedor;
 }
 
 export const emptyUsage = (): AgentUsage => ({
@@ -133,6 +149,8 @@ MODO VOZ EN VIVO (prioridad máxima): tu respuesta será leída en voz alta.
     const availableTools = this.toolRegistry.getToolDefinitions();
 
     let finalReplyText = '';
+    /** Se rellena si DeepSeek deja de responder; ver FalloProveedor. */
+    let fallo: FalloProveedor | undefined;
     let iterations = 0;
     const maxIterations = 5;
     // Firmas de escrituras ya ejecutadas en ESTA consulta (anti-duplicados).
@@ -219,6 +237,10 @@ MODO VOZ EN VIVO (prioridad máxima): tu respuesta será leída en voz alta.
           break;
         }
       } catch (err: any) {
+        fallo = {
+          status: err instanceof ErrorDeepSeek ? err.status : 0,
+          escriturasEjecutadas: executedWriteCalls.size
+        };
         if (err instanceof ErrorDeepSeek) {
           console.error(`[AgentOrchestrator] DeepSeek ${err.status} (usuario ${userId}): ${err.detalle}`);
           finalReplyText = err.mensajeParaUsuario;
@@ -273,6 +295,6 @@ MODO VOZ EN VIVO (prioridad máxima): tu respuesta será leída en voz alta.
     this.learningPipeline.processConversationInsight(userId, securityCheck.sanitizedInput, sanitizedOutput, this.db)
       .catch(e => console.error('[LearningPipeline Error]:', e));
 
-    return { text: sanitizedOutput, usage };
+    return { text: sanitizedOutput, usage, fallo };
   }
 }

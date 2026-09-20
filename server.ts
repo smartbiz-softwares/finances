@@ -2744,6 +2744,50 @@ Incluye al final:
 }
 <<<DOC_END>>>`;
 
+  /**
+   * Respuesta con Gemini. Es el proveedor de respaldo: se usa cuando no hay
+   * clave de DeepSeek y, sobre todo, cuando DeepSeek deja de responder (saldo
+   * agotado, clave caducada, caída). Devuelve null si tampoco sale nada de
+   * aquí, para que quien llama decida qué contarle al usuario.
+   */
+  const responderConGemini = async (): Promise<{ text: string; usage: ProviderUsage } | null> => {
+    try {
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey.trim()}`;
+      const geminiRes = await fetch(geminiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `${systemPrompt}\n\nConsulta del usuario: ${message}` }] }]
+        })
+      });
+
+      if (!geminiRes.ok) {
+        console.error(`[Chat] Gemini respondió ${geminiRes.status}`);
+        return null;
+      }
+
+      const json = await geminiRes.json() as any;
+      const texto = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!texto) return null;
+
+      // Gemini reporta el consumo con otros nombres que DeepSeek.
+      return { text: texto, usage: geminiUsage(json) };
+    } catch (e: any) {
+      console.error('[Chat] Error llamando a Gemini:', e);
+      return null;
+    }
+  };
+
+  /** Suma de consumos: en un respaldo se paga lo gastado con los dos proveedores. */
+  const sumarUso = (a: ProviderUsage, b: ProviderUsage): ProviderUsage => ({
+    promptTokens: a.promptTokens + b.promptTokens,
+    completionTokens: a.completionTokens + b.completionTokens,
+    totalTokens: a.totalTokens + b.totalTokens,
+    cachedPromptTokens: a.cachedPromptTokens + b.cachedPromptTokens
+  });
+
+  const hayGemini = !!(geminiKey && geminiKey.trim());
+
   if (deepseekKey && deepseekKey.trim()) {
     try {
       const agentResult = await agentOrchestrator.processUserQuery(userId, message, deepseekKey, { voiceMode: req.body?.live === true });
@@ -2755,33 +2799,44 @@ Incluye al final:
         cachedPromptTokens: agentResult.usage.cachedPromptTokens
       };
       reasoningContent = 'Razonamiento agéntico ejecutado con memoria jerárquica de 4 niveles, análisis de tono y guardrails de seguridad.';
-    } catch (e: any) {
-      console.error('DeepSeek Orchestrator Fetch error:', e);
-      aiReplyText = 'Lo sentimos, tenemos un problema de conexión con el servidor. Por favor inténtalo de nuevo más tarde.';
-    }
-  } else if (geminiKey && geminiKey.trim()) {
-    try {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiKey.trim()}`;
-      const geminiRes = await fetch(geminiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: `${systemPrompt}\n\nConsulta del usuario: ${message}` }] }]
-        })
-      });
 
-      if (geminiRes.ok) {
-        const json = await geminiRes.json() as any;
-        aiReplyText = json.candidates?.[0]?.content?.parts?.[0]?.text || 'Lo sentimos, el servidor se encuentra ocupado en este momento.';
-        // Gemini reporta el consumo con otros nombres que DeepSeek.
-        chatUsage = geminiUsage(json);
-        chatModel = GEMINI_MODEL;
-        reasoningContent = 'Evaluando patrimonio, ingresos y liquidez disponible con modelo de análisis en tiempo real.';
-      } else {
-        aiReplyText = 'Lo sentimos, el servidor se encuentra ocupado en este momento. Por favor inténtalo de nuevo más tarde.';
+      // El agente no falla hacia fuera: cuando DeepSeek se cae devuelve el
+      // aviso de avería como si fuera la respuesta. Teniendo Gemini
+      // configurado, eso es dejar el chat mudo sin necesidad.
+      //
+      // Solo se reintenta si el agente no llegó a escribir nada: si ya creó un
+      // movimiento, repetir la consulta con otro modelo podría duplicarlo.
+      if (agentResult.fallo && agentResult.fallo.escriturasEjecutadas === 0 && hayGemini) {
+        const respaldo = await responderConGemini();
+        if (respaldo) {
+          console.warn(`[Chat] DeepSeek ${agentResult.fallo.status}: respondiendo con ${GEMINI_MODEL}`);
+          aiReplyText = respaldo.text;
+          chatUsage = sumarUso(chatUsage, respaldo.usage);
+          chatModel = GEMINI_MODEL;
+          reasoningContent = 'Análisis generado con el proveedor de respaldo por indisponibilidad del motor principal.';
+        }
       }
     } catch (e: any) {
-      aiReplyText = 'Lo sentimos, tenemos un problema de conexión con el servidor. Por favor inténtalo de nuevo más tarde.';
+      console.error('DeepSeek Orchestrator Fetch error:', e);
+      const respaldo = hayGemini ? await responderConGemini() : null;
+      if (respaldo) {
+        aiReplyText = respaldo.text;
+        chatUsage = respaldo.usage;
+        chatModel = GEMINI_MODEL;
+        reasoningContent = 'Análisis generado con el proveedor de respaldo por indisponibilidad del motor principal.';
+      } else {
+        aiReplyText = 'Lo sentimos, tenemos un problema de conexión con el servidor. Por favor inténtalo de nuevo más tarde.';
+      }
+    }
+  } else if (hayGemini) {
+    const respaldo = await responderConGemini();
+    if (respaldo) {
+      aiReplyText = respaldo.text;
+      chatUsage = respaldo.usage;
+      chatModel = GEMINI_MODEL;
+      reasoningContent = 'Evaluando patrimonio, ingresos y liquidez disponible con modelo de análisis en tiempo real.';
+    } else {
+      aiReplyText = 'Lo sentimos, el servidor se encuentra ocupado en este momento. Por favor inténtalo de nuevo más tarde.';
     }
   } else {
     aiReplyText = 'Lo sentimos, el servicio de inteligencia artificial no se encuentra configurado en este momento. Por favor inténtalo más tarde.';
@@ -4552,15 +4607,35 @@ app.get('/api/admin/health', adminAuthMiddleware, async (req, res) => {
     voiceEn: process.env.PIPER_VOICE_EN || null
   };
 
-  // DeepSeek (cerebro del agente) con saldo restante
-  const dsKey = process.env.DEEPSEEK_API_KEY;
-  if (dsKey) {
+  // DeepSeek (cerebro del agente) con saldo restante.
+  // La clave se busca igual que en el chat: entorno primero y, si no, la que se
+  // guardó desde el panel. Mirando solo el entorno, este check decía "no
+  // configurada" mientras el chat funcionaba con la clave de la base.
+  const dsKey = process.env.DEEPSEEK_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%DeepSeek%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+  if (dsKey && dsKey.trim()) {
     try {
-      const r = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${dsKey}` } });
+      const r = await fetch('https://api.deepseek.com/user/balance', { headers: { Authorization: `Bearer ${dsKey.trim()}` } });
       const d = await r.json() as any;
-      checks.deepseek = { ok: r.ok, balanceUSD: d?.balance_infos?.[0]?.total_balance ?? null };
+      const saldo = d?.balance_infos?.[0]?.total_balance ?? null;
+      checks.deepseek = {
+        // Con saldo a cero la API sigue respondiendo 200 aquí, pero el chat
+        // recibe 402 en cada consulta: sin saldo esto no está sano.
+        ok: r.ok && Number(saldo ?? 0) > 0,
+        balanceUSD: saldo,
+        origenClave: process.env.DEEPSEEK_API_KEY ? 'entorno' : 'panel',
+        ...(r.ok && Number(saldo ?? 0) <= 0 ? { error: 'Saldo agotado: el chat responderá con el proveedor de respaldo' } : {})
+      };
     } catch (e: any) { checks.deepseek = { ok: false, error: e.message }; }
-  } else checks.deepseek = { ok: false, error: 'DEEPSEEK_API_KEY no configurada' };
+  } else checks.deepseek = { ok: false, error: 'Clave DeepSeek no configurada (ni en el entorno ni en el panel)' };
+
+  // Gemini: es el respaldo del chat, así que su ausencia deja de ser un detalle
+  // cuando DeepSeek se queda sin saldo.
+  const gmKey = process.env.GEMINI_API_KEY || (db.prepare("SELECT apiKey FROM ai_providers WHERE name LIKE '%Gemini%' AND (isActive = 1 OR LENGTH(apiKey) > 3)").get() as any)?.apiKey;
+  checks.geminiRespaldo = {
+    ok: !!(gmKey && gmKey.trim()),
+    origenClave: gmKey ? (process.env.GEMINI_API_KEY ? 'entorno' : 'panel') : null,
+    modelo: GEMINI_MODEL
+  };
 
   // Respaldos de transcripción en la nube
   checks.sttCloudFallback = {
