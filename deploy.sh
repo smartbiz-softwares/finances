@@ -15,8 +15,20 @@ echo "📦 Instalando/actualizando dependencias npm..."
 npm install
 
 # 3. Compilar la aplicación Frontend (Vite -> dist/)
+#
+# A un directorio aparte: Vite vacía la salida antes de escribir, así que un
+# build interrumpido (falta de memoria) dejaba producción sin index.html y con
+# todo el sitio en 404. Solo se cambia por el bueno si terminó bien.
 echo "🔨 Compilando el frontend (npm run build)..."
-npm run build
+rm -rf dist.nuevo
+if ! npm run build -- --outDir dist.nuevo --emptyOutDir || [ ! -s dist.nuevo/index.html ]; then
+  rm -rf dist.nuevo
+  echo "❌ El build falló. Producción sigue con la versión anterior."
+  exit 1
+fi
+rm -rf dist.anterior
+[ -d dist ] && mv dist dist.anterior
+mv dist.nuevo dist
 
 # 4. Reiniciar el servidor Backend con PM2
 echo "🔄 Reiniciando proceso backend en PM2..."

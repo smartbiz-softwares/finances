@@ -4511,9 +4511,25 @@ app.use(express.static(distPath, {
     }
   }
 }));
+const indexPath = path.join(distPath, 'index.html');
+
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
-  res.sendFile(path.join(distPath, 'index.html'));
+
+  // Sin index.html no hay web: pasó al morirse un build a mitad y dejar dist/
+  // vacío. Express respondía con un ENOENT que enseñaba la ruta interna del
+  // servidor y no decía nada útil a nadie.
+  if (!fs.existsSync(indexPath)) {
+    console.error('[Web] Falta dist/index.html: el frontend no está compilado. Ejecuta scripts/desplegar.sh.');
+    return res.status(503).type('html').send(
+      '<!doctype html><meta charset="utf-8"><title>HeraWallet</title>' +
+      '<div style="font-family:system-ui;max-width:32rem;margin:20vh auto;text-align:center;line-height:1.6">' +
+      '<h1 style="font-size:1.25rem">Estamos actualizando HeraWallet</h1>' +
+      '<p>Volvemos en unos minutos. Tus datos están a salvo.</p></div>'
+    );
+  }
+
+  res.sendFile(indexPath);
 });
 
 // --- Modo Live: síntesis de voz (TTS) con Piper local ---

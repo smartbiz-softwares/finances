@@ -24,3 +24,6 @@ apk/
 android/firma.properties
 android/*.jks
 *.keystore
+dist.nuevo/
+dist.anterior/
+dist.roto.*/

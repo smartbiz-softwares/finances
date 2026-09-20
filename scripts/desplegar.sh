@@ -56,8 +56,35 @@ if ! git diff --quiet "$ANTES" "$DESPUES" -- package-lock.json package.json 2>/d
   npm ci
 fi
 
-log "Compilando la web…"
-npm run build
+# Vite vacía el directorio de salida ANTES de escribir nada. Si el build muere
+# a mitad —en este servidor, con 1 GB de RAM, lo hace el OOM killer— `dist/`
+# se queda sin index.html y el sitio entero devuelve 404: se cae producción
+# justo por intentar actualizarla (ocurrió el 20-09-2026).
+#
+# Por eso se compila aparte y solo se cambia por el bueno si el build terminó
+# y el index.html existe de verdad.
+NUEVO="dist.nuevo"
+ANTERIOR="dist.anterior"
+
+rm -rf "$NUEVO"
+log "Compilando la web en $NUEVO…"
+if ! npm run build -- --outDir "$NUEVO" --emptyOutDir; then
+  rm -rf "$NUEVO"
+  aviso "El build falló: producción se queda con la versión anterior, intacta."
+  aviso "Si no dio error claro, casi siempre es memoria: comprueba 'free -m'."
+  exit 1
+fi
+
+if [[ ! -s "$NUEVO/index.html" ]]; then
+  rm -rf "$NUEVO"
+  aviso "El build terminó sin index.html; no se toca producción."
+  exit 1
+fi
+
+rm -rf "$ANTERIOR"
+[[ -d dist ]] && mv dist "$ANTERIOR"
+mv "$NUEVO" dist
+log "Web actualizada (la versión anterior queda en $ANTERIOR/ por si hay que volver)."
 
 # --- Reiniciar el backend -------------------------------------------------
 #
