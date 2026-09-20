@@ -22,14 +22,49 @@ concurrency:
 
 jobs:
   # --- La web ---------------------------------------------------------------
+  #
+  # La web se compila AQUÍ y al servidor sube el resultado ya hecho, igual que
+  # el APK. Antes se compilaba en el VPS y el 20-09-2026 eso tiró el sitio: la
+  # máquina tiene 1 GB de RAM y el build murió a mitad, justo después de que
+  # Vite vaciara dist/. Resultado: dist/ sin index.html y todas las rutas en
+  # 404 durante horas, con el agravante de que Cloudflare seguía sirviendo los
+  # bundles cacheados y desde fuera parecía que la web vivía.
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Descargar el repositorio
         uses: actions/checkout@v4
 
-      - name: Executing remote SSH commands for deploy
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar la web
+        run: npm run build
+
+      - name: Empaquetar la entrega
+        run: |
+          test -s dist/index.html || { echo "El build no generó index.html"; exit 1; }
+          tar czf web.tgz -C dist .
+          ls -lh web.tgz
+
+      - name: Subir la entrega al servidor
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22112 }}
+          source: 'web.tgz'
+          target: /var/www/finances/entrega
+
+      - name: Publicar y reiniciar
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -37,11 +72,36 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22112 }}
           script: |
+            set -e
             cd /var/www/finances
+
+            # Las dependencias solo se reinstalan si cambiaron de verdad: en
+            # esta máquina cada npm install es memoria que no sobra.
+            ANTES="$(md5sum package-lock.json | cut -d' ' -f1)"
             git pull origin main
-            npm install
-            npm run build
-            pm2 restart hera-api || pm2 start tsx --name "hera-api" -- server.ts
+            DESPUES="$(md5sum package-lock.json | cut -d' ' -f1)"
+            [ "$ANTES" != "$DESPUES" ] && npm install --no-audit --no-fund
+
+            # Cambio atómico: producción no se toca hasta tener la entrega
+            # entera y comprobada en disco.
+            rm -rf dist.nuevo
+            mkdir dist.nuevo
+            tar xzf entrega/web.tgz -C dist.nuevo
+            test -s dist.nuevo/index.html || { echo "La entrega llegó sin index.html"; rm -rf dist.nuevo; exit 1; }
+
+            rm -rf dist.anterior
+            [ -d dist ] && mv dist dist.anterior
+            mv dist.nuevo dist
+            rm -rf entrega
+
+            pm2 restart hera-api --update-env || pm2 start tsx --name "hera-api" -- server.ts
+
+            # Si esto falla, el despliegue falla: mejor enterarse por el flujo
+            # que por un usuario.
+            sleep 4
+            CODIGO="$(curl -s -o /dev/null -w '%{http_code}' http://localhost:${PORT:-4000}/panel)"
+            echo "GET /panel -> $CODIGO"
+            [ "$CODIGO" = "200" ] || { echo "La web no responde tras desplegar"; exit 1; }
 
   # --- La app Android -------------------------------------------------------
   #
