@@ -2034,7 +2034,7 @@ export default function App() {
 
   // Filtered Users List
   const filteredAdminUsers = React.useMemo(() => {
-    return adminUsers
+    return (Array.isArray(adminUsers) ? adminUsers : [])
       .filter(u => {
         const matchesQuery =
           !userSearchQuery ||
@@ -2055,7 +2055,7 @@ export default function App() {
 
   // Filtered Transactions List
   const filteredAdminTransactions = React.useMemo(() => {
-    return adminAllTransactions
+    return (Array.isArray(adminAllTransactions) ? adminAllTransactions : [])
       .filter(tx => {
         const query = txSearchQuery.toLowerCase();
         const matchesQuery =
@@ -2081,7 +2081,7 @@ export default function App() {
 
   // Filtered Audit Logs List
   const filteredAdminLogs = React.useMemo(() => {
-    return adminLogs.filter(log => {
+    return (Array.isArray(adminLogs) ? adminLogs : []).filter(log => {
       const query = logSearchQuery.toLowerCase();
       const matchesQuery =
         !logSearchQuery ||
@@ -4878,20 +4878,36 @@ export default function App() {
     if (!t) return;
     try {
       const headers = { 'Authorization': `Bearer ${t}` };
-      const [statsRes, provsRes, usersRes, logsRes, plansRes, cubaRes, allTxsRes] = await Promise.all([
-        fetch(apiUrl('/api/admin/stats'), { headers }).then(r => r.json()),
-        fetch(apiUrl('/api/admin/providers'), { headers }).then(r => r.json()),
-        fetch(apiUrl('/api/admin/users'), { headers }).then(r => r.json()),
-        fetch(apiUrl('/api/admin/logs'), { headers }).then(r => r.json()),
-        fetch(apiUrl('/api/admin/plans'), { headers }).then(r => r.json()),
-        fetch(apiUrl('/api/admin/cuba-requests'), { headers }).then(r => r.json()),
-        fetch(apiUrl('/api/admin/all-transactions'), { headers }).then(r => r.json())
-      ]);
+      const respuestas = await Promise.all([
+        '/api/admin/stats',
+        '/api/admin/providers',
+        '/api/admin/users',
+        '/api/admin/logs',
+        '/api/admin/plans',
+        '/api/admin/cuba-requests',
+        '/api/admin/all-transactions'
+      ].map(ruta => fetch(apiUrl(ruta), { headers })));
 
-      setAdminStats(statsRes);
-      setAiProviders(provsRes || []);
-      setAdminUsers(usersRes || []);
-      setAdminLogs(logsRes || []);
+      // El token de administrador caduca a los 7 días. Sin esta comprobación,
+      // el {error:'...'} del 401 se guardaba donde se esperaba una lista y el
+      // panel moría con "filter is not a function" —pantalla en negro— en vez
+      // de pedir la contraseña otra vez.
+      if (respuestas.some(r => r.status === 401)) {
+        localStorage.removeItem('hera_admin_token');
+        setAdminToken(null);
+        showToast('Tu sesión de administrador caducó. Vuelve a entrar.', 'error');
+        return;
+      }
+
+      const [statsRes, provsRes, usersRes, logsRes, plansRes, cubaRes, allTxsRes] =
+        await Promise.all(respuestas.map(r => r.json().catch(() => null)));
+
+      // Lo que se pinta como lista solo se guarda si de verdad es una lista:
+      // una respuesta rara deja su sección como estaba y no tumba el panel.
+      if (statsRes && typeof statsRes === 'object' && !statsRes.error) setAdminStats(statsRes);
+      if (Array.isArray(provsRes)) setAiProviders(provsRes);
+      if (Array.isArray(usersRes)) setAdminUsers(usersRes);
+      if (Array.isArray(logsRes)) setAdminLogs(logsRes);
       if (Array.isArray(plansRes)) setAdminPlans(plansRes);
       if (Array.isArray(cubaRes)) setCubaRequests(cubaRes);
       if (Array.isArray(allTxsRes)) setAdminAllTransactions(allTxsRes);

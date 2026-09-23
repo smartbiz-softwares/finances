@@ -1,6 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import {PantallaDeError} from './PantallaDeError.tsx';
 import './index.css';
 import {IS_NATIVE_APP} from './api';
 import {activarHapticaGlobal} from './haptica';
@@ -11,7 +12,9 @@ activarHapticaGlobal();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <PantallaDeError>
+      <App />
+    </PantallaDeError>
   </StrictMode>,
 );
 
