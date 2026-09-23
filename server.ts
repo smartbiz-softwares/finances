@@ -59,7 +59,7 @@ if (!process.env.JWT_SECRET || !process.env.ADMIN_JWT_SECRET) {
   console.warn('⚠️ [Seguridad] JWT_SECRET / ADMIN_JWT_SECRET no definidos en .env: usando valores de desarrollo. NO usar así en producción.');
 }
 if (!process.env.ADMIN_PASSWORD) {
-  console.warn('⚠️ [Seguridad] ADMIN_PASSWORD no definida en .env: el /panel acepta la contraseña de desarrollo. Defínela antes de exponer la app.');
+  console.warn('⚠️ [Seguridad] ADMIN_PASSWORD no definida en .env: el /panel rechazará cualquier acceso hasta que se defina.');
 }
 if (process.env.OTP_DEBUG === '1') {
   console.warn('🚨 [Seguridad] OTP_DEBUG=1 ACTIVO: los códigos OTP viajan en la respuesta HTTP. SOLO desarrollo.');
@@ -3364,7 +3364,16 @@ app.get('/api/admin/notifications/history', adminAuthMiddleware, (req: any, res)
 app.post('/api/admin/login', (req, res) => {
   const { username, password } = req.body;
   const expectedAdminUser = process.env.ADMIN_USERNAME || 'admin';
-  const expectedAdminPass = process.env.ADMIN_PASSWORD || 'fuKWDqqmXn';
+  const expectedAdminPass = process.env.ADMIN_PASSWORD;
+
+  // Sin ADMIN_PASSWORD no se entra. Antes había aquí una contraseña de
+  // reserva escrita en el código: quien leyera el repositorio tenía el panel
+  // de administración de producción. Mejor quedarse fuera que dejar la puerta
+  // con la llave puesta.
+  if (!expectedAdminPass) {
+    console.error('[Seguridad] Intento de acceso al panel sin ADMIN_PASSWORD definida.');
+    return res.status(503).json({ error: 'El acceso de administrador no está configurado en este servidor.' });
+  }
 
   if (username === expectedAdminUser && password === expectedAdminPass) {
     const adminToken = jwt.sign({ adminId: 'admin_root', role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: '7d' });
