@@ -1539,11 +1539,16 @@ export default function App() {
     category: string;
     description: string;
     accountId: string;
+    /** Vacío = la moneda de la cuenta elegida. */
+    currency?: string;
+    /** Cuánto vale 1 unidad de `currency` en la moneda de la cuenta (texto, como se escribe). */
+    exchangeRate?: string;
   } | null>(null);
 
   // AI API Keys State
   const [deepseekKeyInput, setDeepseekKeyInput] = useState('');
   const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  const [newAccCurrency, setNewAccCurrency] = useState('');
   const [showAddGoalModal, setShowAddGoalModal] = useState(false);
   const [newGoalName, setNewGoalName] = useState('');
   const [newGoalTarget, setNewGoalTarget] = useState('');
@@ -2983,13 +2988,14 @@ export default function App() {
           name: newAccName,
           type: newAccType,
           balance: parseFloat(newAccBalance) || 0,
-          currency: defaultCurrency
+          currency: newAccCurrency || defaultCurrency
         })
       });
       showToast('Nueva cuenta creada correctamente', 'success');
       setShowAddAccountModal(false);
       setNewAccName('');
       setNewAccBalance('');
+      setNewAccCurrency('');
       loadUserData();
     } catch (err: any) {
       showToast('Error al crear cuenta', 'error');
@@ -8711,6 +8717,11 @@ export default function App() {
                                       <p className={cn("font-mono font-bold text-xs sm:text-sm", isIncome ? "text-success" : "text-text-primary")}>
                                         {isIncome ? '+' : '-'}{compacto(item.amount)}{currencySymbol}
                                       </p>
+                                      {item.originalAmount != null && item.currency && (
+                                        <p className="font-mono text-[10px] text-text-dim">
+                                          {compacto(item.originalAmount)} {item.currency}
+                                        </p>
+                                      )}
                                       <span className={cn(
                                         "inline-block px-2 py-0.5 text-[9px] font-mono font-bold rounded-md uppercase",
                                         isIncome ? "bg-success/10 text-success" : "bg-error/10 text-error"
@@ -11406,17 +11417,66 @@ export default function App() {
                   {/* Real-time Interactive Editable Fields */}
                   <div className="bg-bg/90 border border-border p-4 rounded-2xl space-y-3 shadow-xs">
 
-                    {/* Editable Amount */}
-                    <div>
-                      <label className="text-[10px] font-mono text-text-dim block uppercase">Importe ({defaultCurrency})</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={aiParsedPreview.amount}
-                        onChange={e => setAiParsedPreview(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : null)}
-                        className="w-full bg-surface border border-border focus:border-brand px-3 py-2 rounded-xl text-lg font-bold font-mono text-text-primary focus:outline-none mt-1"
-                      />
-                    </div>
+                    {/* Editable Amount + moneda */}
+                    {(() => {
+                      const cuentaSel = accounts.find(a => a.id === (selectedAccountId || aiParsedPreview.accountId || accounts[0]?.id));
+                      const monedaCuenta = (cuentaSel?.currency || 'EUR').toUpperCase();
+                      const monedaMov = (aiParsedPreview.currency || monedaCuenta).toUpperCase();
+                      const distinta = monedaMov !== monedaCuenta;
+                      const tasa = parseFloat(aiParsedPreview.exchangeRate || '');
+                      const convertido = distinta && tasa > 0 ? Math.round(aiParsedPreview.amount * tasa * 100) / 100 : null;
+
+                      return (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                            <div>
+                              <label className="text-[10px] font-mono text-text-dim block uppercase">Importe ({monedaMov})</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={aiParsedPreview.amount}
+                                onChange={e => setAiParsedPreview(prev => prev ? { ...prev, amount: parseFloat(e.target.value) || 0 } : null)}
+                                className="w-full bg-surface border border-border focus:border-brand px-3 py-2 rounded-xl text-lg font-bold font-mono text-text-primary focus:outline-none mt-1"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-mono text-text-dim block uppercase">Moneda</label>
+                              <select
+                                value={monedaMov}
+                                onChange={e => setAiParsedPreview(prev => prev ? { ...prev, currency: e.target.value, exchangeRate: '' } : null)}
+                                className="bg-surface border border-border focus:border-brand px-2 py-2.5 rounded-xl text-xs font-mono font-bold text-text-primary focus:outline-none mt-1 cursor-pointer"
+                              >
+                                {Array.from(new Set([monedaCuenta, ...ALL_CURRENCIES.map(c => c.code)])).map(code => (
+                                  <option key={code} value={code}>{code}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          {distinta && (
+                            <div className="bg-brand/5 border border-brand/20 rounded-xl p-3 space-y-1.5">
+                              <label className="text-[10px] font-mono text-text-dim block uppercase">
+                                1 {monedaMov} equivale a (en {monedaCuenta}, la moneda de la cuenta)
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                inputMode="decimal"
+                                value={aiParsedPreview.exchangeRate || ''}
+                                onChange={e => setAiParsedPreview(prev => prev ? { ...prev, exchangeRate: e.target.value } : null)}
+                                placeholder="Ej. 0.92"
+                                className="w-full bg-surface border border-border focus:border-brand px-3 py-2 rounded-xl text-xs font-mono text-text-primary focus:outline-none"
+                              />
+                              <p className="text-[11px] text-text-secondary">
+                                {convertido !== null
+                                  ? <>El saldo de la cuenta cambiará en <strong className="text-text-primary font-mono">{convertido} {monedaCuenta}</strong></>
+                                  : 'Indica el tipo de cambio para saber cuánto se descuenta o suma en la cuenta.'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Editable Description */}
                     <div>
@@ -11501,6 +11561,12 @@ export default function App() {
                       onClick={async () => {
                         if (!aiParsedPreview) return;
                         const targetAccId = selectedAccountId || aiParsedPreview.accountId || accounts[0]?.id;
+                        const monedaCuenta = (accounts.find(a => a.id === targetAccId)?.currency || 'EUR').toUpperCase();
+                        const monedaMov = (aiParsedPreview.currency || monedaCuenta).toUpperCase();
+                        if (monedaMov !== monedaCuenta && !(parseFloat(aiParsedPreview.exchangeRate || '') > 0)) {
+                          showToast(`Indica a cuánto equivale 1 ${monedaMov} en ${monedaCuenta}`, 'error');
+                          return;
+                        }
                         try {
                           const res = await api('/finance/transactions', {
                             method: 'POST',
@@ -11508,13 +11574,15 @@ export default function App() {
                               accountId: targetAccId,
                               type: aiParsedPreview.type,
                               amount: aiParsedPreview.amount,
+                              currency: monedaMov,
+                              exchangeRate: monedaMov !== monedaCuenta ? parseFloat(aiParsedPreview.exchangeRate || '') : undefined,
                               category: aiParsedPreview.category,
                               description: aiParsedPreview.description,
                               date: new Date().toISOString().split('T')[0]
                             })
                           });
                           if (res.success) {
-                            showToast(`¡Registro guardado! ${aiParsedPreview.category} - ${aiParsedPreview.amount}€`, 'success');
+                            showToast(`¡Registro guardado! ${aiParsedPreview.category} - ${aiParsedPreview.amount} ${aiParsedPreview.currency || (accounts.find(a => a.id === targetAccId)?.currency || 'EUR')}`, 'success');
                             setShowAddModal(false);
                             setAddModalStep(1);
                             setAiParsedPreview(null);
@@ -11610,6 +11678,19 @@ export default function App() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-text-secondary">Moneda de la cuenta:</label>
+                  <select
+                    value={newAccCurrency || defaultCurrency}
+                    onChange={e => setNewAccCurrency(e.target.value)}
+                    className="w-full bg-bg border border-border rounded-2xl p-3 text-xs text-text-primary focus:outline-none focus:border-brand/60 cursor-pointer"
+                  >
+                    {ALL_CURRENCIES.map(c => (
+                      <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="space-y-1">
