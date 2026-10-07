@@ -70,5 +70,13 @@ db.exec(`INSERT INTO transactions (id,userId,accountId,type,amount,category,date
 r = C.resumen(db, 'u1');
 comprobar('movimientos de cuentas borradas sin moneda cuentan en la principal', r.totalIncome === 15, r);
 
+console.log('\nConvertidor para listas');
+const { moneda, convertir } = C.convertidor(db, 'u1');
+comprobar('usa la moneda principal', moneda === 'USD');
+comprobar('misma moneda queda igual', convertir(12.5, 'USD') === 12.5);
+comprobar('convierte con el tipo guardado', convertir(4000, 'CUP') === 10);
+comprobar('sin moneda se asume la principal', convertir(7, null) === 7);
+comprobar('sin tipo de cambio devuelve null', convertir(5, 'JPY') === null);
+
 console.log(fallos ? `\n${fallos} fallos` : '\nTodo bien');
 process.exit(fallos ? 1 : 0);

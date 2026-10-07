@@ -191,6 +191,17 @@ function AnimatedProgressBar({ progress, colorClass = "bg-brand", heightClass = 
   );
 }
 
+/**
+ * Importe de un movimiento en la moneda principal del usuario.
+ *
+ * El servidor lo manda ya convertido en `importeBase` (null si falta el tipo de
+ * cambio). Sin ese campo —un servidor anterior— se usa el importe tal cual.
+ */
+export function importeEnPrincipal(t: any): number | null {
+  if (t && 'importeBase' in t) return t.importeBase === null ? null : Number(t.importeBase) || 0;
+  return Number(t?.amount) || 0;
+}
+
 function HeraProjectionChartCard({ data, currencySymbol = '$' }: { data: any; currencySymbol?: string }) {
   const chartTitle = data?.title || "Próximos cuatro meses";
   const categoryLabel = data?.category || "PROYECCIÓN DE SALDO";
@@ -8507,10 +8518,15 @@ export default function App() {
                   {(() => {
                     let totalInc = 0;
                     let totalExp = 0;
+                    // Se suma en la moneda principal; lo que no se puede convertir
+                    // queda fuera y se avisa debajo.
+                    let sinConvertir = 0;
                     timeline.forEach(group => {
                       group.items?.forEach((it: any) => {
-                        if (it.type === 'income') totalInc += Number(it.amount || 0);
-                        else totalExp += Number(it.amount || 0);
+                        const importe = importeEnPrincipal(it);
+                        if (importe === null) { sinConvertir++; return; }
+                        if (it.type === 'income') totalInc += importe;
+                        else totalExp += importe;
                       });
                     });
                     const netBal = totalInc - totalExp;
@@ -8601,6 +8617,13 @@ export default function App() {
                             </p>
                           </div>
                         </div>
+
+                        {sinConvertir > 0 && (
+                          <p className="text-[11px] text-warning px-2">
+                            {sinConvertir === 1 ? '1 movimiento en otra moneda no está' : `${sinConvertir} movimientos en otra moneda no están`} en estos totales:
+                            falta su tipo de cambio. Puedes indicarlo en Cuentas.
+                          </p>
+                        )}
                       </div>
                     );
                   })()}
@@ -8706,7 +8729,7 @@ export default function App() {
                                   <div className="flex items-center gap-3 shrink-0">
                                     <div className="text-right space-y-1">
                                       <p className={cn("font-mono font-bold text-xs sm:text-sm", isIncome ? "text-success" : "text-text-primary")}>
-                                        {isIncome ? '+' : '-'}{compacto(item.amount)}{currencySymbol}
+                                        {isIncome ? '+' : '-'}{compacto(item.amount)}{item.accountCurrency && item.accountCurrency !== defaultCurrency ? ` ${item.accountCurrency}` : currencySymbol}
                                       </p>
                                       {item.originalAmount != null && item.currency && (
                                         <p className="font-mono text-[10px] text-text-dim">
@@ -8917,8 +8940,10 @@ export default function App() {
                             const catMap: Record<string, number> = {};
                             const allTx = (timeline || []).flatMap((g: any) => g.items || []);
                             allTx.filter((t: any) => t.type === 'expense').forEach((t: any) => {
+                              const importe = importeEnPrincipal(t);
+                              if (importe === null) return;
                               const cat = t.category || 'General';
-                              catMap[cat] = (catMap[cat] || 0) + Math.abs(Number(t.amount) || 0);
+                              catMap[cat] = (catMap[cat] || 0) + Math.abs(importe);
                             });
 
                             let sortedCats = Object.entries(catMap)

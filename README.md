@@ -12,6 +12,10 @@
   </p>
 </div>
 
+> [!IMPORTANT]
+> **Hay tareas pendientes en el servidor** (rotar claves de IA, secretos de sesión, copias de seguridad…).
+> Léelas en **[IMPORTANTE.md](IMPORTANTE.md)** antes de cualquier otra cosa.
+
 ---
 
 ## 💡 ¿Qué es HeraWallet?

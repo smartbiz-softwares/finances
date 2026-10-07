@@ -1,0 +1,22 @@
+# Avisa (con un pull request) cuando una dependencia tiene una versión nueva o
+# una corrección de seguridad. Los PR pasan por el flujo de Pruebas antes de
+# poder fusionarse.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Capacitor se actualiza siempre en bloque: versiones mezcladas rompen el APK.
+      capacitor:
+        patterns: ["@capacitor/*"]
+      menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

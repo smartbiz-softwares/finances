@@ -59,6 +59,25 @@ export function monedaPrincipal(db: any, userId: string): string {
 
 const redondear = (n: number) => Math.round(n * 100) / 100;
 
+/**
+ * Convertidor a la moneda principal con caché por moneda, para pasar listas
+ * largas (la línea de tiempo) sin una consulta por fila. Devuelve null si no
+ * hay tipo de cambio: quien llama decide cómo enseñarlo.
+ */
+export function convertidor(db: any, userId: string): { moneda: string; convertir: (monto: number, de: string | null | undefined) => number | null } {
+  const moneda = monedaPrincipal(db, userId);
+  const cache = new Map<string, number | null>();
+  return {
+    moneda,
+    convertir(monto, de) {
+      const m = norm(de) || moneda;
+      if (!cache.has(m)) cache.set(m, tasa(db, userId, m, moneda));
+      const t = cache.get(m);
+      return t === null || t === undefined ? null : redondear(Number(monto) * t);
+    },
+  };
+}
+
 export interface Resumen {
   moneda: string;
   totalBalance: number;

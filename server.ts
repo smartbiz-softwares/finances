@@ -46,7 +46,34 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
+// Orígenes que pueden llamar a la API desde un navegador. La web va al mismo
+// dominio y no lo necesita; la app Android carga la interfaz desde dentro del
+// APK (https://localhost) y sí. Se pueden añadir más con CORS_ORIGENES
+// (separados por comas).
+//
+// Mientras CORS_ESTRICTO no valga 1, un origen desconocido se deja pasar pero
+// se anota (una vez por origen) en el log y en /api/admin/health: así se ve
+// qué llega de verdad antes de cerrar la puerta y dejar a alguien fuera.
+const ORIGENES_PERMITIDOS = new Set([
+  'https://herawallet.app',
+  'https://www.herawallet.app',
+  'https://localhost',          // app Android (Capacitor)
+  'capacitor://localhost',      // app iPhone (Capacitor)
+  'http://localhost',
+  'http://localhost:3000',      // desarrollo (vite)
+  ...String(process.env.CORS_ORIGENES || '').split(',').map(o => o.trim()).filter(Boolean),
+]);
+const CORS_ESTRICTO = process.env.CORS_ESTRICTO === '1';
+const origenesDesconocidos = new Map<string, number>();
+app.use(cors({
+  origin(origen, listo) {
+    // Sin cabecera Origin: misma web, apps nativas o herramientas como curl.
+    if (!origen || ORIGENES_PERMITIDOS.has(origen)) return listo(null, true);
+    if (!origenesDesconocidos.has(origen)) console.warn(`[CORS] Origen no reconocido: ${origen}`);
+    origenesDesconocidos.set(origen, (origenesDesconocidos.get(origen) || 0) + 1);
+    listo(null, !CORS_ESTRICTO);
+  },
+}));
 // Cabeceras básicas de seguridad. Sin CSP: la web carga recursos de varios
 // orígenes y una política mal ajustada la rompería sin avisar.
 app.use((_req, res, next) => {
@@ -58,8 +85,31 @@ app.use((_req, res, next) => {
 // El webhook de Stripe necesita el cuerpo crudo para poder validar la firma HMAC.
 // Debe montarse ANTES de express.json(), o el body llega ya parseado y la firma no cuadra.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Tamaño máximo del cuerpo por ruta. Antes era 50 MB para todo: cualquiera
+// podía mandar peticiones enormes a cualquier ruta y llenar la memoria de un
+// VPS de 1 GB. Solo el audio y las fotos (en base64, un 33 % más grandes que el
+// archivo) necesitan margen; el resto cabe de sobra en 1 MB.
+const LIMITE_CUERPO: Record<string, string> = {
+  '/api/transcribe': '25mb',       // audio dictado
+  '/api/widget/dictado': '25mb',   // audio desde el widget
+  '/api/scan-receipt': '25mb',     // foto del recibo, sin comprimir
+  '/api/export-document': '5mb',   // filas que manda la app
+  '/api/me': '2mb',                // foto de perfil (ya comprimida a 256 px)
+};
+const lectoresJson = new Map<string, any>();
+const lectorJson = (limite: string) => {
+  if (!lectoresJson.has(limite)) lectoresJson.set(limite, express.json({ limit: limite }));
+  return lectoresJson.get(limite);
+};
+app.use((req, res, next) => lectorJson(LIMITE_CUERPO[req.path] || '1mb')(req, res, next));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
+// Un cuerpo demasiado grande responde 413 con un mensaje claro, no un HTML de error.
+app.use((err: any, _req: any, res: any, next: any) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'El archivo o los datos enviados son demasiado grandes.' });
+  }
+  next(err);
+});
 
 // Secretos de firma de sesión: SIEMPRE desde el entorno en producción.
 // El fallback solo existe para desarrollo local; con él, cualquiera que lea
@@ -1722,7 +1772,7 @@ app.get('/api/finance/timeline', authMiddleware, (req: any, res) => {
   const { startDate, endDate, category, type, minAmount, maxAmount } = req.query;
 
   let sql = `
-    SELECT t.*, a.name as accountName 
+    SELECT t.*, a.name as accountName, a.currency as accountCurrency
     FROM transactions t 
     LEFT JOIN accounts a ON t.accountId = a.id 
     WHERE t.userId = ? 
@@ -1766,6 +1816,16 @@ app.get('/api/finance/timeline', authMiddleware, (req: any, res) => {
   sql += ` ORDER BY t.date DESC, COALESCE(t.createdAt, t.date) DESC, t.rowid DESC LIMIT 200`;
 
   const txs = db.prepare(sql).all(...params) as any[];
+
+  // Cada movimiento lleva también su importe en la moneda principal, para que
+  // los totales de la pantalla no sumen monedas distintas. null = sin tipo de
+  // cambio conocido; la app lo deja fuera del total y lo avisa.
+  const { moneda: monedaPrincipal, convertir } = cambios.convertidor(db, req.userId);
+  for (const t of txs) {
+    const monedaCuenta = t.accountCurrency || (t.originalAmount == null ? t.currency : null) || monedaPrincipal;
+    t.accountCurrency = String(monedaCuenta).toUpperCase();
+    t.importeBase = convertir(t.amount, monedaCuenta);
+  }
 
   // Group transactions by date for Timeline view
   const timelineMap: Record<string, any[]> = {};
@@ -4703,7 +4763,10 @@ app.get('/api/admin/health', adminAuthMiddleware, async (req, res) => {
   };
 
   const allOk = Object.values(checks).every((c: any) => c.ok !== false);
-  res.json({ commit: GIT_COMMIT, startedAt: BOOT_TIME, allOk, checks });
+  res.json({
+    commit: GIT_COMMIT, startedAt: BOOT_TIME, allOk, checks,
+    cors: { estricto: CORS_ESTRICTO, origenesDesconocidos: Object.fromEntries(origenesDesconocidos) },
+  });
 });
 
 // --- Notificaciones -------------------------------------------------------
