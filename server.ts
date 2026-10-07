@@ -23,6 +23,7 @@ import { extraerMovimiento } from './server/extraer.ts';
 import * as presupuestos from './server/presupuestos.ts';
 import * as recurrentes from './server/recurrentes.ts';
 import * as cobros from './server/cobros.ts';
+import { resolverMoneda } from './server/monedas.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -341,6 +342,11 @@ try { db.exec('ALTER TABLE users ADD COLUMN lastSeenAt TEXT'); } catch { }
 // por un id aleatorio: dentro del mismo día el orden salía arbitrario en vez
 // de "lo más nuevo primero".
 try { db.exec("ALTER TABLE transactions ADD COLUMN createdAt TEXT"); } catch { }
+// Moneda en la que se registró el movimiento. `amount` sigue en la moneda de la
+// cuenta; ver server/monedas.ts.
+try { db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT"); } catch { }
+try { db.exec("ALTER TABLE transactions ADD COLUMN originalAmount REAL"); } catch { }
+try { db.exec("ALTER TABLE transactions ADD COLUMN exchangeRate REAL"); } catch { }
 // Los movimientos anteriores a esta columna se ordenan por su fecha.
 try { db.exec("UPDATE transactions SET createdAt = date || 'T12:00:00.000Z' WHERE createdAt IS NULL OR createdAt = ''"); } catch { }
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_tx_userId_created ON transactions(userId, createdAt)"); } catch { }
@@ -1663,7 +1669,7 @@ app.get('/api/finance/transactions', authMiddleware, (req: any, res) => {
 });
 
 app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
-  const { accountId, type, amount, category, description, date, receiptUrl } = req.body;
+  const { accountId, type, amount, category, description, date, receiptUrl, currency, exchangeRate } = req.body;
   if (!type || !amount || !category) return res.status(400).json({ error: 'Tipo, monto y categoría requeridos' });
 
   let targetAccountId = accountId;
@@ -1672,15 +1678,21 @@ app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
     targetAccountId = acc ? acc.id : randomUUID();
   }
 
+  const cuenta = db.prepare('SELECT currency FROM accounts WHERE id = ? AND userId = ?')
+    .get(targetAccountId, req.userId) as any;
+  const moneda = resolverMoneda(cuenta?.currency, { amount, currency, exchangeRate });
+  if ('error' in moneda) return res.status(400).json({ error: moneda.error });
+
   const id = randomUUID();
   const txDate = date || new Date().toISOString().split('T')[0];
 
-  db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, receiptUrl, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    id, req.userId, targetAccountId, type, amount, category, description || '', txDate, receiptUrl || null, new Date().toISOString()
+  db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, receiptUrl, createdAt, currency, originalAmount, exchangeRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+    id, req.userId, targetAccountId, type, moneda.amount, category, description || '', txDate, receiptUrl || null, new Date().toISOString(),
+    moneda.currency, moneda.originalAmount, moneda.exchangeRate
   );
 
-  // Update account balance
-  const delta = type === 'income' ? Number(amount) : -Number(amount);
+  // Update account balance (siempre en la moneda de la cuenta)
+  const delta = type === 'income' ? moneda.amount : -moneda.amount;
   db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, targetAccountId, req.userId);
 
   logAudit(req.userId, 'create_transaction', `Transacción registrada: ${category} - ${amount}`);
@@ -3048,7 +3060,7 @@ Incluye al final:
 
 app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
   try {
-    const { actionType, type, amount, category, description, accountId, name, targetAmount, currentAmount, deadline } = req.body;
+    const { actionType, type, amount, category, description, accountId, name, targetAmount, currentAmount, deadline, currency, exchangeRate } = req.body;
 
     if (actionType === 'create_transaction') {
       let targetAccountId = accountId;
@@ -3056,14 +3068,20 @@ app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
         const acc = db.prepare('SELECT id FROM accounts WHERE userId = ? LIMIT 1').get(req.userId) as any;
         targetAccountId = acc ? acc.id : randomUUID();
       }
+      const cuentaChat = db.prepare('SELECT currency FROM accounts WHERE id = ? AND userId = ?')
+        .get(targetAccountId, req.userId) as any;
+      const moneda = resolverMoneda(cuentaChat?.currency, { amount: Number(amount) || 0, currency, exchangeRate });
+      if ('error' in moneda) return res.status(400).json({ error: moneda.error });
+
       const id = randomUUID();
       const txDate = new Date().toISOString().split('T')[0];
 
-      db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-        id, req.userId, targetAccountId, type || 'expense', Number(amount) || 0, category || 'General', description || category || 'Transacción desde Chat', txDate, new Date().toISOString()
+      db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, createdAt, currency, originalAmount, exchangeRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+        id, req.userId, targetAccountId, type || 'expense', moneda.amount, category || 'General', description || category || 'Transacción desde Chat', txDate, new Date().toISOString(),
+        moneda.currency, moneda.originalAmount, moneda.exchangeRate
       );
 
-      const delta = (type || 'expense') === 'income' ? Number(amount) : -Number(amount);
+      const delta = (type || 'expense') === 'income' ? moneda.amount : -moneda.amount;
       db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, targetAccountId, req.userId);
 
       logAudit(req.userId, 'confirm_chat_transaction', `Transacción confirmada desde chat: ${category} - ${amount}€`);
