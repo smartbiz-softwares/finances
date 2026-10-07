@@ -100,6 +100,7 @@ import { Notificaciones, OfertaNotificaciones } from './Notificaciones';
 import { compartirSesionConWidget, olvidarSesionEnWidget, refrescarWidget } from './puenteNativo';
 import Presupuestos from './Presupuestos';
 import Recurrentes from './Recurrentes';
+import Cobros from './Cobros';
 import { CompartirScore } from './CompartirScore';
 import { compacto, dinero as dineroCompacto } from './formato';
 import {
@@ -9601,6 +9602,14 @@ export default function App() {
                         <span>Registrar Deuda / Cobro</span>
                       </button>
                     </div>
+
+                    {/* Lo que te pagan otros cada cierto tiempo; al cobrar se elige la cuenta. */}
+                    <Cobros
+                      simbolo={currencySymbol}
+                      cuentas={accounts}
+                      alCambiar={loadUserData}
+                      mostrarAviso={showToast}
+                    />
 
                     {/* High-End Bento Grid KPI Overview */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

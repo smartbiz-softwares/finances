@@ -22,6 +22,7 @@ import * as apertura from './server/apertura.ts';
 import { extraerMovimiento } from './server/extraer.ts';
 import * as presupuestos from './server/presupuestos.ts';
 import * as recurrentes from './server/recurrentes.ts';
+import * as cobros from './server/cobros.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -4778,6 +4779,85 @@ app.post('/api/finance/recurring/decidir', authMiddleware, (req: any, res) => {
   recurrentes.decidir(db, req.userId, clave, decision);
   res.json({ success: true, detectados: recurrentes.detectar(db, req.userId, hoyDe(req.userId)) });
 });
+
+// --- Cobros recurrentes ---------------------------------------------------
+cobros.crearTablas(db);
+
+app.get('/api/finance/charges', authMiddleware, (req: any, res) => {
+  res.json({ cobros: cobros.listar(db, req.userId, hoyDe(req.userId)) });
+});
+
+app.post('/api/finance/charges', authMiddleware, (req: any, res) => {
+  const v = cobros.validar(req.body || {});
+  if ('error' in v) return res.status(400).json({ error: v.error });
+
+  const id = cobros.crear(db, req.userId, v.datos);
+  logAudit(req.userId, 'create_charge', `Cobro recurrente: ${v.datos.cliente} - ${v.datos.monto}`);
+  res.json({ success: true, id });
+});
+
+app.put('/api/finance/charges/:id', authMiddleware, (req: any, res) => {
+  const v = cobros.validar(req.body || {});
+  if ('error' in v) return res.status(400).json({ error: v.error });
+
+  if (!cobros.actualizar(db, req.userId, req.params.id, v.datos)) {
+    return res.status(404).json({ error: 'No existe ese cobro' });
+  }
+  res.json({ success: true });
+});
+
+app.post('/api/finance/charges/:id/estado', authMiddleware, (req: any, res) => {
+  if (!cobros.cambiarEstado(db, req.userId, req.params.id, String(req.body?.estado || ''))) {
+    return res.status(400).json({ error: 'No se pudo cambiar el estado' });
+  }
+  res.json({ success: true });
+});
+
+/** Cobra: elige la cuenta, crea el ingreso y pasa al siguiente período. */
+app.post('/api/finance/charges/:id/cobrar', authMiddleware, (req: any, res) => {
+  const r = cobros.cobrar(db, req.userId, req.params.id, {
+    cuentaId: String(req.body?.cuentaId || ''),
+    hoy: hoyDe(req.userId),
+    monto: req.body?.monto === undefined || req.body?.monto === '' ? undefined : Number(req.body.monto),
+    fechaCobro: req.body?.fechaCobro,
+    proximaManual: req.body?.proximaManual || null,
+  });
+  if ('error' in r) return res.status(r.codigo).json({ error: r.error });
+
+  logAudit(req.userId, 'collect_charge', `Cobro registrado: ${req.params.id}`);
+  res.json({ success: true, proximoCobro: r.proximoCobro });
+});
+
+app.get('/api/finance/charges/:id/historial', authMiddleware, (req: any, res) => {
+  res.json({ pagos: cobros.historial(db, req.userId, req.params.id) });
+});
+
+app.delete('/api/finance/charges/:id', authMiddleware, (req: any, res) => {
+  if (!cobros.borrar(db, req.userId, req.params.id)) {
+    return res.status(404).json({ error: 'No existe ese cobro' });
+  }
+  res.json({ success: true });
+});
+
+/**
+ * Avisa de lo que toca cobrar. Se evalúa cada hora pero sale como mucho un
+ * aviso por persona y día (lo garantiza `enviarSiProcede` por tipo), dentro del
+ * horario en que se puede molestar.
+ */
+async function avisarCobros() {
+  try {
+    for (const p of cobros.pendientesDeAvisar(db, hoyDe)) {
+      const { titulo, cuerpo } = cobros.textoAviso(p.cobros);
+      await notificaciones.enviarSiProcede(db, p.userId, {
+        tipo: 'cobros', titulo, cuerpo, url: '/', huella: `cobros-${hoyDe(p.userId)}`,
+      });
+    }
+  } catch (err) {
+    console.error('[cobros] fallo avisando', err);
+  }
+}
+setTimeout(avisarCobros, 30 * 1000);
+setInterval(avisarCobros, 3600 * 1000);
 
 app.delete('/api/finance/budgets/:id', authMiddleware, (req: any, res) => {
   const r = db.prepare('DELETE FROM budgets WHERE id = ? AND userId = ?')
