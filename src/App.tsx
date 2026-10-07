@@ -101,6 +101,7 @@ import { compartirSesionConWidget, olvidarSesionEnWidget, refrescarWidget } from
 import Presupuestos from './Presupuestos';
 import Recurrentes from './Recurrentes';
 import Cobros from './Cobros';
+import AvisoMonedas from './AvisoMonedas';
 import { CompartirScore } from './CompartirScore';
 import { compacto, dinero as dineroCompacto } from './formato';
 import {
@@ -1545,9 +1546,7 @@ export default function App() {
     exchangeRate?: string;
   } | null>(null);
 
-  // AI API Keys State
-  const [deepseekKeyInput, setDeepseekKeyInput] = useState('');
-  const [geminiKeyInput, setGeminiKeyInput] = useState('');
+  // Moneda elegida al crear una cuenta (vacío = la del usuario)
   const [newAccCurrency, setNewAccCurrency] = useState('');
   const [showAddGoalModal, setShowAddGoalModal] = useState(false);
   const [newGoalName, setNewGoalName] = useState('');
@@ -1579,6 +1578,12 @@ export default function App() {
   // Movimiento abierto en el detalle. La lista resume; aquí está todo lo que se
   // guardó de él, incluido el recibo si se registró con una foto.
   const [txDetalle, setTxDetalle] = useState<any | null>(null);
+  // Formulario de edición del movimiento abierto en el detalle (null = solo lectura).
+  const [txEdicion, setTxEdicion] = useState<{
+    type: 'income' | 'expense'; amount: string; category: string; description: string;
+    date: string; accountId: string; exchangeRate: string;
+  } | null>(null);
+  const [guardandoTx, setGuardandoTx] = useState(false);
   const [deletingTx, setDeletingTx] = useState(false);
   const liveRecorderRef = useRef<MediaRecorder | null>(null);
   const liveChunksRef = useRef<Blob[]>([]);
@@ -3013,20 +3018,6 @@ export default function App() {
       loadUserData();
     } catch (err: any) {
       showToast('Error al eliminar cuenta', 'error');
-    }
-  };
-
-  const handleSaveAiKey = async (provider: 'DeepSeek' | 'Gemini', key: string) => {
-    if (!key.trim()) return;
-    try {
-      await api('/settings/ai-keys', {
-        method: 'POST',
-        body: JSON.stringify({ provider, apiKey: key.trim() })
-      });
-      showToast(`Clave API de ${provider} guardada y activada correctamente`, 'success');
-      loadUserData();
-    } catch {
-      showToast(`Error al guardar clave de ${provider}`, 'error');
     }
   };
 
@@ -8770,6 +8761,13 @@ export default function App() {
                     </button>
                   </div>
 
+                  <AvisoMonedas
+                    moneda={overview?.summary?.moneda || defaultCurrency}
+                    cuentas={overview?.summary?.sinConvertir || []}
+                    alGuardar={loadUserData}
+                    mostrarAviso={showToast}
+                  />
+
                   {/* Accounts Grid (Ultra-Soft Smooth Animations) */}
                   {financeLoading && accounts.length === 0 && (
                     <SkeletonCards count={4} className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" />
@@ -8902,6 +8900,13 @@ export default function App() {
                           </p>
                         </AnimatedCard>
                       </div>
+
+                      <AvisoMonedas
+                        moneda={overview?.summary?.moneda || defaultCurrency}
+                        cuentas={overview?.summary?.sinConvertir || []}
+                        alGuardar={loadUserData}
+                        mostrarAviso={showToast}
+                      />
 
                       {/* AI Executive Analysis Bento Card */}
                       {aiReportData && (
@@ -12267,7 +12272,7 @@ export default function App() {
           return (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-              onClick={() => setTxDetalle(null)}
+              onClick={() => { setTxDetalle(null); setTxEdicion(null); }}
             >
               <motion.div
                 initial={{ opacity: 0, scale: 0.96, y: 10 }}
@@ -12297,7 +12302,7 @@ export default function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setTxDetalle(null)}
+                      onClick={() => { setTxDetalle(null); setTxEdicion(null); }}
                       aria-label="Cerrar"
                       className="p-1.5 rounded-lg text-text-dim hover:text-text-primary hover:bg-bg transition-colors active:scale-[0.95]"
                     >
@@ -12318,6 +12323,120 @@ export default function App() {
                   </div>
                 </div>
 
+                {txEdicion ? (() => {
+                  const monedaTx = (txDetalle.currency || accounts.find((a: any) => a.id === txDetalle.accountId)?.currency || 'EUR').toUpperCase();
+                  const monedaCuentaNueva = (accounts.find((a: any) => a.id === txEdicion.accountId)?.currency || 'EUR').toUpperCase();
+                  const pideTasa = monedaTx !== monedaCuentaNueva && !(txDetalle.exchangeRate && txEdicion.accountId === txDetalle.accountId);
+                  const campoEd = "w-full bg-bg border border-border focus:border-brand px-3 py-2 rounded-xl text-xs text-text-primary focus:outline-none mt-1";
+                  const etiquetaEd = "text-[10px] font-mono text-text-dim block uppercase";
+
+                  const guardar = async () => {
+                    setGuardandoTx(true);
+                    try {
+                      await api(`/finance/transactions/${txDetalle.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                          type: txEdicion.type,
+                          amount: parseFloat(txEdicion.amount),
+                          category: txEdicion.category,
+                          description: txEdicion.description,
+                          date: txEdicion.date,
+                          accountId: txEdicion.accountId,
+                          ...(pideTasa ? { exchangeRate: parseFloat(txEdicion.exchangeRate) } : {}),
+                        }),
+                      });
+                      showToast('Movimiento actualizado', 'success');
+                      setTxEdicion(null);
+                      setTxDetalle(null);
+                      loadUserData();
+                    } catch (err: any) {
+                      showToast(err?.message || 'No se pudo guardar el cambio', 'error');
+                    } finally {
+                      setGuardandoTx(false);
+                    }
+                  };
+
+                  return (
+                    <>
+                      <div className="p-6 space-y-3 overflow-y-auto">
+                        <div className="grid grid-cols-2 gap-2">
+                          {(['expense', 'income'] as const).map(t => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => setTxEdicion({ ...txEdicion, type: t })}
+                              className={cn(
+                                "py-2 rounded-xl border text-xs font-semibold cursor-pointer transition-colors",
+                                txEdicion.type === t ? "bg-brand/10 border-brand text-brand" : "bg-bg border-border text-text-secondary"
+                              )}
+                            >
+                              {t === 'expense' ? 'Gasto' : 'Ingreso'}
+                            </button>
+                          ))}
+                        </div>
+                        <div>
+                          <label className={etiquetaEd}>Importe ({monedaTx})</label>
+                          <input type="number" step="0.01" inputMode="decimal" value={txEdicion.amount}
+                            onChange={e => setTxEdicion({ ...txEdicion, amount: e.target.value })} className={campoEd} />
+                        </div>
+                        <div>
+                          <label className={etiquetaEd}>Descripción</label>
+                          <input value={txEdicion.description}
+                            onChange={e => setTxEdicion({ ...txEdicion, description: e.target.value })} className={campoEd} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className={etiquetaEd}>Categoría</label>
+                            <input list="category-suggestions" value={txEdicion.category}
+                              onChange={e => setTxEdicion({ ...txEdicion, category: e.target.value })} className={campoEd} />
+                          </div>
+                          <div>
+                            <label className={etiquetaEd}>Fecha</label>
+                            <input type="date" value={txEdicion.date}
+                              onChange={e => setTxEdicion({ ...txEdicion, date: e.target.value })} className={campoEd} />
+                          </div>
+                        </div>
+                        <div>
+                          <label className={etiquetaEd}>Cuenta</label>
+                          <select value={txEdicion.accountId}
+                            onChange={e => setTxEdicion({ ...txEdicion, accountId: e.target.value, exchangeRate: '' })}
+                            className={cn(campoEd, "cursor-pointer")}>
+                            {accounts.map((a: any) => (
+                              <option key={a.id} value={a.id}>{a.name} ({a.currency || 'EUR'})</option>
+                            ))}
+                          </select>
+                        </div>
+                        {pideTasa && (
+                          <div>
+                            <label className={etiquetaEd}>1 {monedaTx} equivale a ({monedaCuentaNueva})</label>
+                            <input type="number" step="any" inputMode="decimal" value={txEdicion.exchangeRate}
+                              onChange={e => setTxEdicion({ ...txEdicion, exchangeRate: e.target.value })}
+                              placeholder="Ej. 0.92" className={campoEd} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-6 pt-0 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setTxEdicion(null)}
+                          className="flex-1 bg-bg hover:bg-surface-hover border border-border text-text-secondary py-2.5 rounded-xl text-xs font-medium cursor-pointer transition-colors duration-200"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={guardar}
+                          disabled={guardandoTx || !(parseFloat(txEdicion.amount) > 0) || !txEdicion.category.trim()
+                            || (pideTasa && !(parseFloat(txEdicion.exchangeRate) > 0))}
+                          className="flex-1 bg-brand hover:bg-brand-hover text-white py-2.5 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors duration-200"
+                        >
+                          {guardandoTx ? 'Guardando…' : 'Guardar cambios'}
+                        </button>
+                      </div>
+                    </>
+                  );
+                })() : (
+                <>
                 <div className="p-6 space-y-4 overflow-y-auto">
                   <dl className="space-y-3">
                     {datos.map((d) => (
@@ -12351,6 +12470,21 @@ export default function App() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setTxEdicion({
+                      type: txDetalle.type === 'income' ? 'income' : 'expense',
+                      amount: String(txDetalle.originalAmount ?? txDetalle.amount),
+                      category: txDetalle.category || '',
+                      description: txDetalle.description || '',
+                      date: txDetalle.date || new Date().toISOString().slice(0, 10),
+                      accountId: txDetalle.accountId,
+                      exchangeRate: '',
+                    })}
+                    className="px-4 py-2.5 rounded-xl border border-border text-text-secondary hover:text-brand hover:border-brand/40 text-xs font-medium cursor-pointer transition-colors duration-200"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => { setTxToDelete(txDetalle); setTxDetalle(null); }}
                     className="px-4 py-2.5 rounded-xl border border-border text-text-dim hover:text-error hover:border-error/40 hover:bg-error/5 text-xs font-medium cursor-pointer transition-colors duration-200 flex items-center gap-1.5"
                   >
@@ -12358,6 +12492,8 @@ export default function App() {
                     Eliminar
                   </button>
                 </div>
+                </>
+                )}
               </motion.div>
             </div>
           );

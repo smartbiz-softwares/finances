@@ -45,6 +45,14 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # Nada llega a producción con errores de tipos o pruebas rotas: si falla
+      # cualquiera de los dos, el despliegue se para aquí y el servidor ni se toca.
+      - name: Comprobar tipos
+        run: npm run lint
+
+      - name: Pruebas
+        run: npm test
+
       - name: Compilar la web
         run: npm run build
 

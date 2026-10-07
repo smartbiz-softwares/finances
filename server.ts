@@ -23,7 +23,8 @@ import { extraerMovimiento } from './server/extraer.ts';
 import * as presupuestos from './server/presupuestos.ts';
 import * as recurrentes from './server/recurrentes.ts';
 import * as cobros from './server/cobros.ts';
-import { resolverMoneda } from './server/monedas.ts';
+import * as movimientos from './server/movimientos.ts';
+import * as cambios from './server/cambios.ts';
 
 if (process.env.MYSQL_HOST || process.env.MYSQL_DATABASE) {
   initMySQLSchema().catch(err => console.error('⚠️ [MySQL WARN] Error inicializando esquemas MySQL:', err.message));
@@ -46,6 +47,14 @@ app.use((req, res, next) => {
 });
 
 app.use(cors());
+// Cabeceras básicas de seguridad. Sin CSP: la web carga recursos de varios
+// orígenes y una política mal ajustada la rompería sin avisar.
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  next();
+});
 // El webhook de Stripe necesita el cuerpo crudo para poder validar la firma HMAC.
 // Debe montarse ANTES de express.json(), o el body llega ya parseado y la firma no cuadra.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json', limit: '2mb' }));
@@ -55,11 +64,27 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Secretos de firma de sesión: SIEMPRE desde el entorno en producción.
 // El fallback solo existe para desarrollo local; con él, cualquiera que lea
 // el repositorio puede firmar tokens de cualquier usuario.
-const JWT_SECRET = process.env.JWT_SECRET || 'hera-secret-key-change-in-production';
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || 'hera-admin-secret-key-prod';
-if (!process.env.JWT_SECRET || !process.env.ADMIN_JWT_SECRET) {
-  console.warn('⚠️ [Seguridad] JWT_SECRET / ADMIN_JWT_SECRET no definidos en .env: usando valores de desarrollo. NO usar así en producción.');
+//
+// Si faltan en el entorno ya no se usa un valor fijo escrito aquí —quien leyera
+// el repositorio podía firmar sesiones de cualquier usuario—, sino uno
+// aleatorio que se genera una vez y se guarda junto a la base de datos, fuera
+// de git. Sobrevive a reinicios y despliegues (que hacen `git pull`).
+const ARCHIVO_SECRETOS = '.secretos-sesion.json';
+function secretoDeSesion(nombre: 'JWT_SECRET' | 'ADMIN_JWT_SECRET'): string {
+  const delEntorno = process.env[nombre];
+  if (delEntorno) return delEntorno;
+
+  let guardados: Record<string, string> = {};
+  try { guardados = JSON.parse(fs.readFileSync(ARCHIVO_SECRETOS, 'utf8')); } catch { }
+  if (!guardados[nombre]) {
+    guardados[nombre] = crypto.randomBytes(48).toString('hex');
+    fs.writeFileSync(ARCHIVO_SECRETOS, JSON.stringify(guardados, null, 2), { mode: 0o600 });
+    console.warn(`⚠️ [Seguridad] ${nombre} no está en .env: generado uno aleatorio en ${ARCHIVO_SECRETOS}.`);
+  }
+  return guardados[nombre];
 }
+const JWT_SECRET = secretoDeSesion('JWT_SECRET');
+const ADMIN_JWT_SECRET = secretoDeSesion('ADMIN_JWT_SECRET');
 if (!process.env.ADMIN_PASSWORD) {
   console.warn('⚠️ [Seguridad] ADMIN_PASSWORD no definida en .env: el /panel rechazará cualquier acceso hasta que se defina.');
 }
@@ -347,6 +372,7 @@ try { db.exec("ALTER TABLE transactions ADD COLUMN createdAt TEXT"); } catch { }
 try { db.exec("ALTER TABLE transactions ADD COLUMN currency TEXT"); } catch { }
 try { db.exec("ALTER TABLE transactions ADD COLUMN originalAmount REAL"); } catch { }
 try { db.exec("ALTER TABLE transactions ADD COLUMN exchangeRate REAL"); } catch { }
+cambios.crearTablas(db);
 // Los movimientos anteriores a esta columna se ordenan por su fecha.
 try { db.exec("UPDATE transactions SET createdAt = date || 'T12:00:00.000Z' WHERE createdAt IS NULL OR createdAt = ''"); } catch { }
 try { db.exec("CREATE INDEX IF NOT EXISTS idx_tx_userId_created ON transactions(userId, createdAt)"); } catch { }
@@ -751,8 +777,9 @@ function normalizeEmail(raw: string): string | null {
   return email;
 }
 
-let mailTransport: nodemailer.Transporter | null = null;
-function getMailTransport(): nodemailer.Transporter | null {
+type TransporteCorreo = ReturnType<typeof nodemailer.createTransport>;
+let mailTransport: TransporteCorreo | null = null;
+function getMailTransport(): TransporteCorreo | null {
   if (mailTransport) return mailTransport;
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
@@ -878,6 +905,13 @@ function authMiddleware(req: any, res: any, next: any) {
   }
 }
 
+/** Compara secretos en tiempo constante, para no filtrar por cuánto tarda. */
+function iguales(a: string, b: string): boolean {
+  const ha = crypto.createHash('sha256').update(a).digest();
+  const hb = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(ha, hb) && a === b;
+}
+
 function adminAuthMiddleware(req: any, res: any, next: any) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
@@ -981,12 +1015,14 @@ async function sendSMS(cleanPhone: string, message: string): Promise<boolean> {
 
 // --- AI API Keys Management Endpoints ---
 
-app.get('/api/settings/ai-keys', authMiddleware, (req: any, res) => {
-  const providers = db.prepare('SELECT name, model, apiKey, isActive FROM ai_providers').all();
-  res.json(providers);
+// Solo administración: son las claves de toda la plataforma. Antes cualquier
+// usuario con sesión podía leerlas y cambiarlas.
+app.get('/api/settings/ai-keys', adminAuthMiddleware, (req: any, res) => {
+  const providers = db.prepare('SELECT name, model, apiKey, isActive FROM ai_providers').all() as any[];
+  res.json(providers.map(p => ({ ...p, apiKey: p.apiKey ? `••••${String(p.apiKey).slice(-4)}` : '' })));
 });
 
-app.post('/api/settings/ai-keys', authMiddleware, (req: any, res) => {
+app.post('/api/settings/ai-keys', adminAuthMiddleware, (req: any, res) => {
   const { provider, apiKey } = req.body;
   if (!provider) return res.status(400).json({ error: 'Proveedor requerido' });
 
@@ -999,27 +1035,15 @@ app.post('/api/settings/ai-keys', authMiddleware, (req: any, res) => {
     db.prepare("UPDATE ai_providers SET apiKey = ?, isActive = ? WHERE name LIKE '%Gemini%'").run(cleanKey, cleanKey ? 1 : 0);
   }
 
-  logAudit(req.userId, 'update_ai_key', `Clave de ${provider} actualizada`);
+  logAudit(req.adminId, 'update_ai_key', `Clave de ${provider} actualizada`);
   res.json({ success: true, message: `Clave API de ${provider} actualizada` });
 });
 
 // --- DB Function Calling Tools for AI (Strict Row-Level Isolation by userId) ---
 
+/** Totales en la moneda principal del usuario; ver server/cambios.ts. */
 function getDBUserSummary(userId: string) {
-  const accounts = db.prepare('SELECT type, SUM(balance) as total FROM accounts WHERE userId = ? GROUP BY type').all(userId) as any[];
-  const txs = db.prepare('SELECT type, SUM(amount) as total FROM transactions WHERE userId = ? GROUP BY type').all(userId) as any[];
-
-  let totalBalance = 0;
-  accounts.forEach(a => { totalBalance += a.total; });
-
-  let totalIncome = 0;
-  let totalExpense = 0;
-  txs.forEach(t => {
-    if (t.type === 'income') totalIncome += t.total;
-    if (t.type === 'expense') totalExpense += t.total;
-  });
-
-  return { totalBalance, totalIncome, totalExpense, netWorth: totalBalance };
+  return cambios.resumen(db, userId);
 }
 
 function getDBTransactions(userId: string, limit = 20) {
@@ -1115,14 +1139,17 @@ app.post('/api/send-otp', async (req, res) => {
   otpStore.set(identifier, { code, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
 
   logAudit(null, 'send_otp', `OTP generado para ${identifier} (${channel})`);
-  console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${identifier} (${channel})`);
+  // El código solo sale en los logs en desarrollo: cualquiera con acceso a los
+  // logs del servidor podría entrar en la cuenta de otra persona.
+  if (process.env.OTP_DEBUG === '1') console.log(`🔑 [OTP GENERADO] Código: ${code} -> ${identifier} (${channel})`);
+  else console.log(`🔑 [OTP] Código generado para ${identifier} (${channel})`);
 
   const delivered = channel === 'email'
     ? await sendOtpEmail(identifier, code)
     : await sendSMS(identifier, `Tu codigo de verificacion para HeraWallet es: ${code}`);
 
   if (!delivered) {
-    console.warn(`⚠️ [OTP WARN] No se pudo entregar a ${identifier}. El código sigue activo en consola.`);
+    console.warn(`⚠️ [OTP WARN] No se pudo entregar a ${identifier}.`);
   }
 
   // El código JAMÁS viaja en la respuesta en producción: eso permitiría
@@ -1532,31 +1559,15 @@ app.post('/api/finance/debts', authMiddleware, (req: any, res) => {
   res.json({ success: true, id });
 });
 
-app.put('/api/finance/debts/:id', (req: any, res) => {
+app.put('/api/finance/debts/:id', authMiddleware, (req: any, res) => {
   const { id } = req.params;
   const { status, paidAmount, name, personOrEntity, amount, dueDate } = req.body;
+  const userId = req.userId;
 
-  let userId = req.userId;
-  const header = req.headers.authorization;
-  if (!userId && header && header.startsWith('Bearer ')) {
-    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch { }
-  }
-  if (!userId) userId = 'demo_user';
-
-  let debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
-  if (!debt) {
-    const sampleNames: any = {
-      'sample-1': { name: 'Cena de cumpleaños', person: 'Carlos Gómez', type: 'debt', amount: 150.00 },
-      'sample-2': { name: 'Préstamo proyecto web', person: 'Laura Martínez', type: 'receivable', amount: 280.00 },
-      'sample-3': { name: 'Cuota mensual equipo', person: 'Banco Santander', type: 'debt', amount: 450.00 },
-      'sample-4': { name: 'Entrada de concierto', person: 'Pedro Sánchez', type: 'receivable', amount: 65.00 }
-    };
-    const s = sampleNames[id] || { name: 'Deuda / Cobro', person: 'Contacto', type: 'debt', amount: 100.00 };
-    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      id, userId, s.name, s.person, s.type, s.amount, 0, '2026-08-30', 'pending'
-    );
-    debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
-  }
+  // Solo las deudas propias. Antes no hacía falta sesión y, si el id no existía,
+  // se inventaba una deuda de ejemplo.
+  const debt = db.prepare('SELECT * FROM debts WHERE id = ? AND userId = ?').get(id, userId) as any;
+  if (!debt) return res.status(404).json({ error: 'Deuda no encontrada' });
 
   const newStatus = status || debt.status;
   let newPaidAmount = paidAmount !== undefined ? paidAmount : debt.paidAmount;
@@ -1582,8 +1593,8 @@ app.put('/api/finance/debts/:id', (req: any, res) => {
   const newAmount = amount !== undefined ? amount : debt.amount;
   const newDueDate = dueDate !== undefined ? dueDate : debt.dueDate;
 
-  db.prepare('UPDATE debts SET status = ?, paidAmount = ?, name = ?, personOrEntity = ?, amount = ?, dueDate = ? WHERE id = ?').run(
-    newStatus, newPaidAmount, newName, newPerson, newAmount, newDueDate, id
+  db.prepare('UPDATE debts SET status = ?, paidAmount = ?, name = ?, personOrEntity = ?, amount = ?, dueDate = ? WHERE id = ? AND userId = ?').run(
+    newStatus, newPaidAmount, newName, newPerson, newAmount, newDueDate, id, userId
   );
   logAudit(userId, 'update_debt', `Deuda actualizada: ${newName} -> ${newStatus}`);
   res.json({ success: true, paidAmount: newPaidAmount, status: newStatus });
@@ -1598,44 +1609,21 @@ app.delete('/api/finance/debts/:id', authMiddleware, (req: any, res) => {
 });
 
 // Get payment history for a debt
-app.get('/api/finance/debts/:id/payments', (req: any, res) => {
-  const { id } = req.params;
-  let userId = req.userId;
-  const header = req.headers.authorization;
-  if (!userId && header && header.startsWith('Bearer ')) {
-    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch { }
-  }
-  const payments = db.prepare('SELECT * FROM debt_payments WHERE debtId = ? ORDER BY date DESC, createdAt DESC').all(id);
+app.get('/api/finance/debts/:id/payments', authMiddleware, (req: any, res) => {
+  const payments = db.prepare('SELECT * FROM debt_payments WHERE debtId = ? AND userId = ? ORDER BY date DESC, createdAt DESC')
+    .all(req.params.id, req.userId);
   res.json(payments);
 });
 
 // Add partial payment (abono) to a debt
-app.post('/api/finance/debts/:id/payments', (req: any, res) => {
+app.post('/api/finance/debts/:id/payments', authMiddleware, (req: any, res) => {
   const { id } = req.params;
   const { amount, date, note } = req.body;
-  if (!amount || Number(amount) <= 0) return res.status(400).json({ error: 'Monto de pago válido requerido' });
+  if (!amount || !(Number(amount) > 0)) return res.status(400).json({ error: 'Monto de pago válido requerido' });
 
-  let userId = req.userId;
-  const header = req.headers.authorization;
-  if (!userId && header && header.startsWith('Bearer ')) {
-    try { userId = (jwt.verify(header.slice(7), JWT_SECRET) as any).userId; } catch { }
-  }
-  if (!userId) userId = 'demo_user';
-
-  let debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
-  if (!debt) {
-    const sampleNames: any = {
-      'sample-1': { name: 'Cena de cumpleaños', person: 'Carlos Gómez', type: 'debt', amount: 150.00 },
-      'sample-2': { name: 'Préstamo proyecto web', person: 'Laura Martínez', type: 'receivable', amount: 280.00 },
-      'sample-3': { name: 'Cuota mensual equipo', person: 'Banco Santander', type: 'debt', amount: 450.00 },
-      'sample-4': { name: 'Entrada de concierto', person: 'Pedro Sánchez', type: 'receivable', amount: 65.00 }
-    };
-    const s = sampleNames[id] || { name: 'Deuda / Cobro', person: 'Contacto', type: 'debt', amount: Number(amount) * 2 };
-    db.prepare('INSERT INTO debts (id, userId, name, personOrEntity, type, amount, paidAmount, dueDate, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-      id, userId, s.name, s.person, s.type, s.amount, 0, '2026-08-30', 'pending'
-    );
-    debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(id) as any;
-  }
+  const userId = req.userId;
+  const debt = db.prepare('SELECT * FROM debts WHERE id = ? AND userId = ?').get(id, userId) as any;
+  if (!debt) return res.status(404).json({ error: 'Deuda no encontrada' });
 
   const paymentId = randomUUID();
   const payDate = date || new Date().toISOString().split('T')[0];
@@ -1645,7 +1633,7 @@ app.post('/api/finance/debts/:id/payments', (req: any, res) => {
   );
 
   // Recalculate total paid
-  const totalPaidRes = db.prepare('SELECT SUM(amount) as total FROM debt_payments WHERE debtId = ?').get(id) as any;
+  const totalPaidRes = db.prepare('SELECT SUM(amount) as total FROM debt_payments WHERE debtId = ? AND userId = ?').get(id, userId) as any;
   const totalPaid = Number(totalPaidRes?.total || 0);
 
   let newStatus = debt.status;
@@ -1655,8 +1643,8 @@ app.post('/api/finance/debts/:id/payments', (req: any, res) => {
     newStatus = 'partial';
   }
 
-  db.prepare('UPDATE debts SET paidAmount = ?, status = ? WHERE id = ?').run(
-    totalPaid, newStatus, id
+  db.prepare('UPDATE debts SET paidAmount = ?, status = ? WHERE id = ? AND userId = ?').run(
+    totalPaid, newStatus, id, userId
   );
 
   logAudit(userId, 'add_debt_payment', `Pago registrado a deuda ${debt.name}: ${amount}€`);
@@ -1669,31 +1657,10 @@ app.get('/api/finance/transactions', authMiddleware, (req: any, res) => {
 });
 
 app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
-  const { accountId, type, amount, category, description, date, receiptUrl, currency, exchangeRate } = req.body;
-  if (!type || !amount || !category) return res.status(400).json({ error: 'Tipo, monto y categoría requeridos' });
-
-  let targetAccountId = accountId;
-  if (!targetAccountId) {
-    const acc = db.prepare('SELECT id FROM accounts WHERE userId = ? LIMIT 1').get(req.userId) as any;
-    targetAccountId = acc ? acc.id : randomUUID();
-  }
-
-  const cuenta = db.prepare('SELECT currency FROM accounts WHERE id = ? AND userId = ?')
-    .get(targetAccountId, req.userId) as any;
-  const moneda = resolverMoneda(cuenta?.currency, { amount, currency, exchangeRate });
-  if ('error' in moneda) return res.status(400).json({ error: moneda.error });
-
-  const id = randomUUID();
-  const txDate = date || new Date().toISOString().split('T')[0];
-
-  db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, receiptUrl, createdAt, currency, originalAmount, exchangeRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-    id, req.userId, targetAccountId, type, moneda.amount, category, description || '', txDate, receiptUrl || null, new Date().toISOString(),
-    moneda.currency, moneda.originalAmount, moneda.exchangeRate
-  );
-
-  // Update account balance (siempre en la moneda de la cuenta)
-  const delta = type === 'income' ? moneda.amount : -moneda.amount;
-  db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, targetAccountId, req.userId);
+  const r = movimientos.crear(db, req.userId, req.body || {}, hoyDe(req.userId));
+  if ('error' in r) return res.status(r.codigo).json({ error: r.error });
+  const { id } = r;
+  const { category, amount } = req.body;
 
   logAudit(req.userId, 'create_transaction', `Transacción registrada: ${category} - ${amount}`);
 
@@ -1707,6 +1674,28 @@ app.post('/api/finance/transactions', authMiddleware, (req: any, res) => {
   }
 
   res.json({ success: true, id, logros: logrosNuevos });
+});
+
+/** Tipos de cambio que el usuario ha usado o fijado. */
+app.get('/api/finance/exchange-rates', authMiddleware, (req: any, res) => {
+  res.json({ moneda: cambios.monedaPrincipal(db, req.userId), tasas: cambios.listar(db, req.userId) });
+});
+
+/** Fija a mano cuánto vale 1 `de` en `a` (por ejemplo, para que una cuenta entre en el total). */
+app.put('/api/finance/exchange-rates', authMiddleware, (req: any, res) => {
+  const { de, a, tasa } = req.body || {};
+  const ok = /^[A-Za-z]{2,6}$/.test(String(de || '')) && /^[A-Za-z]{2,6}$/.test(String(a || ''))
+    && cambios.guardarTasa(db, req.userId, de, a, Number(tasa));
+  if (!ok) return res.status(400).json({ error: 'Tipo de cambio no válido' });
+  res.json({ success: true, summary: cambios.resumen(db, req.userId) });
+});
+
+/** Edita un movimiento y corrige el saldo de las cuentas afectadas. */
+app.put('/api/finance/transactions/:id', authMiddleware, (req: any, res) => {
+  const r = movimientos.editar(db, req.userId, req.params.id, req.body || {});
+  if ('error' in r) return res.status(r.codigo).json({ error: r.error });
+  logAudit(req.userId, 'update_transaction', `Movimiento editado: ${req.params.id}`);
+  res.json({ success: true, id: r.id, amount: r.amount });
 });
 
 app.get('/api/finance/goals', authMiddleware, (req: any, res) => {
@@ -2402,22 +2391,25 @@ Responde ÚNICAMENTE con un objeto JSON válido (sin marcas de markdown) con las
 });
 
 // --- Hera Pre-Configured Document Export Engine (Excel, Word, PDF Templates) ---
-app.post('/api/export-document', (req: any, res) => {
+/** Escapa texto para meterlo en HTML: título y celdas vienen del cliente. */
+function escaparHtml(v: any): string {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+}
+
+app.post('/api/export-document', authMiddleware, (req: any, res) => {
   const { format, title, columns, rows, summary } = req.body;
-  const docTitle = title || 'Informe Financiero Ejecutivo - HeraWallet';
-  const filename = `${docTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+  const docTitle = escaparHtml(title || 'Informe Financiero Ejecutivo - HeraWallet');
+  const filename = `${String(title || 'Informe_HeraWallet').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 80)}_${Date.now()}`;
   const dateStr = new Date().toLocaleString('es-ES');
 
-  let userId = req.userId;
-  const header = req.headers.authorization;
-  if (!userId && header && header.startsWith('Bearer ')) {
-    try {
-      const decoded = jwt.verify(header.slice(7), JWT_SECRET) as any;
-      userId = decoded.userId;
-    } catch { }
-  }
-  const userSummary = summary || getDBUserSummary(userId);
-  const userTxs = rows || (getDBTransactions(userId, 10) as any[]).map(t => [
+  const userId = req.userId;
+  const resumenCrudo: any = summary || getDBUserSummary(userId);
+  const userSummary = {
+    totalBalance: escaparHtml(resumenCrudo?.totalBalance),
+    totalIncome: escaparHtml(resumenCrudo?.totalIncome),
+    totalExpense: escaparHtml(resumenCrudo?.totalExpense),
+  };
+  const filasCrudas: any[] = Array.isArray(rows) ? rows : (getDBTransactions(userId, 10) as any[]).map(t => [
     t.date || 'Hoy',
     t.category || 'General',
     t.description || 'Movimiento',
@@ -2425,7 +2417,8 @@ app.post('/api/export-document', (req: any, res) => {
     `${t.amount} €`
   ]);
 
-  const docCols = columns || ['Fecha', 'Categoría', 'Descripción', 'Tipo', 'Importe'];
+  const docCols = (Array.isArray(columns) ? columns : ['Fecha', 'Categoría', 'Descripción', 'Tipo', 'Importe']).map(escaparHtml);
+  const userTxs: string[][] = filasCrudas.map((r: any) => (Array.isArray(r) ? r : [r]).map(escaparHtml));
 
   if (format === 'xlsx' || format === 'excel' || format === 'csv') {
     // 🟢 Styled Excel Spreadsheet (XML/HTML format supported natively by MS Excel & LibreOffice with full CSS colors and formatting)
@@ -3063,26 +3056,12 @@ app.post('/api/finance/confirm-action', authMiddleware, (req: any, res) => {
     const { actionType, type, amount, category, description, accountId, name, targetAmount, currentAmount, deadline, currency, exchangeRate } = req.body;
 
     if (actionType === 'create_transaction') {
-      let targetAccountId = accountId;
-      if (!targetAccountId) {
-        const acc = db.prepare('SELECT id FROM accounts WHERE userId = ? LIMIT 1').get(req.userId) as any;
-        targetAccountId = acc ? acc.id : randomUUID();
-      }
-      const cuentaChat = db.prepare('SELECT currency FROM accounts WHERE id = ? AND userId = ?')
-        .get(targetAccountId, req.userId) as any;
-      const moneda = resolverMoneda(cuentaChat?.currency, { amount: Number(amount) || 0, currency, exchangeRate });
-      if ('error' in moneda) return res.status(400).json({ error: moneda.error });
-
-      const id = randomUUID();
-      const txDate = new Date().toISOString().split('T')[0];
-
-      db.prepare('INSERT INTO transactions (id, userId, accountId, type, amount, category, description, date, createdAt, currency, originalAmount, exchangeRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
-        id, req.userId, targetAccountId, type || 'expense', moneda.amount, category || 'General', description || category || 'Transacción desde Chat', txDate, new Date().toISOString(),
-        moneda.currency, moneda.originalAmount, moneda.exchangeRate
-      );
-
-      const delta = (type || 'expense') === 'income' ? moneda.amount : -moneda.amount;
-      db.prepare('UPDATE accounts SET balance = balance + ? WHERE id = ? AND userId = ?').run(delta, targetAccountId, req.userId);
+      const r = movimientos.crear(db, req.userId, {
+        accountId, type: type || 'expense', amount, currency, exchangeRate,
+        category: category || 'General',
+        description: description || category || 'Transacción desde Chat',
+      }, hoyDe(req.userId));
+      if ('error' in r) return res.status(r.codigo).json({ error: r.error });
 
       logAudit(req.userId, 'confirm_chat_transaction', `Transacción confirmada desde chat: ${category} - ${amount}€`);
       return res.json({ success: true, message: 'Registro creado con éxito en tus transacciones' });
@@ -3394,7 +3373,14 @@ app.post('/api/admin/login', (req, res) => {
     return res.status(503).json({ error: 'El acceso de administrador no está configurado en este servidor.' });
   }
 
-  if (username === expectedAdminUser && password === expectedAdminPass) {
+  // Sin tope, la contraseña del panel se podría adivinar a fuerza de intentos.
+  const ip = clientIpOf(req);
+  if (otpRateExceeded(`admin-login:${ip}`, 10)) {
+    logAudit(null, 'admin_login_rate_limited', `Demasiados intentos de acceso al panel desde ${ip}`);
+    return res.status(429).json({ error: 'Demasiados intentos. Espera unos minutos.' });
+  }
+
+  if (iguales(String(username || ''), expectedAdminUser) && iguales(String(password || ''), expectedAdminPass)) {
     const adminToken = jwt.sign({ adminId: 'admin_root', role: 'admin' }, ADMIN_JWT_SECRET, { expiresIn: '7d' });
     logAudit('admin_root', 'admin_login', 'Inicio de sesión de administrador exitoso');
     return res.json({ success: true, token: adminToken });

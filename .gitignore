@@ -27,3 +27,6 @@ android/*.jks
 dist.nuevo/
 dist.anterior/
 dist.roto.*/
+
+# Secretos de sesión generados por el servidor si faltan en .env
+.secretos-sesion.json

@@ -1,0 +1,36 @@
+name: Pruebas
+
+# Corre en cada pull request y en cada rama que no sea main (main ya las pasa
+# dentro del despliegue). Así un cambio roto se ve antes de fusionarlo.
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar tipos
+        run: npm run lint
+
+      - name: Pruebas
+        run: npm test
+
+      - name: Compilar la web
+        run: npm run build
