@@ -183,7 +183,7 @@ jobs:
 
       - name: Preparar el SDK de Android
         if: steps.decidir.outputs.hace-falta == 'si'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           # compileSdk es 36 (android/variables.gradle), pero las build-tools que
           # usa el proyecto son las 35: es la combinación con la que compila.
