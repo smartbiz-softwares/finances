@@ -4536,9 +4536,13 @@ function leerApkPublicado() {
     const info = fs.statSync(apkPath);
     let version = '';
     let versionCode = 0;
+    let commit = '';
     try {
       const meta = JSON.parse(fs.readFileSync(path.join(__dirname, 'apk', 'version.json'), 'utf8'));
       version = meta.version || '';
+      // El flujo de despliegue lo usa para saber qué cambió desde el último
+      // APK publicado (no desde el último push, que pudo fallar sin publicarlo).
+      commit = String(meta.commit || '');
       // La app compara su propio versionCode con este para saber si hay algo
       // nuevo que instalar.
       versionCode = Number(meta.versionCode || 0);
@@ -4549,6 +4553,7 @@ function leerApkPublicado() {
       disponible: true,
       version,
       versionCode,
+      commit,
       bytes: info.size,
       mb: Math.round((info.size / 1024 / 1024) * 10) / 10,
       actualizado: info.mtime.toISOString(),

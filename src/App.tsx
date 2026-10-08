@@ -1238,7 +1238,7 @@ export default function App() {
 
   // Active Tab & View State (/panel URL route handling)
   const isPanelRoute = typeof window !== 'undefined' && window.location.pathname === '/panel';
-  const [activeTab, setActiveTab] = useState<'chat' | 'timeline' | 'accounts' | 'reports' | 'goals' | 'debts'>('chat');
+  const [activeTab, setActiveTab] = useState<'chat' | 'timeline' | 'accounts' | 'reports' | 'goals' | 'debts' | 'cobros'>('chat');
   const [showAdmin, setShowAdmin] = useState(isPanelRoute);
 
   useEffect(() => {
@@ -9595,6 +9595,18 @@ export default function App() {
                 </div>
               )}
 
+              {activeTab === 'cobros' && (
+                /* --- COBROS RECURRENTES: lo que te pagan otros cada cierto tiempo --- */
+                <div className="space-y-6 max-w-5xl w-full mx-auto pt-2 sm:pt-4 pb-28 sm:pb-32 px-1 sm:px-0">
+                  <Cobros
+                    simbolo={currencySymbol}
+                    cuentas={accounts}
+                    alCambiar={loadUserData}
+                    mostrarAviso={showToast}
+                  />
+                </div>
+              )}
+
               {activeTab === 'debts' && (() => {
                 const pendingDebts = debtsList.filter(d => (d.status || 'pending') === 'pending');
                 const totalIOwe = pendingDebts.filter(d => d.type === 'debt').reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
@@ -9644,13 +9656,23 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Lo que te pagan otros cada cierto tiempo; al cobrar se elige la cuenta. */}
-                    <Cobros
-                      simbolo={currencySymbol}
-                      cuentas={accounts}
-                      alCambiar={loadUserData}
-                      mostrarAviso={showToast}
-                    />
+                    {/* Los cobros recurrentes tienen pestaña propia; aquí solo un acceso,
+                        porque quien busca "me deben" suele mirar primero en Deudas. */}
+                    <button
+                      onClick={() => setActiveTab('cobros')}
+                      className="w-full bg-surface border border-border hover:border-brand/50 p-4 rounded-3xl flex items-center justify-between gap-3 text-left transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
+                          <RefreshCw size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-text-primary">Cobros recurrentes</p>
+                          <p className="text-[11px] text-text-secondary">Clientes que te pagan cada semana, mes o año (suscripciones, cuotas…)</p>
+                        </div>
+                      </div>
+                      <ChevronRight size={18} className="text-text-dim shrink-0" />
+                    </button>
 
                     {/* High-End Bento Grid KPI Overview */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -11054,6 +11076,19 @@ export default function App() {
           >
             <IconoAnimado icono={IconoTarjeta} size={16} activo={activeTab === 'accounts'} sinToque />
             <span className="hidden md:inline">Cuentas</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cobros')}
+            className={cn(
+              "px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-[0.95]",
+              activeTab === 'cobros' ? "bg-brand text-white shadow-md font-semibold" : "text-text-secondary hover:text-text-primary hover:bg-surface-hover"
+            )}
+            title="Cobros recurrentes"
+            aria-label="Cobros recurrentes"
+          >
+            <RefreshCw size={16} />
+            <span className="hidden md:inline">Cobros</span>
           </button>
 
           <button

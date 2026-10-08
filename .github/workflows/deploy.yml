@@ -144,14 +144,21 @@ jobs:
           # Se incluye el propio flujo: si cambian los pasos de compilación, hay
           # que comprobar que siguen funcionando.
           RUTAS="src android index.html capacitor.config.ts package.json package-lock.json vite.config.ts public .github/workflows"
-          ANTES="${{ github.event.before }}"
 
-          # En el primer push de una rama, o tras un force-push, el commit
-          # anterior puede no existir aquí: se compila por si acaso.
-          if [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+          # Se compara con el commit del APK que está PUBLICADO, no con el push
+          # anterior: si un despliegue falló, sus cambios nunca llegaron a la app
+          # y el siguiente push, aunque solo toque el servidor, debe incluirlos.
+          # Pasó el 08-10-2026: un despliegue fallido dejó el APK sin la última
+          # versión de la interfaz.
+          ANTES="$(curl -fsS -m 20 https://herawallet.app/api/app/latest \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commit",""))' 2>/dev/null || true)"
+          echo "APK publicado: ${ANTES:-desconocido}"
+
+          # Sin dato del APK publicado (servidor caído, version.json antiguo) o
+          # con un commit que aquí no existe, se compila por si acaso.
+          if [ -z "$ANTES" ] || ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
             echo "hace-falta=si" >> "$GITHUB_OUTPUT"
-            echo "No hay commit anterior con el que comparar; se compila."
+            echo "No sé qué versión tiene el APK publicado; se compila."
             exit 0
           fi
 
