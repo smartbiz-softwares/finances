@@ -155,20 +155,37 @@ console.log('\nVentana y techo');
     fecha === '2026-08-05', fecha);
 }
 {
-  const db = baseDePrueba();
-  const ahora = new Date().toISOString();
-  for (let i = 0; i < 3; i++) {
-    db.prepare(`
-      INSERT INTO notification_sent (id, userId, tipo, titulo, cuerpo, enviadoEn)
-      VALUES (?, 'u1', ?, 't', 'c', ?)
-    `).run(`n${i}`, `tipo${i}`, ahora);
+  // Instantes fijos para que la prueba no dependa de cuándo se ejecute. El
+  // segundo caso es el que fallaba: a las 20:30 en La Habana en UTC ya es el
+  // día siguiente, y lo enviado esa tarde no contaba para el tope diario.
+  for (const [descripcion, momento] of [
+    ['a media tarde', '2026-08-05T19:00:00Z'],          // 15:00 en La Habana
+    ['a última hora, con UTC ya en mañana', '2026-08-06T00:45:00Z'], // 20:45 en La Habana
+  ] as const) {
+    const db = baseDePrueba();
+    const ahora = new Date(momento);
+    for (let i = 0; i < 3; i++) {
+      db.prepare(`
+        INSERT INTO notification_sent (id, userId, tipo, titulo, cuerpo, enviadoEn)
+        VALUES (?, 'u1', ?, 't', 'c', ?)
+      `).run(`n${i}`, `tipo${i}`, new Date(ahora.getTime() - (i + 1) * 10 * 60 * 1000).toISOString());
+    }
+    comprobar(`con tres enviadas hoy no entra una cuarta (${descripcion})`,
+      !N.puedeRecibir(db, 'u1', 'tipo9', ahora));
   }
-  // Las tres se anotan con la hora de ahora, así que se pregunta por ese mismo
-  // instante para que la prueba no dependa de cuándo se ejecute.
-  comprobar('con tres enviadas hoy no entra una cuarta',
-    !N.puedeRecibir(db, 'u1', 'tipo9', new Date()) ||
-    N.horaLocal('America/Havana') < N.HORA_INICIO ||
-    N.horaLocal('America/Havana') >= N.HORA_FIN);
+}
+{
+  // Un aviso enviado a las 20:05 locales (00:05 UTC, ya "mañana" en UTC) no
+  // puede repetirse a las 20:30 locales del mismo día.
+  const db = baseDePrueba();
+  db.prepare(`
+    INSERT INTO notification_sent (id, userId, tipo, titulo, cuerpo, enviadoEn)
+    VALUES ('n1', 'u1', 'cobros', 't', 'c', '2026-08-06T00:05:00.000Z')
+  `).run();
+  comprobar('el mismo tipo no se repite cuando UTC cambia de día',
+    !N.puedeRecibir(db, 'u1', 'cobros', new Date('2026-08-06T00:30:00Z')));
+  comprobar('al día siguiente local sí vuelve a poder enviarse',
+    N.puedeRecibir(db, 'u1', 'cobros', new Date('2026-08-06T14:00:00Z')));
 }
 
 // --- Variedad de los mensajes ---------------------------------------------

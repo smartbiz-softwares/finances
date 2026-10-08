@@ -139,11 +139,18 @@ export function puedeRecibir(db: any, userId: string, tipo: string, ahora = new 
   const hora = horaLocal(p.zonaHoraria, ahora);
   if (hora < HORA_INICIO || hora >= HORA_FIN) return false;
 
+  // `enviadoEn` está en UTC y "hoy" es el día del usuario: no se pueden
+  // comparar por el texto de la fecha. A las 20:30 en La Habana en UTC ya es
+  // mañana, y lo enviado esa tarde no contaba, así que el tope diario y el
+  // "una vez por tipo" fallaban justo esa última hora. Se traen las últimas
+  // 36 horas y se filtra por el día local de cada envío.
   const hoy = fechaLocal(p.zonaHoraria, ahora);
-  const enviadasHoy = db.prepare(`
-    SELECT tipo FROM notification_sent
-    WHERE userId = ? AND substr(enviadoEn, 1, 10) = ?
-  `).all(userId, hoy) as any[];
+  const desde = new Date(ahora.getTime() - 36 * 3600 * 1000).toISOString();
+  const enviadasHoy = (db.prepare(`
+    SELECT tipo, enviadoEn FROM notification_sent
+    WHERE userId = ? AND enviadoEn >= ? AND enviadoEn <= ?
+  `).all(userId, desde, ahora.toISOString()) as any[])
+    .filter((n) => fechaLocal(p.zonaHoraria, new Date(n.enviadoEn)) === hoy);
 
   if (enviadasHoy.length >= (p.maxPorDia || 3)) return false;
   if (enviadasHoy.some((n) => n.tipo === tipo)) return false;
