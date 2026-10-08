@@ -63,7 +63,7 @@ jobs:
           ls -lh web.tgz
 
       - name: Subir la entrega al servidor
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -250,7 +250,7 @@ jobs:
       # a descargar un archivo a medio copiar.
       - name: Subir el APK
         if: steps.decidir.outputs.hace-falta == 'si'
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
