@@ -230,7 +230,7 @@ jobs:
       # teléfono sin tocar producción.
       - name: Guardar el APK en la ejecución
         if: steps.decidir.outputs.hace-falta == 'si'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: HeraWallet-apk
           path: apk/HeraWallet.apk
