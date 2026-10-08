@@ -73,7 +73,7 @@ jobs:
           target: /var/www/finances/entrega
 
       - name: Publicar y reiniciar
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -238,7 +238,7 @@ jobs:
 
       - name: Preparar la carpeta en el servidor
         if: steps.decidir.outputs.hace-falta == 'si'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
@@ -262,7 +262,7 @@ jobs:
 
       - name: Publicar el APK
         if: steps.decidir.outputs.hace-falta == 'si'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
