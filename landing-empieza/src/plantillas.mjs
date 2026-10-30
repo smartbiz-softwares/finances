@@ -25,12 +25,19 @@ const url = ruta => `${config.dominio}${ruta}`;
 // palabra entera para que nunca quede a medias.
 const recortar = (t, max = 158) => (t.length <= max ? t : `${t.slice(0, t.lastIndexOf(' ', max - 1)).replace(/[,;:.]$/, '')}…`);
 
+export const recursos = [
+  { nombre: 'Calculadora de fugas', ruta: '/calculadora-de-fugas/' },
+  { nombre: 'Cuaderno, Excel o sistema: cuál te conviene', ruta: '/comparar/cuaderno-excel-o-sistema/' },
+  { nombre: 'Glosario para dueños de negocio', ruta: '/glosario/' },
+];
+
 export const rutas = {
   inicio: '/',
   sector: s => `/sectores/${s.slug}/`,
   problema: p => `/problemas/${p.slug}/`,
   combo: (s, p) => `/sectores/${s.slug}/${p.slug}/`,
   pais: c => `/paises/${c.slug}/`,
+  sectorPais: (s, c) => `/paises/${c.slug}/${s.slug}/`,
 };
 
 export const funciones = [
@@ -74,7 +81,7 @@ const imgLogo = (clase = 'logo') => `<img class="${clase}" src="/assets/img/logo
 // --- Piezas -------------------------------------------------------------------
 
 const mensajeEmpezar = (extra = '') =>
-  `Hola, quiero empezar con ${config.marca}${extra ? ` para ${extra}` : ''}. ¿Me ayudan?`;
+  `Hola, quiero empezar con ${config.marca}${extra ? ` para ${extra.replace(/^tu /, 'mi ')}` : ''}. ¿Me ayudan?`;
 
 export function botonEmpezar({ texto = 'Empezar', clase = 'btn btn-primario', extra = '' } = {}) {
   return `<a class="${clase}" href="${esc(whatsappUrl(mensajeEmpezar(extra)))}" data-empezar><span class="btn-texto">${esc(texto)}${icono('flecha', 'ico ico-flecha')}</span><span class="btn-spinner" aria-hidden="true"></span></a>`;
@@ -102,7 +109,7 @@ function ticket({ negocio = 'Minimarket La Esquina', destacar, carga = 'eager' }
       return `<li class="${es ? 'destacada' : ''}"${es ? ' aria-current="true"' : ''}><span>${esc(p.nombre)}</span><span class="ticket-monto">${montosEjemplo[p.clave]}</span></li>`;
     })
     .join('');
-  return `<figure class="ticket" data-ticket aria-label="Ejemplo de ticket con las fugas que Hera detectó en un negocio">
+  return `<!--md:no--><figure class="ticket" data-ticket aria-label="Ejemplo de ticket con las fugas que Hera detectó en un negocio">
     <div class="ticket-ranura" aria-hidden="true"></div>
     <div class="ticket-salida"><div class="ticket-papel">
       <p class="ticket-cabeza">${imgLogo('ticket-logo')}<span>SmartBusiness · Hera</span></p>
@@ -114,7 +121,7 @@ function ticket({ negocio = 'Minimarket La Esquina', destacar, carga = 'eager' }
     </div></div>
     <figcaption class="sr">Ejemplo: ${problemas.map(p => `${p.nombre} ${montosEjemplo[p.clave]}`).join(', ')}. Total ${totalEjemplo} al mes.</figcaption>
     ${imgHera('laptop', 'ticket-hera', { carga, decorativa: true })}
-  </figure>`;
+  </figure><!--/md:no-->`;
 }
 
 function hero({ titulo, texto, extra = '', migasItems, destacar, negocio }) {
@@ -125,7 +132,7 @@ function hero({ titulo, texto, extra = '', migasItems, destacar, negocio }) {
       <div class="hero-texto">
         <h1>${titulo}</h1>
         <p class="hero-bajada">${esc(texto)}</p>
-        <div class="acciones">${botonEmpezar({ clase: 'btn btn-blanco', extra })}${botonWhatsapp({ clase: 'btn btn-contorno', extra })}</div>
+        <div class="acciones">${botonEmpezar({ extra })}</div>
         <p class="hero-nota">Unas preguntas sobre tu negocio · unos 3 minutos · sin compromiso</p>
       </div>
       ${ticket({ destacar, negocio })}
@@ -208,7 +215,7 @@ function demo() {
       ${encabezado('<span id="demo-t">Mira a Hera encontrar el fiado fantasma</span>', 'Un negocio que vendía bien, un cuaderno de fiados y el dinero que nadie estaba cobrando. Menos de un minuto.')}
       <div class="demo-hera">${imgHera('explica', 'demo-hera-img')}<p>“Mira lo que encontré en este cuaderno.”</p></div>
     </div>
-    <div class="demo-marco">${reproductor}
+    <div class="demo-marco"><!--md:no-->${reproductor}<!--/md:no-->
       <details class="transcripcion">
         <summary>Leer lo que dice la demostración</summary>
         <ol>${guionDemo.map(g => `<li>${esc(g.texto)}</li>`).join('')}</ol>
@@ -280,7 +287,7 @@ function seccionSectores(pais) {
   return `<section class="seccion seccion-indice" id="sectores" aria-labelledby="sectores-t">
   <div class="contenedor">
     ${encabezado(`<span id="sectores-t">Hecho para el negocio que tienes${pais ? ` ${esc(pais.en)}` : ''}</span>`)}
-    <ul class="indice">${sectores.map(s => `<li><a href="${rutas.sector(s)}">${esc(s.nombre)}</a></li>`).join('')}</ul>
+    <ul class="indice">${sectores.map(s => `<li><a href="${pais ? rutas.sectorPais(s, pais) : rutas.sector(s)}">${esc(s.nombre)}</a></li>`).join('')}</ul>
     ${pais ? '' : `<p class="indice-paises">También por país: ${paises.map(c => `<a href="${rutas.pais(c)}">${esc(c.nombre)}</a>`).join(', ')}.</p>`}
   </div>
 </section>`;
@@ -294,7 +301,8 @@ function seccionPreguntas(lista, titulo = 'Preguntas que nos hacen siempre') {
       <p>¿No está la tuya? ${botonWhatsapp({ texto: 'Pregúntanos por WhatsApp', clase: 'enlace' })}</p>
       ${imgHera('piensa', 'preguntas-hera', { decorativa: true })}
     </div>
-    <div class="preguntas">
+    <div class="preguntas" data-preguntas>
+      ${lista.length > 6 ? `<div class="buscador">${icono('lupa', 'ico')}<label class="sr" for="buscar-${titulo.length}">Buscar en las preguntas</label><input type="search" id="buscar-${titulo.length}" placeholder="Busca tu duda: precio, internet, fiados…" autocomplete="off" data-buscar-preguntas></div>` : ''}
       ${lista
         .map(
           q => `<details class="pregunta">
@@ -303,6 +311,7 @@ function seccionPreguntas(lista, titulo = 'Preguntas que nos hacen siempre') {
       </details>`,
         )
         .join('')}
+      <p class="sin-resultados" data-sin-resultados hidden>No encontramos esa pregunta. ${botonWhatsapp({ texto: 'Pregúntanos por WhatsApp', clase: 'enlace' })}</p>
     </div>
   </div>
 </section>`;
@@ -315,7 +324,7 @@ function ctaFinal({ titulo = 'Tu negocio ya vende. Ahora vas a saber cuánto gan
     <div>
       <h2 id="cta-t">${esc(titulo)}</h2>
       <p>Responde unas preguntas y elige: reservar un día para armar tu negocio con nosotros o escribirnos ahora mismo.</p>
-      <div class="acciones">${botonEmpezar({ texto: 'Empezar ahora', clase: 'btn btn-blanco', extra })}${botonWhatsapp({ clase: 'btn btn-contorno', extra })}</div>
+      <div class="acciones">${botonEmpezar({ texto: 'Empezar ahora', extra })}${botonWhatsapp({ extra })}</div>
     </div>
   </div>
 </section>`;
@@ -347,6 +356,7 @@ function pie() {
       ${col('Sectores', sectores.map(s => [s.nombre, rutas.sector(s)]))}
       ${col('Problemas que resolvemos', problemas.map(p => [p.nombre, rutas.problema(p)]))}
       ${col('Países', paises.map(c => [c.nombre, rutas.pais(c)]))}
+      ${col('Recursos gratis', recursos.map(r => [r.nombre, r.ruta]))}
     </div>
     <p class="pie-legal">© ${new Date().getFullYear()} ${config.marca} · <a href="${config.sitioPrincipal}">smartbiz.com.uy</a> · <a href="/llms.txt">Información para asistentes de IA</a></p>
   </div>
@@ -380,8 +390,17 @@ function hojaYModales() {
 <a class="wa-flotante" href="${esc(whatsappUrl(mensajeEmpezar()))}" target="_blank" rel="noopener" aria-label="Escribir por WhatsApp al ${config.whatsappVisible}" data-whatsapp>${iconoWhatsapp('ico')}</a>`;
 }
 
-export function layout({ titulo, descripcion, ruta, jsonld = [], contenido, pagina = {}, migasItems, imagen = '/assets/og.png' }) {
+// Versiones de los archivos estáticos (hash de su contenido), las pone build.mjs
+// antes de generar las páginas: así el navegador los guarda un año y se
+// renuevan solos cuando cambian.
+export const versiones = {};
+const asset = ruta => `${ruta}${versiones[ruta] ? `?v=${versiones[ruta]}` : ''}`;
+export const fechaCompilacion = new Date().toISOString().slice(0, 10);
+export const rutaMarkdown = ruta => (ruta.endsWith('/') ? `${ruta}index.md` : null);
+
+export function layout({ titulo, descripcion, ruta, jsonld = [], contenido, pagina = {}, migasItems, imagen = '/assets/og.png', indexable = true }) {
   const canonical = url(ruta);
+  const md = indexable ? rutaMarkdown(ruta) : null;
   const grafo = { '@context': 'https://schema.org', '@graph': [organizacion(), sitioWeb(), ...jsonld] };
   if (migasItems?.length) grafo['@graph'].push(migasLd(migasItems));
   const attrs = Object.entries(pagina)
@@ -396,8 +415,12 @@ export function layout({ titulo, descripcion, ruta, jsonld = [], contenido, pagi
 <title>${esc(titulo)}</title>
 <meta name="description" content="${esc(recortar(descripcion))}">
 <link rel="canonical" href="${canonical}">
-<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
-<meta name="theme-color" content="#00795F">
+<link rel="alternate" hreflang="es" href="${canonical}">
+<link rel="alternate" hreflang="es-419" href="${canonical}">
+<link rel="alternate" hreflang="x-default" href="${canonical}">
+${md ? `<link rel="alternate" type="text/markdown" href="${md}" title="Esta página en Markdown">
+` : ''}<meta name="robots" content="${indexable ? 'index' : 'noindex'}, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+<meta name="theme-color" content="#FBFBFD">
 <meta name="color-scheme" content="light">
 <meta property="og:type" content="website">
 <meta property="og:locale" content="es_419">
@@ -408,15 +431,17 @@ export function layout({ titulo, descripcion, ruta, jsonld = [], contenido, pagi
 <meta property="og:image" content="${url(imagen)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Hera, la asistente de SmartBusiness, junto a un ticket con las fugas de dinero de un negocio">
+<meta property="og:updated_time" content="${fechaCompilacion}">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/assets/img/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
 <link rel="alternate" type="text/plain" href="/llms.txt" title="Resumen para asistentes de IA">
 <link rel="preload" href="/assets/fuentes/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/estilos.css">
+<link rel="stylesheet" href="${asset('/assets/estilos.css')}">
 <script type="application/ld+json">${JSON.stringify(grafo).replace(/</g, '\\u003c')}</script>
-<script src="/assets/datos.js" defer></script>
-<script src="/assets/app.js" defer></script>
+<script src="${asset('/assets/datos.js')}" defer></script>
+<script src="${asset('/assets/app.js')}" defer></script>
 </head>
 <body${attrs}>
 <a class="saltar" href="#contenido">Saltar al contenido</a>
@@ -424,6 +449,8 @@ export function layout({ titulo, descripcion, ruta, jsonld = [], contenido, pagi
 ${contenido}
 </main>
 ${pie()}
+<div class="empezar-fijo" data-empezar-fijo hidden>${botonEmpezar({ texto: 'Empezar' })}</div>
+<div class="avisos" data-avisos role="status" aria-live="polite"></div>
 ${hojaYModales()}
 </body>
 </html>
@@ -499,8 +526,100 @@ const paginaLd = (ruta, nombre, descripcion, extra = {}) => ({
   inLanguage: 'es',
   isPartOf: { '@id': `${config.dominio}/#sitio` },
   about: { '@id': `${config.dominio}/#software` },
+  dateModified: fechaCompilacion,
+  primaryImageOfPage: url('/assets/og.png'),
   ...extra,
 });
+
+// --- Calculadora de fugas -------------------------------------------------------
+// Estimación con los números de quien la usa; las fórmulas están a la vista
+// en la propia sección. Sin JavaScript muestra el ejemplo calculado.
+
+export const calcDefecto = { ventas: 8000, fiado: 15, incobrable: 10, inventario: 5000, merma: 2, caja: 5, horas: 6, valorHora: 3 };
+export function calcularFugas(v) {
+  const fiado = (v.ventas * v.fiado * v.incobrable) / 10000;
+  const merma = (v.inventario * v.merma) / 100;
+  const caja = v.caja * 26;
+  const tiempo = v.horas * 4.33 * v.valorHora;
+  const total = fiado + merma + caja + tiempo;
+  return { fiado, merma, caja, tiempo, total, anual: total * 12 };
+}
+const dinero = n => `$${Math.round(n).toLocaleString('es-UY')}`;
+
+function campoCalc({ nombre, etiqueta, ayuda, tipo, min, max, paso, prefijo, sufijo }) {
+  const v = calcDefecto[nombre];
+  const id = `calc-${nombre}`;
+  if (tipo === 'rango') {
+    return `<div class="calc-campo">
+      <label for="${id}">${etiqueta} <output for="${id}" data-salida="${nombre}">${v}${sufijo}</output></label>
+      <input class="rango" type="range" id="${id}" name="${nombre}" min="${min}" max="${max}" step="${paso}" value="${v}" style="--pct:${((v - min) / (max - min)) * 100}%" aria-describedby="${id}-ayuda">
+      <p class="calc-ayuda" id="${id}-ayuda">${ayuda}</p>
+    </div>`;
+  }
+  return `<div class="calc-campo">
+      <label for="${id}">${etiqueta}</label>
+      <div class="calc-entrada"><span aria-hidden="true">${prefijo}</span><input type="number" inputmode="decimal" id="${id}" name="${nombre}" min="0" step="${paso}" value="${v}" aria-describedby="${id}-ayuda"></div>
+      <p class="calc-ayuda" id="${id}-ayuda">${ayuda}</p>
+    </div>`;
+}
+
+export function seccionCalculadora({ titulo = '¿Cuánto se le escapa a tu negocio cada mes?', h1 = false } = {}) {
+  const r = calcularFugas(calcDefecto);
+  const H = h1 ? 'h1' : 'h2';
+  const filas = [
+    ['fiado', 'Fiados que nunca se cobran', r.fiado],
+    ['merma', 'Mercancía que se pierde', r.merma],
+    ['caja', 'Diferencias de caja', r.caja],
+    ['tiempo', 'Tu tiempo en papeles', r.tiempo],
+  ];
+  return `<section class="seccion seccion-calculadora" id="calculadora" aria-labelledby="calc-t">
+  <div class="contenedor calc">
+    <div class="calc-lado">
+      <div class="encabezado"><${H} id="calc-t">${esc(titulo)}</${H}><p>Pon los números de tu negocio. La cuenta se hace aquí mismo, en tu teléfono: no se envía a ningún lado.</p></div>
+      <!--md:no--><div class="calc-chip" aria-hidden="true"><span>Se escapa al mes</span><b data-resultado="total">${dinero(r.total)}</b></div>
+      <form class="calc-form" data-calculadora novalidate>
+        <fieldset><legend>Fiados</legend>
+          ${campoCalc({ nombre: 'ventas', etiqueta: 'Lo que vendes en un mes', ayuda: 'Un aproximado está bien.', tipo: 'numero', paso: 100, prefijo: '$' })}
+          ${campoCalc({ nombre: 'fiado', etiqueta: 'Parte que vendes fiado', ayuda: 'De cada 100 que vendes, cuánto queda "para después".', tipo: 'rango', min: 0, max: 60, paso: 1, sufijo: '%' })}
+          ${campoCalc({ nombre: 'incobrable', etiqueta: 'De lo fiado, lo que nunca se cobra', ayuda: 'Deudas olvidadas o clientes que no volvieron.', tipo: 'rango', min: 0, max: 50, paso: 1, sufijo: '%' })}
+        </fieldset>
+        <fieldset><legend>Mercancía</legend>
+          ${campoCalc({ nombre: 'inventario', etiqueta: 'Lo que vale tu mercancía', ayuda: 'Lo que pagaste por lo que hay hoy en el almacén.', tipo: 'numero', paso: 100, prefijo: '$' })}
+          ${campoCalc({ nombre: 'merma', etiqueta: 'Lo que se vence o se pierde al mes', ayuda: 'Vencido, roto o que desapareció.', tipo: 'rango', min: 0, max: 10, paso: 0.5, sufijo: '%' })}
+        </fieldset>
+        <fieldset><legend>Caja y tiempo</legend>
+          ${campoCalc({ nombre: 'caja', etiqueta: 'Lo que falta en la caja un día normal', ayuda: 'La diferencia de cada cierre, aunque sea poca.', tipo: 'numero', paso: 1, prefijo: '$' })}
+          ${campoCalc({ nombre: 'horas', etiqueta: 'Horas a la semana sumando papeles', ayuda: 'Cuadernos, Excel, cuentas a mano.', tipo: 'rango', min: 0, max: 20, paso: 1, sufijo: ' h' })}
+          ${campoCalc({ nombre: 'valorHora', etiqueta: 'Lo que vale una hora tuya', ayuda: 'Lo que ganas o pagarías por una hora de trabajo.', tipo: 'numero', paso: 1, prefijo: '$' })}
+        </fieldset>
+      </form><!--/md:no-->
+    </div>
+    <div class="calc-resultado">
+      <div class="ticket ticket-calc" aria-live="polite">
+        <div class="ticket-ranura" aria-hidden="true"></div>
+        <div class="ticket-salida"><div class="ticket-papel">
+          <p class="ticket-cabeza"><img class="ticket-logo" src="/assets/img/logo.webp" width="40" height="40" alt=""><span>Tu ticket de fugas</span></p>
+          <p class="ticket-meta">Estimación con tus números</p>
+          <ul class="ticket-filas">${filas.map(([k, t, n]) => `<li><span>${t}</span><span class="ticket-monto" data-resultado="${k}">${dinero(n)}</span></li>`).join('')}</ul>
+          <p class="ticket-total"><span>Se escapa al mes</span><span data-resultado="total">${dinero(r.total)}</span></p>
+          <p class="ticket-anual">En un año: <b data-resultado="anual">${dinero(r.anual)}</b></p>
+        </div></div>
+      </div>
+      <div class="acciones calc-acciones">${botonEmpezar({ texto: 'Quiero cerrar estas fugas', extra: '' }).replace('data-empezar>', 'data-empezar data-dolores="fiado,merma,caja,tiempo">')}</div>
+      <details class="calc-formula">
+        <summary>Cómo hacemos la cuenta</summary>
+        <ul>
+          <li>Fiados: ventas del mes × parte fiada × parte que no se cobra.</li>
+          <li>Mercancía: valor de la mercancía × lo que se pierde al mes.</li>
+          <li>Caja: diferencia de un día × 26 días de trabajo.</li>
+          <li>Tiempo: horas por semana × 4,33 semanas × lo que vale tu hora.</li>
+        </ul>
+        <p>Es una estimación orientativa con tus propios números, no una promesa de ahorro.</p>
+      </details>
+    </div>
+  </div>
+</section>`;
+}
 
 // --- Páginas ------------------------------------------------------------------
 
@@ -537,6 +656,7 @@ ${hero({
   texto: 'Fiados que nadie cobra, inventario que no cuadra, una caja que no cierra. Hera, la asistente con inteligencia artificial de SmartBusiness, encuentra cada fuga y te ayuda a cerrarla. Lo armamos contigo, paso a paso.',
 })}
 ${seccionFugas()}
+${seccionCalculadora()}
 ${demo()}
 ${seccionComparacion()}
 ${seccionPasos()}
@@ -604,7 +724,7 @@ ${bloqueTexto({ id: 'solucion', titulo: `Cómo lo resuelve ${config.marca}`, lis
 </section>
 ${seccionPreguntas(faq, `Preguntas sobre ${p.nombre.toLowerCase()}`)}
 ${ctaFinal({ titulo: `Cierra la fuga: ${p.nombre.toLowerCase()}` })}`;
-  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, titulo, descripcion), faqLd(faq)], contenido, pagina: { problema: p.clave }, migasItems });
+  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, titulo, descripcion), faqLd(faq), howToLd(`Cómo resolver: ${p.nombre.toLowerCase()}`, p.pasos(generico))], contenido, pagina: { problema: p.clave }, migasItems });
 }
 
 export function paginaCombo(s, p) {
@@ -627,7 +747,7 @@ ${seccionCasos(s.slug)}
 ${seccionPreguntas(faq, `Preguntas sobre ${p.nombre.toLowerCase()} en ${s.plural}`)}
 ${seccionFugas({ titulo: `Otras fugas comunes en ${s.plural}`, bajada: 'Cuando una fuga aparece, casi nunca viene sola.', sector: s, excluir: p.slug })}
 ${ctaFinal({ titulo: `Cierra esta fuga en ${s.su}`, extra: s.su })}`;
-  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, h1, descripcion), faqLd(faq)], contenido, pagina: { sector: s.slug, problema: p.clave }, migasItems });
+  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, h1, descripcion), faqLd(faq), howToLd(`Cómo resolver ${p.nombre.toLowerCase()} en ${s.plural}`, p.pasos(s))], contenido, pagina: { sector: s.slug, problema: p.clave }, migasItems });
 }
 
 export function paginaPais(c) {
@@ -655,4 +775,148 @@ ${seccionCasos()}
 ${seccionPreguntas(faq, `Preguntas de negocios ${c.en}`)}
 ${ctaFinal({ extra: `mi negocio ${c.en}` })}`;
   return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, titulo, descripcion), softwareLd(), faqLd(faq)], contenido, pagina: { pais: c.slug }, migasItems });
+}
+
+// --- Recursos: calculadora, comparativa, glosario ------------------------------------
+
+const howToLd = (nombre, pasos) => ({
+  '@type': 'HowTo',
+  name: nombre,
+  step: pasos.map((t, i) => ({ '@type': 'HowToStep', position: i + 1, name: t.split(':')[0].split('.')[0], text: t })),
+});
+
+export function paginaCalculadora() {
+  const ruta = '/calculadora-de-fugas/';
+  const titulo = `Calculadora de fugas de dinero para tu negocio (gratis) | ${config.marca}`;
+  const descripcion = 'Calcula en un minuto cuánto dinero pierde tu negocio al mes por fiados sin cobrar, mercancía vencida, descuadres de caja y tiempo en papeles. Gratis y sin registrarte.';
+  const faq = [
+    { p: '¿La calculadora guarda mis números?', r: 'No. La cuenta se hace en tu propio teléfono o computadora y no se envía a ningún lado.' },
+    { p: '¿Qué tan exacto es el resultado?', r: 'Es una estimación orientativa hecha con tus propios números. Sirve para ver qué fuga pesa más; el número real lo da registrar cada venta, fiado y gasto.' },
+    { p: '¿Por qué se cuentan 26 días de caja?', r: 'Es un mes de trabajo con un día de descanso por semana. Si abres todos los días, la pérdida real es un poco mayor.' },
+    { p: '¿Cómo cierro las fugas que me salieron?', r: 'Registrando cada fiado con fecha, descontando el inventario con cada venta y cerrando la caja contra lo registrado. Eso es lo que hace SmartBusiness; toca "Quiero cerrar estas fugas" y lo armamos contigo.' },
+  ];
+  const app = {
+    '@type': 'WebApplication',
+    name: 'Calculadora de fugas de dinero',
+    url: url(ruta),
+    applicationCategory: 'FinanceApplication',
+    operatingSystem: 'Cualquiera (navegador)',
+    isAccessibleForFree: true,
+    inLanguage: 'es',
+    offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },
+    publisher: { '@id': `${config.sitioPrincipal}/#organizacion` },
+  };
+  const migasItems = [{ nombre: 'Calculadora de fugas', ruta }];
+  const contenido = `
+<header class="hero hero-corto">
+  <div class="contenedor">${marca(migasItems)}</div>
+</header>
+${seccionCalculadora({ titulo: 'Calculadora de fugas: cuánto dinero pierde tu negocio al mes', h1: true })}
+${bloqueTexto({ id: 'como-leerla', titulo: 'Cómo leer tu resultado', parrafos: ['Las cuatro fugas de la calculadora son las que más dinero se llevan en un negocio pequeño: los fiados que nadie cobra, la mercancía que se vence o se pierde, las diferencias de caja de cada día y las horas que pasas sumando papeles.', 'La que más pesa en tu ticket es la que conviene atacar primero. Ninguna se arregla trabajando más: se arreglan registrando en el momento lo que hoy queda en la memoria o en el cuaderno.'], clase: 'seccion-menta' })}
+${seccionFugas({ titulo: 'Cada fuga, en detalle', bajada: 'Qué la causa, cómo se ve y cómo se cierra.' })}
+${seccionPreguntas(faq, 'Preguntas sobre la calculadora')}
+${ctaFinal()}`;
+  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, titulo, descripcion), app, faqLd(faq)], contenido, migasItems });
+}
+
+const comparativaFilas = [
+  ['Cuánto cuesta empezar', 'Nada: un cuaderno y un lápiz.', 'Nada, si ya tienes computadora.', 'Depende del tamaño del negocio; te lo decimos sin compromiso.'],
+  ['Saber cuánto te deben', 'Hay que sumar página por página.', 'Si alguien mantiene la planilla al día.', 'En una pantalla, cliente por cliente, con fechas.'],
+  ['Saber qué mercancía hay', 'Contando a mano.', 'Solo si se actualiza con cada venta.', 'Cada venta descuenta el stock sola.'],
+  ['Cerrar la caja', 'Sumando el cuaderno al final del día.', 'Copiando las ventas a la planilla.', 'El sistema ya sabe cuánto debería haber.'],
+  ['Saber cuánto ganaste', 'Casi imposible producto por producto.', 'Posible con fórmulas, si los costos están al día.', 'Ganancia por producto y por día.'],
+  ['Cobrar en varias monedas', 'Todo mezclado en la misma columna.', 'Posible, con cuidado en cada fórmula.', 'Cada moneda con su saldo.'],
+  ['Varias personas vendiendo', 'Un cuaderno por persona, o uno solo que se pasa.', 'Una planilla que se pisa entre todos.', 'Cada uno registra y tú ves todo.'],
+  ['Ver el negocio sin estar ahí', 'No.', 'Si te mandan el archivo.', 'Desde tu celular, en el momento.'],
+];
+
+export function paginaComparativa() {
+  const ruta = '/comparar/cuaderno-excel-o-sistema/';
+  const titulo = `Cuaderno, Excel o sistema de gestión: cuál le conviene a tu negocio | ${config.marca}`;
+  const descripcion = 'Comparación honesta entre llevar el negocio en cuaderno, en Excel o con un sistema de gestión: fiados, inventario, caja, ganancia y varias monedas.';
+  const faq = [
+    { p: '¿Cuándo alcanza con el cuaderno?', r: 'Cuando vendes poco, trabajas solo, casi no fías y tienes pocos productos. Si el cuaderno ya no te dice cuánto te deben o cuánto ganaste, se quedó chico.' },
+    { p: '¿Excel no es suficiente?', r: 'Excel sirve si alguien lo mantiene al día todos los días. El problema es que cada venta hay que copiarla a mano, y en la práctica se atrasa justo cuando hay más trabajo.' },
+    { p: '¿Pasar a un sistema es difícil?', r: 'No tiene que serlo. En la primera sesión cargamos contigo lo esencial —tus productos y lo que te deben— para que vendas con el sistema desde ese día.' },
+  ];
+  const migasItems = [{ nombre: 'Cuaderno, Excel o sistema', ruta }];
+  const contenido = `
+<header class="hero hero-corto">
+  <div class="contenedor">${marca(migasItems)}
+    <div class="hero-texto hero-texto-corto"><h1>Cuaderno, Excel o sistema: <em>¿cuál le conviene a tu negocio?</em></h1>
+    <p class="hero-bajada">Los tres sirven. La pregunta es hasta dónde te acompaña cada uno cuando el negocio crece, fías más o contratas a alguien.</p>
+    <div class="acciones">${botonEmpezar()}</div></div>
+  </div>
+</header>
+<section class="seccion" aria-labelledby="tabla-t">
+  <div class="contenedor">
+    ${encabezado('<span id="tabla-t">Lado a lado</span>')}
+    <div class="tabla-desliza" tabindex="0" role="region" aria-label="Tabla comparativa, desliza para ver todas las columnas">
+      <table class="comparacion comparacion-3">
+        <thead><tr><th scope="col">Lo que necesitas</th><th scope="col">Cuaderno</th><th scope="col">Excel</th><th scope="col">${config.marca}</th></tr></thead>
+        <tbody>${comparativaFilas.map(([q, a, b, c]) => `<tr><th scope="row">${esc(q)}</th><td>${esc(a)}</td><td>${esc(b)}</td><td>${esc(c)}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>
+</section>
+${bloqueTexto({ id: 'veredicto', titulo: 'Entonces, ¿cuál?', parrafos: ['Si vendes poco, trabajas solo y casi no fías, el cuaderno te alcanza: no gastes en lo que no necesitas.', 'Si ya fías a muchos clientes, tienes más de un par de cientos de productos, alguien más vende por ti o cobras en varias monedas, el cuaderno y el Excel empiezan a costarte dinero sin que lo notes. Ahí es donde un sistema se paga solo.'], clase: 'seccion-menta' })}
+${seccionPreguntas(faq, 'Preguntas sobre el cambio')}
+${ctaFinal()}`;
+  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, titulo, descripcion), faqLd(faq)], contenido, migasItems });
+}
+
+export function paginaGlosario(glosario) {
+  const ruta = '/glosario/';
+  const titulo = `Glosario para dueños de negocio: fiado, merma, arqueo de caja y más | ${config.marca}`;
+  const descripcion = 'Qué significan fiado, cuentas por cobrar, arqueo y cierre de caja, merma, margen, kardex, stock mínimo y otros términos de gestión, explicados en simple.';
+  const set = {
+    '@type': 'DefinedTermSet',
+    '@id': `${url(ruta)}#glosario`,
+    name: 'Glosario de gestión para pequeños negocios',
+    inLanguage: 'es',
+    hasDefinedTerm: glosario.map(g => ({ '@type': 'DefinedTerm', name: g.termino, description: g.definicion, url: `${url(ruta)}#${g.slug}`, inDefinedTermSet: `${url(ruta)}#glosario` })),
+  };
+  const migasItems = [{ nombre: 'Glosario', ruta }];
+  const contenido = `
+<header class="hero hero-corto">
+  <div class="contenedor">${marca(migasItems)}
+    <div class="hero-texto hero-texto-corto"><h1>Glosario para dueños de negocio</h1>
+    <p class="hero-bajada">Las palabras que aparecen cuando empiezas a ordenar tu negocio, explicadas como te las explicaría un colega, no un contador.</p></div>
+  </div>
+</header>
+<section class="seccion" aria-label="Términos">
+  <div class="contenedor dos-columnas">
+    <nav class="encabezado-lateral glosario-indice" aria-label="Ir a un término">
+      <ul>${glosario.map(g => `<li><a href="#${g.slug}">${esc(g.termino)}</a></li>`).join('')}</ul>
+    </nav>
+    <dl class="glosario">
+      ${glosario.map(g => `<div class="glosario-item" id="${g.slug}"><dt>${esc(g.termino)}</dt><dd><p>${esc(g.definicion)}</p>${g.enlace ? `<p><a href="${g.enlace}">Cómo se controla en la práctica ${icono('flecha', 'ico')}</a></p>` : ''}</dd></div>`).join('')}
+    </dl>
+  </div>
+</section>
+${ctaFinal()}`;
+  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, titulo, descripcion), set], contenido, migasItems });
+}
+
+// --- Sector × país -------------------------------------------------------------------
+
+export function paginaSectorPais(s, c) {
+  const ruta = rutas.sectorPais(s, c);
+  const h1 = `Sistema de gestión para ${s.plural} ${c.en}`;
+  const titulo = `${h1}: inventario, caja y fiados | ${config.marca}`;
+  const descripcion = `Programa para ${s.plural} ${c.en}: ventas en ${c.monedas.join(' y ')}, inventario, caja, fiados y ganancia real desde el celular. Lo armamos contigo.`;
+  const faq = [
+    { p: `¿SmartBusiness funciona para ${s.plural} ${c.en}?`, r: `Sí. Trabajamos con negocios ${c.en} y está pensado para negocios como ${s.su}: ${s.productos}, ${s.clientes} y ${s.lugar}.` },
+    { p: `¿Puedo cobrar en ${c.monedas.join(' y ')}?`, r: c.monedas.length > 1 ? `Sí. Cada cobro guarda su moneda y ves el saldo de ${c.monedas.join(', ')} por separado.` : 'Sí. Y si algún cliente paga en otra moneda, el cobro guarda la moneda en que lo recibiste.' },
+    { p: '¿Cómo empiezo?', r: `Responde unas preguntas sobre ${s.su} (unos 3 minutos) y elige: reservar un día para armarlo con nosotros o escribirnos por WhatsApp al ${config.whatsappVisible}.` },
+    ...problemas.slice(0, 2).flatMap(p => p.faq(s).slice(0, 1)),
+  ];
+  const migasItems = [{ nombre: c.nombre, ruta: rutas.pais(c) }, { nombre: s.nombre, ruta }];
+  const contenido = `
+${hero({ titulo: `${esc(h1)}. <em>Deja de perder dinero sin saber dónde.</em>`, texto: `${s.contexto} ${c.nota}`, extra: `${s.su} ${c.en}`, migasItems, negocio: `${s.nombre} · ${c.nombre} · ejemplo` })}
+${seccionFugas({ titulo: `Las fugas más comunes en ${s.plural}`, bajada: `Toca la que más se parece a lo que pasa en ${s.su}.`, sector: s })}
+${seccionComparacion(`Así cambia el día a día en ${s.su}`)}
+${seccionPreguntas(faq, `Preguntas de ${s.plural} ${c.en}`)}
+${ctaFinal({ titulo: `Arma ${s.su} con nosotros`, extra: `${s.su} ${c.en}` })}`;
+  return layout({ titulo, descripcion, ruta, jsonld: [paginaLd(ruta, h1, descripcion), softwareLd(), faqLd(faq)], contenido, pagina: { sector: s.slug, pais: c.slug }, migasItems });
 }

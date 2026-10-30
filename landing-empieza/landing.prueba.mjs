@@ -11,7 +11,8 @@ import { validarSolicitud, construirCorreo } from './solicitud.mjs';
 import { sectores } from './src/datos/sectores.mjs';
 import { problemas } from './src/datos/problemas.mjs';
 import { paises } from './src/datos/paises.mjs';
-import { paginaInicio, paginaSector, paginaProblema, paginaCombo, paginaPais, rutas } from './src/plantillas.mjs';
+import { paginaInicio, paginaSector, paginaProblema, paginaCombo, paginaPais, paginaCalculadora, paginaComparativa, paginaGlosario, paginaSectorPais, rutas, calcularFugas, calcDefecto } from './src/plantillas.mjs';
+import { glosario } from './src/datos/glosario.mjs';
 import { generarPalabrasClave } from './src/palabras-clave.mjs';
 
 let fallos = 0;
@@ -72,8 +73,12 @@ console.log('\nPáginas');
     ...problemas.map(p => [rutas.problema(p), paginaProblema(p)]),
     ...paises.map(c => [rutas.pais(c), paginaPais(c)]),
     ...sectores.flatMap(s => problemas.map(p => [rutas.combo(s, p), paginaCombo(s, p)])),
+    ...paises.flatMap(c => sectores.map(s => [rutas.sectorPais(s, c), paginaSectorPais(s, c)])),
+    ['/calculadora-de-fugas/', paginaCalculadora()],
+    ['/comparar/cuaderno-excel-o-sistema/', paginaComparativa()],
+    ['/glosario/', paginaGlosario(glosario)],
   ];
-  comprobar('se generan todas las páginas', paginas.length === 1 + sectores.length + problemas.length + paises.length + sectores.length * problemas.length, paginas.length);
+  comprobar('se generan todas las páginas', paginas.length === 4 + sectores.length + problemas.length + paises.length + sectores.length * problemas.length + paises.length * sectores.length, paginas.length);
 
   const titulos = new Set();
   const problemasPagina = [];
@@ -98,11 +103,20 @@ console.log('\nPáginas');
 console.log('\nPalabras clave');
 {
   const claves = generarPalabrasClave();
-  const rutasValidas = new Set(['/', ...sectores.map(rutas.sector), ...problemas.map(rutas.problema), ...paises.map(rutas.pais), ...sectores.flatMap(s => problemas.map(p => rutas.combo(s, p)))]);
+  const rutasValidas = new Set(['/', '/calculadora-de-fugas/', '/comparar/cuaderno-excel-o-sistema/', '/glosario/', ...sectores.map(rutas.sector), ...problemas.map(rutas.problema), ...paises.map(rutas.pais), ...sectores.flatMap(s => problemas.map(p => rutas.combo(s, p))), ...paises.flatMap(c => sectores.map(s => rutas.sectorPais(s, c)))]);
   comprobar('hay más de 2.000 palabras clave', claves.length > 2000, claves.length);
   comprobar('todas apuntan a una página que existe', claves.every(c => rutasValidas.has(c.ruta)));
   comprobar('no hay repetidas', new Set(claves.map(c => c.palabra)).size === claves.length);
   comprobar('cada página recibe al menos una palabra clave', [...rutasValidas].every(r => claves.some(c => c.ruta === r)));
+}
+
+console.log('\nCalculadora');
+{
+  const r = calcularFugas(calcDefecto);
+  comprobar('el ejemplo da la cuenta esperada', Math.round(r.fiado) === 120 && r.merma === 100 && r.caja === 130 && Math.round(r.total) === 428, r);
+  comprobar('el anual es doce meses', Math.round(r.anual) === Math.round(r.total * 12));
+  const cero = calcularFugas({ ventas: 0, fiado: 0, incobrable: 0, inventario: 0, merma: 0, caja: 0, horas: 0, valorHora: 0 });
+  comprobar('todo en cero da cero', cero.total === 0);
 }
 
 console.log(`\n${pruebas - fallos}/${pruebas} pruebas pasan.`);

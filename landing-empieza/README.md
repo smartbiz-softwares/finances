@@ -50,6 +50,31 @@ WhatsApp. Luego muestra un diagnóstico y los dos caminos.
   480 × 660 px se verá nítida en pantallas de alta densidad: basta con
   reemplazar los archivos con el mismo nombre.
 
+## Interacciones
+
+- **Calculadora de fugas** (inicio y `/calculadora-de-fugas/`): con los números
+  del negocio arma un ticket en vivo; en el celular, el total queda fijo arriba
+  mientras se escribe. "Quiero cerrar estas fugas" abre el formulario con las
+  fugas más grandes ya marcadas. La cuenta no sale del navegador.
+- **Formulario:** atajos de teclado (1–9 eligen, Enter sigue), un paso de
+  revisión donde cada respuesta se puede cambiar (solo se vuelve a preguntar lo
+  que ese cambio abre), diagnóstico copiable y horas en formato de 12 h con
+  "Hoy" y "Mañana" en la agenda.
+- **Buscador** en las preguntas frecuentes, **botón Empezar fijo** que aparece
+  al dejar atrás el hero y **avisos** breves al copiar, reservar o salir.
+
+## SEO para buscadores y asistentes de IA
+
+- 250 páginas: sectores, problemas, sector × problema, países, **sector ×
+  país** (`/paises/cuba/ferreteria/`), calculadora, comparativa y glosario.
+- Cada página también en **Markdown** (`/ruta/index.md`), enlazada con
+  `rel="alternate"` y listada en `llms.txt`; `llms-full.txt` trae el texto
+  completo, el glosario y las preguntas.
+- Datos estructurados: Organization, WebSite, WebPage (con fecha), FAQPage,
+  HowTo, BreadcrumbList, SoftwareApplication, WebApplication (calculadora) y
+  DefinedTermSet (glosario). Sitemap con imágenes de Hera, hreflang y
+  archivos versionados por contenido (caché de un año).
+
 ## Montar en local
 
 Necesitas [Node.js](https://nodejs.org) 18 o superior. Desde esta carpeta:

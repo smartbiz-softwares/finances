@@ -7,6 +7,7 @@ import { sectores } from './datos/sectores.mjs';
 import { problemas } from './datos/problemas.mjs';
 import { paises } from './datos/paises.mjs';
 import { rutas } from './plantillas.mjs';
+import { glosario } from './datos/glosario.mjs';
 
 const productos = ['sistema', 'programa', 'software', 'aplicación', 'app'];
 const generales = [
@@ -70,8 +71,11 @@ export function generarPalabrasClave() {
       agregar(`cómo administrar mi ${sin}`, rutas.sector(s), 'informativa', 'sector');
     }
     for (const c of paises) {
-      agregar(`sistema para ${s.sinonimos[0]} ${c.en}`, rutas.sector(s), 'comercial', 'sector+país');
-      agregar(`programa para ${s.sinonimos[0]} ${c.en}`, rutas.sector(s), 'comercial', 'sector+país');
+      for (const sin of s.sinonimos.slice(0, 3)) {
+        agregar(`sistema para ${sin} ${c.en}`, rutas.sectorPais(s, c), 'comercial', 'sector+país');
+        agregar(`programa para ${sin} ${c.en}`, rutas.sectorPais(s, c), 'comercial', 'sector+país');
+      }
+      agregar(`control de inventario ${s.sinonimos[0]} ${c.en}`, rutas.sectorPais(s, c), 'comercial', 'sector+país');
     }
     for (const p of problemas) {
       const ruta = rutas.combo(s, p);
@@ -93,6 +97,14 @@ export function generarPalabrasClave() {
       agregar(`${q} de mi negocio`, rutas.problema(p), 'informativa', 'problema');
     }
   }
+  for (const g of glosario) {
+    agregar(`qué es ${g.termino.toLowerCase().replace(/ \(.*\)/, '')}`, '/glosario/', 'informativa', 'glosario');
+    agregar(`${g.termino.toLowerCase().replace(/ \(.*\)/, '')} significado`, '/glosario/', 'informativa', 'glosario');
+  }
+  for (const q of ['calculadora de pérdidas de un negocio', 'cuánto dinero pierde mi negocio', 'calcular pérdidas por fiados', 'calcular merma de inventario', 'calculadora de merma', 'calcular descuadre de caja'])
+    agregar(q, '/calculadora-de-fugas/', 'informativa', 'herramienta');
+  for (const q of ['cuaderno o sistema para mi negocio', 'excel o sistema de inventario', 'excel vs sistema de gestión', 'dejar el cuaderno de ventas', 'llevar las cuentas en cuaderno o excel', 'cuándo usar un sistema de gestión'])
+    agregar(q, '/comparar/cuaderno-excel-o-sistema/', 'informativa', 'comparativa');
   return filas;
 }
 

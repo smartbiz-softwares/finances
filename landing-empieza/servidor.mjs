@@ -73,8 +73,9 @@ const tipos = {
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
 };
-const comprimibles = new Set(['.html', '.css', '.js', '.json', '.svg', '.txt', '.xml']);
+const comprimibles = new Set(['.html', '.css', '.js', '.json', '.svg', '.txt', '.xml', '.md']);
 
 const cabecerasSeguras = {
   'X-Content-Type-Options': 'nosniff',
@@ -111,7 +112,8 @@ async function servirArchivo(req, res) {
   let cuerpo = await readFile(archivo);
   const cabeceras = {
     'Content-Type': tipos[ext] || 'application/octet-stream',
-    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=86400',
+    // Los archivos versionados (?v=hash) no cambian nunca: se guardan un año.
+    'Cache-Control': ext === '.html' || ext === '.md' ? 'no-cache' : url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'public, max-age=86400',
   };
   if (comprimibles.has(ext) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
     cuerpo = gzipSync(cuerpo);

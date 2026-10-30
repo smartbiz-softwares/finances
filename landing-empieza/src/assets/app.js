@@ -36,6 +36,104 @@
     }
   }
 
+  // --- Avisos breves (toasts) -------------------------------------------------
+  const cajaAvisos = $('[data-avisos]');
+  function aviso(texto, icono = 'check') {
+    if (!cajaAvisos) return;
+    const el = document.createElement('div');
+    el.className = 'aviso';
+    el.innerHTML = `${I[icono] || ''}<span>${esc(texto)}</span>`;
+    cajaAvisos.append(el);
+    requestAnimationFrame(() => el.classList.add('visible'));
+    setTimeout(() => {
+      el.classList.remove('visible');
+      setTimeout(() => el.remove(), 260);
+    }, 2600);
+  }
+
+  // --- Calculadora de fugas -------------------------------------------------------
+  let fugasCalculadas = null;
+  const calc = $('[data-calculadora]');
+  if (calc) iniciarCalculadora(calc);
+
+  function iniciarCalculadora(form) {
+    const seccion = form.closest('section');
+    const fmt = n => `$${Math.round(n).toLocaleString('es-UY')}`;
+    const mostrados = {};
+    const animar = (el, clave, valor) => {
+      const desde = mostrados[clave] ?? valor;
+      mostrados[clave] = valor;
+      if (movReducido() || desde === valor) { el.textContent = fmt(valor); return; }
+      const t0 = performance.now();
+      const paso = t => {
+        const k = Math.min(1, (t - t0) / 320);
+        const e = 1 - Math.pow(1 - k, 3);
+        el.textContent = fmt(desde + (valor - desde) * e);
+        if (k < 1) requestAnimationFrame(paso);
+      };
+      requestAnimationFrame(paso);
+    };
+    const leerNum = n => Math.max(0, Number(form.elements[n].value) || 0);
+    const actualizar = () => {
+      const v = Object.fromEntries(['ventas', 'fiado', 'incobrable', 'inventario', 'merma', 'caja', 'horas', 'valorHora'].map(n => [n, leerNum(n)]));
+      for (const r of $$('input[type="range"]', form)) {
+        const pct = ((r.value - r.min) / (r.max - r.min)) * 100;
+        r.style.setProperty('--pct', `${pct}%`);
+        const salida = $(`[data-salida="${r.name}"]`, form);
+        if (salida) salida.textContent = `${r.value}${r.name === 'horas' ? ' h' : '%'}`;
+      }
+      const res = {
+        fiado: (v.ventas * v.fiado * v.incobrable) / 10000,
+        merma: (v.inventario * v.merma) / 100,
+        caja: v.caja * 26,
+        tiempo: v.horas * 4.33 * v.valorHora,
+      };
+      const total = res.fiado + res.merma + res.caja + res.tiempo;
+      fugasCalculadas = res;
+      for (const [k, n] of Object.entries({ ...res, total, anual: total * 12 })) {
+        $$(`[data-resultado="${k}"]`, seccion).forEach((el, i) => animar(el, `${k}-${i}`, n));
+      }
+      // La fila que más pesa queda marcada, como en el ticket del inicio.
+      const mayor = Object.entries(res).sort((a, b) => b[1] - a[1])[0][0];
+      $$('.ticket-filas li', seccion).forEach(li => li.classList.toggle('destacada', !!$(`[data-resultado="${mayor}"]`, li) && res[mayor] > 0));
+    };
+    form.addEventListener('input', actualizar);
+    form.addEventListener('submit', e => e.preventDefault());
+    actualizar();
+  }
+
+  // --- Buscador de preguntas -------------------------------------------------------
+  for (const buscador of $$('[data-buscar-preguntas]')) {
+    const lista = buscador.closest('[data-preguntas]');
+    const items = $$('.pregunta', lista);
+    const vacio = $('[data-sin-resultados]', lista);
+    const normal = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    buscador.addEventListener('input', () => {
+      const q = normal(buscador.value.trim());
+      let visibles = 0;
+      for (const it of items) {
+        const ok = !q || q.split(/\s+/).every(w => normal(it.textContent).includes(w));
+        it.hidden = !ok;
+        if (ok) visibles++;
+        if (q && ok && visibles <= 2) it.open = true;
+        if (!q) it.open = false;
+      }
+      vacio.hidden = visibles > 0;
+    });
+  }
+
+  // --- Botón Empezar fijo: aparece al dejar atrás el hero, se esconde en el cierre ----
+  const fijo = $('[data-empezar-fijo]');
+  const heroEl = $('.hero');
+  const ctaEl = $('.cta');
+  if (fijo && heroEl && 'IntersectionObserver' in window) {
+    fijo.hidden = false;
+    let fueraHero = false, enCta = false;
+    const pintar = () => fijo.classList.toggle('visible', fueraHero && !enCta);
+    new IntersectionObserver(([e]) => { fueraHero = !e.isIntersecting; pintar(); }).observe(heroEl);
+    if (ctaEl) new IntersectionObserver(([e]) => { enCta = e.isIntersecting; pintar(); }, { threshold: 0.2 }).observe(ctaEl);
+  }
+
   // WhatsApp: el enlace abre en el mismo clic (si se retrasa, el navegador lo
   // bloquea); el spinner es solo la confirmación visual de que se oyó el toque.
   document.addEventListener('click', e => {
@@ -402,6 +500,7 @@
         { valor: 'averiguando', texto: 'Solo estoy averiguando', icono: 'globo' },
       ],
     },
+    { id: 'revisar', corto: 'Revisión', tipo: 'revisar', titulo: r => `${r.nombre}, revisa tus respuestas` },
     { id: 'contacto', corto: 'Contacto', tipo: 'contacto', titulo: r => `Último paso, ${r.nombre}. ¿A qué WhatsApp te escribimos?` },
   ];
   const pasoPorId = Object.fromEntries(pasos.map(p => [p.id, p]));
@@ -414,6 +513,15 @@
   const persistir = () => guardar(estado);
   const aplicables = () => pasos.filter(p => !p.si || p.si(estado.r));
   const pasoActual = () => pasoPorId[estado.historial[estado.historial.length - 1]];
+
+  // Al corregir una respuesta desde la revisión: solo se pregunta lo que esa
+  // respuesta haya abierto y quede sin contestar; después, vuelta a la revisión.
+  function siguientePendiente(idActual) {
+    const lista = aplicables();
+    const i = lista.findIndex(p => p.id === idActual);
+    const pendiente = lista.slice(i + 1).find(p => !['texto', 'revisar', 'contacto'].includes(p.tipo) && estado.r[p.id] == null);
+    return pendiente || pasoPorId.revisar;
+  }
 
   function siguientePaso(idActual) {
     const lista = aplicables();
@@ -431,10 +539,10 @@
   function resumen() {
     const filas = [];
     for (const p of aplicables()) {
-      if (p.tipo === 'contacto') continue;
+      if (p.tipo === 'contacto' || p.tipo === 'revisar') continue;
       const v = estado.r[p.id];
       if (v == null || v === '' || (Array.isArray(v) && !v.length)) continue;
-      filas.push({ pregunta: p.corto, respuesta: etiqueta(p, v) });
+      filas.push({ id: p.id, pregunta: p.corto, respuesta: etiqueta(p, v) });
     }
     return filas;
   }
@@ -481,10 +589,25 @@
         icono: 'escudo',
       });
       if (!salir) return;
+      cerrarHoja();
+      return aviso('Guardamos tus respuestas para después');
     }
     cerrarHoja();
   }
   bCerrar.addEventListener('click', pedirCierre);
+  // Atajos: 1–9 eligen la opción de ese número; Enter sigue (lo hace el form).
+  document.addEventListener('keydown', e => {
+    if (!hoja.open || modal.open || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'radio' && e.target.type !== 'checkbox') return;
+    const n = Number(e.key);
+    if (!n) return;
+    const vista = cuerpo.lastElementChild;
+    const op = $$('.opcion input', vista)[n - 1];
+    if (!op || op.disabled) return;
+    e.preventDefault();
+    op.click();
+    op.focus({ preventScroll: true });
+  });
   hoja.addEventListener('cancel', e => { e.preventDefault(); pedirCierre(); });
   bAtras.addEventListener('click', atras);
 
@@ -509,6 +632,10 @@
       return reanudarEtapa(1);
     }
     reiniciar();
+    if (boton.dataset.dolores && fugasCalculadas) {
+      const orden = Object.entries(fugasCalculadas).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+      if (orden.length) estado.r.dolores = orden.slice(0, 3);
+    }
     abrirHoja();
     esqueletoPregunta();
     await esperar(movReducido() ? 0 : 420);
@@ -606,6 +733,7 @@
   function irA(paso, dir) {
     if (!paso) return mostrarResultado(true);
     estado.etapa = 'preguntas';
+    if (paso.id === 'revisar') estado.editando = false;
     if (estado.historial[estado.historial.length - 1] !== paso.id) estado.historial.push(paso.id);
     persistir();
     const lista = aplicables();
@@ -644,11 +772,23 @@
     const r = estado.r;
     const titulo = esc(paso.titulo(r));
     const ayuda = paso.ayuda ? `<p class="pregunta-ayuda" id="ayuda-${paso.id}">${esc(paso.ayuda)}</p>` : '';
-    const cabeza = `<div class="hera-burbuja">${heraMini()}<span>Pregunta ${n}${n === total ? ' · la última' : ''}</span></div>
+    const conOpciones = paso.tipo === 'unica' || paso.tipo === 'multiple';
+    const etiquetaPaso = paso.tipo === 'revisar' ? 'Casi listo' : `Pregunta ${n}${n === total ? ' · la última' : ''}`;
+    const cabeza = `<div class="hera-burbuja">${heraMini()}<span>${etiquetaPaso}</span>${conOpciones ? '<span class="atajo" aria-hidden="true">Atajo: teclas 1–9</span>' : ''}</div>
       <h2 class="pregunta-titulo" id="hoja-titulo" tabindex="-1">${titulo}</h2>${ayuda}`;
     const boton = (texto = 'Continuar') =>
       `<div class="hoja-pie"><button class="btn btn-primario btn-ancho" type="submit"><span class="btn-texto">${texto}${I.flecha}</span><span class="btn-spinner" aria-hidden="true"></span></button></div>`;
     const error = '<p class="error" role="alert" data-error hidden></p>';
+
+    if (paso.tipo === 'revisar') {
+      const filas = resumen().filter(f => f.id !== 'nombre');
+      return `<form novalidate data-paso="revisar">${cabeza}
+        <p class="pregunta-ayuda">Si algo no está bien, cámbialo ahora. Con esto preparamos tu sesión.</p>
+        <dl class="revision" data-escalonar>
+          ${filas.map(f => `<div class="revision-fila"><dt>${esc(f.pregunta)}</dt><dd>${esc(f.respuesta)}</dd><button class="enlace-chico" type="button" data-editar="${f.id}" aria-label="Cambiar: ${esc(f.pregunta)}">Cambiar</button></div>`).join('')}
+        </dl>
+        ${error}<div class="espacio"></div>${boton('Todo está bien')}</form>`;
+    }
 
     if (paso.tipo === 'texto') {
       const v = esc((paso.id === 'nombre' && r.nombreCompleto) || r[paso.id] || '');
@@ -719,6 +859,16 @@
     };
     const limpiar = () => { err.hidden = true; };
 
+    if (paso.tipo === 'revisar') {
+      form.addEventListener('click', e => {
+        const b = e.target.closest('[data-editar]');
+        if (!b) return;
+        estado.editando = true;
+        persistir();
+        irA(pasoPorId[b.dataset.editar], -1);
+      });
+    }
+
     if (paso.tipo === 'unica' || paso.tipo === 'multiple') {
       const cajaOtro = $('[data-otro]', form);
       const entradaOtro = cajaOtro && $('input', cajaOtro);
@@ -767,7 +917,9 @@
       const datos = new FormData(form);
       const r = estado.r;
 
-      if (paso.tipo === 'texto') {
+      if (paso.tipo === 'revisar') {
+        // Solo confirma; las respuestas ya están guardadas.
+      } else if (paso.tipo === 'texto') {
         const v = String(datos.get(paso.id) || '').trim();
         if (paso.requerido && v.length < 2) return avisar('Escribe tu nombre para seguir.');
         r[paso.id] = paso.id === 'nombre' ? v.replace(/\s+/g, ' ').split(' ')[0].replace(/^./, c => c.toUpperCase()) : v;
@@ -812,7 +964,7 @@
         await esperar(280);
         cargando(boton, false);
       }
-      irA(siguientePaso(paso.id), 1);
+      irA(estado.editando ? siguientePendiente(paso.id) : siguientePaso(paso.id), 1);
     });
   }
 
@@ -879,6 +1031,7 @@
           <p class="ticket-meta">${esc(r.negocio || sectorDe(r)?.nombre || 'Tu negocio')} · ${esc(hoy)}</p>
           <ul class="hallazgos" data-hallazgos>${lista.map(() => '<li class="esqueleto esq-fila"></li>').join('')}</ul>
         </div>
+        <button class="enlace-chico copiar" type="button" data-copiar-diagnostico hidden>${I.copiar}Copiar mi diagnóstico</button>
         <div data-caminos hidden>
           <h3 class="caminos-titulo">¿Cómo quieres seguir?</h3>
           <div class="caminos">
@@ -926,6 +1079,17 @@
       pintar();
     }
     if (!vista.isConnected) return;
+    const bCopiar = $('[data-copiar-diagnostico]', vista);
+    bCopiar.hidden = false;
+    bCopiar.addEventListener('click', async () => {
+      const texto = [`Diagnóstico de ${r.negocio || r.nombre} · ${C.marca}`, ...lista.map(h => `• ${h.titulo}: ${h.texto}`)].join('\n');
+      try {
+        await navigator.clipboard.writeText(texto);
+        aviso('Diagnóstico copiado');
+      } catch {
+        aviso('No se pudo copiar en este navegador', 'alerta');
+      }
+    });
     caminos.hidden = false;
     escalonar([$('.caminos-titulo', caminos), ...$$('.camino', caminos)]);
     $('[data-ir-agenda]', vista).addEventListener('click', async e => {
@@ -960,6 +1124,17 @@
   const fmtLargo = new Intl.DateTimeFormat('es', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   const fmtMes = new Intl.DateTimeFormat('es', { month: 'short', timeZone: 'UTC' });
   const dosD = n => String(n).padStart(2, '0');
+  // Horas en formato de 12 h: "9:00 a. m.", "2:30 p. m.".
+  const hora12 = hhmm => {
+    const [h, m] = hhmm.split(':').map(Number);
+    // Espacios que no se cortan: "10:00 a. m." nunca se parte en dos líneas.
+    return `${h % 12 || 12}:${dosD(m)}\u00a0${h < 12 ? 'a.\u00a0m.' : 'p.\u00a0m.'}`;
+  };
+  const claveHoy = (desplazamiento = 0) => {
+    const p = partesEn(new Date());
+    const d = new Date(Date.UTC(p.y, p.m - 1, p.d + desplazamiento));
+    return `${d.getUTCFullYear()}-${dosD(d.getUTCMonth() + 1)}-${dosD(d.getUTCDate())}`;
+  };
 
   function diasDisponibles() {
     const a = C.agenda;
@@ -1001,7 +1176,7 @@
           ${dias
             .map(
               d => `<button class="dia" type="button" data-dia="${d.clave}" aria-pressed="${d.clave === elegido}" aria-label="${esc(fmtLargo.format(d.base))}" data-escalonar>
-              <small>${esc(fmtDia.format(d.base).replace('.', ''))}</small><b>${d.d}</b><small>${esc(fmtMes.format(d.base).replace('.', ''))}</small></button>`,
+              <small>${d.clave === claveHoy() ? 'Hoy' : d.clave === claveHoy(1) ? 'Mañana' : esc(fmtDia.format(d.base).replace('.', ''))}</small><b>${d.d}</b><small>${esc(fmtMes.format(d.base).replace('.', ''))}</small></button>`,
             )
             .join('')}
         </div>
@@ -1025,7 +1200,7 @@
       if (id !== carga || !cajaHoras.isConnected) return;
       const dia = dias.find(d => d.clave === elegido);
       cajaHoras.innerHTML = dia.horas
-        .map(h => `<button class="hora" type="button" data-hora="${h}" aria-pressed="${h === hora}">${h}</button>`)
+        .map(h => `<button class="hora" type="button" data-hora="${h}" aria-pressed="${h === hora}">${hora12(h)}</button>`)
         .join('');
       cajaHoras.removeAttribute('aria-busy');
       escalonar($$('.hora', cajaHoras));
@@ -1046,8 +1221,8 @@
         bReservar.disabled = false;
       } else if (e.target.closest('[data-reservar]') && hora) {
         const dia = dias.find(d => d.clave === elegido);
-        const texto = `${fmtLargo.format(dia.base)} a las ${hora} (${C.agenda.etiquetaHora}). Te escribiremos al +${r.prefijo} ${r.telefono} para confirmarla.`;
-        estado.reserva = { dia: elegido, hora, texto: `${fmtLargo.format(dia.base)}, ${hora} (${C.agenda.etiquetaHora})` };
+        const texto = `${fmtLargo.format(dia.base)} a las ${hora12(hora)} (${C.agenda.etiquetaHora}). Te escribiremos al +${r.prefijo} ${r.telefono} para confirmarla.`;
+        estado.reserva = { dia: elegido, hora, texto: `${fmtLargo.format(dia.base)}, ${hora12(hora)} (${C.agenda.etiquetaHora})` };
         persistir();
         const ok = await confirmar({
           titulo: '¿Confirmamos tu sesión?',
@@ -1061,7 +1236,10 @@
             persistir();
           },
         });
-        if (ok) mostrarListo();
+        if (ok) {
+          mostrarListo();
+          aviso(estado.reserva.enviada ? 'Reserva recibida' : 'Falta confirmarla por WhatsApp', estado.reserva.enviada ? 'check' : 'alerta');
+        }
       }
     });
     if (dias.length) pintarHoras();
@@ -1097,6 +1275,7 @@
       cargando(b, true);
       await esperar(350);
       descargarIcs();
+      aviso('Evento listo: revisa tus descargas', 'calendario');
       cargando(b, false);
     });
     $('[data-terminar]', vista).addEventListener('click', cerrarHoja);
