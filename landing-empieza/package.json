@@ -1,0 +1,18 @@
+{
+  "name": "smartbusiness-empieza",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Landing empieza.smartbiz.com.uy de SmartBusiness",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node servidor.mjs",
+    "dev": "node build.mjs && node servidor.mjs",
+    "test": "node landing.prueba.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "nodemailer": "^10.0.16"
+  }
+}

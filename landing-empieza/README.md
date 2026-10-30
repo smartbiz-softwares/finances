@@ -50,12 +50,31 @@ WhatsApp. Luego muestra un diagnóstico y los dos caminos.
   480 × 660 px se verá nítida en pantallas de alta densidad: basta con
   reemplazar los archivos con el mismo nombre.
 
+## Montar en local
+
+Necesitas [Node.js](https://nodejs.org) 18 o superior. Desde esta carpeta:
+
+```bash
+npm install
+npm run dev
+```
+
+Abre <http://localhost:4100>. `npm run dev` compila las 115 páginas en `dist/`
+y arranca el servidor. Para que las solicitudes lleguen por correo, copia
+`.env.example` como `.env` y completa el SMTP; sin él, quedan guardadas en
+`solicitudes/solicitudes.jsonl`.
+
 ## Comandos
 
 ```bash
-npm run landing:build      # genera landing-empieza/dist/
-npm run landing:servidor   # sirve dist/ y recibe /api/solicitud (puerto 4100)
-node landing-empieza/landing.prueba.mjs   # pruebas (también corren con npm test)
+# Desde esta carpeta
+npm run build   # genera dist/
+npm start       # sirve dist/ y recibe /api/solicitud (puerto 4100)
+npm test        # pruebas
+
+# Desde la raíz del repositorio de HeraWallet
+npm run landing:build
+npm run landing:servidor
 ```
 
 ## Publicar en el VPS
