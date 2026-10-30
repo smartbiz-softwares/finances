@@ -36,24 +36,6 @@
     }
   }
 
-  // --- Barra superior y aparición al hacer scroll ----------------------------
-  const barra = $('[data-barra]');
-  if (barra) {
-    const marcar = () => barra.toggleAttribute('data-scroll', scrollY > 8);
-    addEventListener('scroll', marcar, { passive: true });
-    marcar();
-  }
-  const revelables = $$('[data-revelar]');
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver(
-      entradas => entradas.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } }),
-      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
-    );
-    revelables.forEach(el => io.observe(el));
-  } else {
-    revelables.forEach(el => el.classList.add('visible'));
-  }
-
   // WhatsApp: el enlace abre en el mismo clic (si se retrasa, el navegador lo
   // bloquea); el spinner es solo la confirmación visual de que se oyó el toque.
   document.addEventListener('click', e => {
@@ -602,7 +584,8 @@
     );
   }
 
-  const heraMini = () => D.hera.replace('class="hera"', 'class="hera-mini"');
+  const imgHera = (pose, clase) => `<img class="${clase}" src="/assets/img/${D.heras[pose]}.webp" width="240" height="330" alt="">`;
+  const heraMini = () => imgHera('neutra', 'hera-mini');
 
   function esqueletoPregunta() {
     bAtras.hidden = true;
@@ -884,27 +867,32 @@
     const grande = tamano(r) !== 'pequeno';
     const recomiendaAgenda = r.cuando !== 'averiguando' && (grande || r.cuando !== 'semana');
 
+    const hoy = new Intl.DateTimeFormat('es', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
     const vista = mostrarVista(
       `<div class="vista-in" aria-busy="${conAnalisis}">
-        <div class="resultado-cabecera">${D.hera}<div>
-          <p class="antetitulo" style="margin:0">Tu diagnóstico</p>
+        <div class="resultado-cabecera">${imgHera(conAnalisis ? 'piensa' : 'explica', 'resultado-hera')}<div>
+          <p>Tu diagnóstico</p>
           <h2 class="pregunta-titulo" id="hoja-titulo" tabindex="-1">${conAnalisis ? `Estoy revisando tu negocio, ${esc(r.nombre)}…` : `Esto es lo que vi en tu negocio, ${esc(r.nombre)}`}</h2>
         </div></div>
-        <ul class="hallazgos" data-hallazgos>${lista.map(() => '<li class="esqueleto esq-hallazgo"></li>').join('')}</ul>
+        <div class="ticket-resultado">
+          <p class="ticket-cabeza"><img class="ticket-logo" src="/assets/img/logo.webp" width="40" height="40" alt=""><span>SmartBusiness · Hera</span></p>
+          <p class="ticket-meta">${esc(r.negocio || sectorDe(r)?.nombre || 'Tu negocio')} · ${esc(hoy)}</p>
+          <ul class="hallazgos" data-hallazgos>${lista.map(() => '<li class="esqueleto esq-fila"></li>').join('')}</ul>
+        </div>
         <div data-caminos hidden>
           <h3 class="caminos-titulo">¿Cómo quieres seguir?</h3>
           <div class="caminos">
             <button class="camino${recomiendaAgenda ? ' recomendado' : ''}" type="button" data-ir-agenda>
               ${recomiendaAgenda ? '<span class="camino-insignia">Recomendado para ti</span>' : ''}
-              <span class="tarjeta-icono">${I.calendario}</span>
+              <span class="camino-icono">${I.calendario}</span>
               <span class="camino-contenido"><b>Reservar un día para armar mi negocio</b><small>Elige día y hora. Sesión de acompañamiento de 1 hora.</small></span>
-              ${I.flecha.replace('class="ico"', 'class="ico ico-flecha"')}
+              ${I.flecha}
             </button>
             <a class="camino${recomiendaAgenda ? '' : ' recomendado'}" href="${esc(urlWhatsapp())}" target="_blank" rel="noopener" data-whatsapp>
               ${recomiendaAgenda ? '' : '<span class="camino-insignia">Recomendado para ti</span>'}
-              <span class="tarjeta-icono">${D.whatsapp}</span>
+              <span class="camino-icono">${D.whatsapp}</span>
               <span class="camino-contenido"><b>Hablar ahora por WhatsApp</b><small>Te responde una persona del equipo · ${esc(C.whatsappVisible)}</small></span>
-              ${I.flecha.replace('class="ico"', 'class="ico ico-flecha"')}
+              ${I.flecha}
             </a>
           </div>
         </div>
@@ -915,9 +903,7 @@
     const caminos = $('[data-caminos]', vista);
     const pintar = () => {
       ul.innerHTML = lista
-        .map(
-          h => `<li class="hallazgo${h.fuga ? ' fuga' : ''}"><span class="tarjeta-icono">${I[h.icono] || ''}</span><div><h3>${esc(h.titulo)}</h3><p>${esc(h.texto)}</p></div></li>`,
-        )
+        .map(h => `<li class="hallazgo${h.fuga ? ' fuga' : ''}">${I[h.icono] || ''}<div><h3>${esc(h.titulo)}</h3><p>${esc(h.texto)}</p></div></li>`)
         .join('');
     };
 
@@ -926,13 +912,15 @@
       if (!vista.isConnected) return;
       pintar();
       const items = $$('.hallazgo', ul);
-      // Uno a uno, no todo de golpe.
+      // Como un ticket que se imprime: una línea tras otra, no todo de golpe.
       for (const [i, li] of items.entries()) {
-        if (!movReducido()) li.animate([{ opacity: 0, transform: 'translateY(10px) scale(0.98)' }, { opacity: 1, transform: 'none' }], { duration: 380, delay: i * 160, easing: EASE, fill: 'backwards' });
+        if (!movReducido()) li.animate([{ opacity: 0, transform: 'translateY(-6px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: i * 180, easing: EASE, fill: 'backwards' });
       }
-      await esperar(movReducido() ? 0 : items.length * 160 + 200);
+      await esperar(movReducido() ? 0 : items.length * 180 + 200);
       const h2 = $('#hoja-titulo', vista);
       h2.textContent = `Esto es lo que vi en tu negocio, ${r.nombre}`;
+      const img = $('.resultado-hera', vista);
+      img.src = `/assets/img/${D.heras.explica}.webp`;
       vista.firstElementChild.setAttribute('aria-busy', 'false');
     } else {
       pintar();
@@ -1088,7 +1076,7 @@
     const enviada = estado.reserva?.enviada;
     const vista = mostrarVista(
       `<div class="vista-in exito">
-        <div class="exito-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        ${imgHera('explica', 'exito-hera')}
         <h2 class="pregunta-titulo" id="hoja-titulo" tabindex="-1">${enviada ? `¡Listo, ${esc(r.nombre)}! Tu sesión quedó reservada` : `¡Casi listo, ${esc(r.nombre)}!`}</h2>
         <p class="pregunta-ayuda">${enviada ? 'Te escribiremos por WhatsApp para confirmarla. Si quieres, avísanos ya desde aquí.' : 'Último paso: envíanos tu reserva por WhatsApp para confirmarla.'}</p>
         <div class="resumen-reserva" data-escalonar>

@@ -2,7 +2,7 @@
 //   node landing-empieza/build.mjs
 // Sin dependencias: solo Node 18+.
 
-import { mkdir, rm, writeFile, copyFile, readdir } from 'node:fs/promises';
+import { mkdir, rm, writeFile, cp } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,8 +11,8 @@ import { sectores } from './src/datos/sectores.mjs';
 import { problemas } from './src/datos/problemas.mjs';
 import { paises } from './src/datos/paises.mjs';
 import { preguntas } from './src/datos/preguntas.mjs';
-import { icono, iconoWhatsapp, hera, logo, nombresIconos } from './src/iconos.mjs';
-import { paginaInicio, paginaSector, paginaProblema, paginaCombo, paginaPais, layout, rutas, funciones, guionDemo, botonEmpezar } from './src/plantillas.mjs';
+import { icono, iconoWhatsapp, nombresIconos } from './src/iconos.mjs';
+import { paginaInicio, paginaSector, paginaProblema, paginaCombo, paginaPais, layout, rutas, funciones, guionDemo, botonEmpezar, imgHera } from './src/plantillas.mjs';
 import { generarPalabrasClave, aCsv } from './src/palabras-clave.mjs';
 
 const raiz = dirname(fileURLToPath(import.meta.url));
@@ -46,10 +46,10 @@ const html404 = layout({
   descripcion: 'Esta página no existe. Vuelve al inicio o empieza ahora.',
   ruta: '/404.html',
   contenido: `<section class="hero"><div class="contenedor" style="text-align:center;display:grid;justify-items:center;gap:20px">
-    ${hera('hera hera-cta')}
+    ${imgHera('piensa', 'cta-hera', { carga: 'eager' })}
     <h1>Esta página se nos escapó</h1>
     <p class="hero-bajada" style="margin:0">Como una fuga. Pero esta tiene arreglo.</p>
-    <div class="acciones" style="justify-content:center"><a class="btn btn-secundario" href="/">Volver al inicio</a>${botonEmpezar()}</div>
+    <div class="acciones" style="justify-content:center;padding-bottom:72px"><a class="btn btn-contorno" href="/">Volver al inicio</a>${botonEmpezar({ clase: 'btn btn-blanco' })}</div>
   </div></section>`,
 }).replace('content="index, follow', 'content="noindex, follow');
 
@@ -70,10 +70,8 @@ const datosCliente = {
   guionDemo: guionDemo.map(g => g.texto),
   iconos,
   whatsapp: iconoWhatsapp('ico'),
-  hera: hera('hera'),
+  heras: { neutra: 'hera', explica: 'hera-explica', piensa: 'hera-piensa', laptop: 'hera-laptop' },
 };
-
-const favicon = `<svg xmlns="http://www.w3.org/2000/svg" ${logo.slice(5).replace(' class="logo-marca"', '').replace(' aria-hidden="true" focusable="false"', '')}`;
 
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -164,8 +162,7 @@ await escribir('robots.txt', robots);
 await escribir('llms.txt', llms);
 await escribir('llms-full.txt', llmsCompleto);
 await escribir('assets/datos.js', `window.SB_DATOS=${JSON.stringify(datosCliente)};\n`);
-await escribir('assets/favicon.svg', favicon);
-for (const f of await readdir(join(raiz, 'src/assets'))) await copyFile(join(raiz, 'src/assets', f), join(dist, 'assets', f));
+await cp(join(raiz, 'src/assets'), join(dist, 'assets'), { recursive: true });
 
 const claves = generarPalabrasClave();
 await mkdir(join(raiz, 'seo'), { recursive: true });

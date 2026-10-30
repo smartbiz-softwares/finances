@@ -1,73 +1,57 @@
-// Íconos de trazo (24×24) y la mascota Hera, en SVG en línea: sin peticiones
-// extra y heredan el color del texto con currentColor.
+// Íconos de lucide-animated (https://lucide-animated.com · github.com/pqoqubbw/icons, licencia MIT,
+// © pqoqubbw): mismo trazo que Lucide. Los SVG se generaron desde sus componentes de React;
+// sus animaciones de hover están portadas a CSS en estilos.css (.la-<nombre>), sin React ni
+// librerías. Los elementos que se animan llevan data-m, en el mismo orden que el original.
 
-const trazos = {
-  tienda: '<path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v1a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 12.5V20h14v-7.5"/><path d="M10 20v-5h4v5"/>',
-  herramienta: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>',
-  farmacia: '<rect x="3" y="3" width="18" height="18" rx="5"/><path d="M12 8v8M8 12h8"/>',
-  ropa: '<path d="M20.4 3.5 16 2a4 4 0 0 1-8 0L3.6 3.5a2 2 0 0 0-1.3 2.2l.6 3.5a1 1 0 0 0 1 .8H6v10a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V10h2.1a1 1 0 0 0 1-.8l.6-3.5a2 2 0 0 0-1.3-2.2z"/>',
-  cafe: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M6 2v2M10 2v2M14 2v2"/>',
-  pan: '<path d="M4 11a8 5 0 0 1 16 0v1a2 2 0 0 1-2 2v5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-5a2 2 0 0 1-2-2z"/><path d="M9 9v3M12 8v4M15 9v3"/>',
-  camion: '<path d="M2 6h12v10H2z"/><path d="M14 9h4l3 3.5V16h-7"/><circle cx="6.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
-  llave: '<path d="M5 16.5h14V12l-2.2-5H7.2L5 12z"/><path d="M5 12h14"/><circle cx="8" cy="16.5" r="1.8"/><circle cx="16" cy="16.5" r="1.8"/>',
-  fabrica: '<path d="M3 21V10.5l5 3v-3l5 3v-3l5 3V4h3v17z"/><path d="M7 17.5h2M11.5 17.5h2M16 17.5h1.5"/>',
-  tijera: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/>',
-  celular: '<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/>',
-  maletin: '<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
-  fiado: '<path d="M5 4a1 1 0 0 1 1-1h10a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3z"/><path d="M5 18a3 3 0 0 1 3-3h11M9 7h6M9 10.5h4"/>',
-  stock: '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
-  caja: '<rect x="3" y="10" width="18" height="10" rx="2"/><path d="M7 10V5h10v5M7 14h2M11 14h2M15 14h2M7 17h10"/>',
-  margen: '<path d="M3 20h18"/><path d="M5 16l4-5 4 3 6-8"/><path d="M15 6h4v4"/>',
-  merma: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/>',
-  monedas: '<circle cx="9" cy="9" r="6"/><path d="M15.4 9.6a6 6 0 1 1-5.8 5.8"/><path d="M9 6.5v5M7.5 8h3"/>',
-  tiempo: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>',
-  flecha: '<path d="M5 12h14M13 6l6 6-6 6"/>',
-  atras: '<path d="M15 18l-6-6 6-6"/>',
-  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-  cerrar: '<path d="M6 6l12 12M18 6 6 18"/>',
-  calendario: '<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M8 2.5v4M16 2.5v4M3 10h18"/>',
-  reloj: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/>',
-  wifi: '<path d="M2 8.8a15 15 0 0 1 20 0M5 12.3a10 10 0 0 1 14 0M8.5 15.8a5 5 0 0 1 7 0"/><path d="M12 19.5h.01"/>',
-  chispa: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
-  usuarios: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6 6 0 0 0-2.6-4.9"/>',
-  sucursal: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
-  escudo: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/>',
-  globo: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
-  lapiz: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',
-  play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
-  pausa: '<path d="M8 5v14M16 5v14"/>',
-  repetir: '<path d="M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15"/><path d="M4 20v-5h5"/>',
-  alerta: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16h.01"/>',
-  celularCheck:'<rect x="6" y="2" width="12" height="20" rx="3"/><path d="M9.5 12l2 2 3.5-4"/>',
+const svg = {
+  flecha: ['arrow-right', '', '<path d="M5 12h14" data-m="0"></path><path d="m12 5 7 7-7 7" data-m="1"></path>'],
+  atras: ['chevron-left', '', '<path d="m15 18-6-6 6-6" data-m="0"></path>'],
+  check: ['check', '', '<path pathLength="1" d="M4 12 9 17L20 6" data-m="0"></path>'],
+  cerrar: ['x', '', '<path pathLength="1" d="M18 6 6 18" data-m="0"></path><path pathLength="1" d="m6 6 12 12" data-m="1"></path>'],
+  calendario: ['calendar-days', '', '<path d="M8 2v4"></path><path d="M16 2v4"></path><rect height="18" rx="2" width="18" x="3" y="4"></rect><path d="M3 10h18"></path><circle cx="8" cy="14" fill="currentColor" r="1" stroke="none" data-m="0"></circle><circle cx="12" cy="14" fill="currentColor" r="1" stroke="none" data-m="1"></circle><circle cx="16" cy="14" fill="currentColor" r="1" stroke="none" data-m="2"></circle><circle cx="8" cy="18" fill="currentColor" r="1" stroke="none" data-m="3"></circle><circle cx="12" cy="18" fill="currentColor" r="1" stroke="none" data-m="4"></circle><circle cx="16" cy="18" fill="currentColor" r="1" stroke="none" data-m="5"></circle>'],
+  reloj: ['clock', '', '<circle cx="12" cy="12" r="10"></circle><line x1="12" x2="12" y1="12" y2="6" data-m="0"></line><line x1="12" x2="16" y1="12" y2="12" data-m="1"></line>'],
+  wifi: ['wifi', '', '<path d="M12 20h.01" data-m="0"></path><path d="M8.5 16.429a5 5 0 0 1 7 0" data-m="1"></path><path d="M5 12.859a10 10 0 0 1 14 0" data-m="2"></path><path d="M2 8.82a15 15 0 0 1 20 0" data-m="3"></path>'],
+  chispa: ['sparkles', '', '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" data-m="0"></path><path d="M20 3v4" data-m="1"></path><path d="M22 5h-4" data-m="2"></path><path d="M4 17v2" data-m="3"></path><path d="M5 18H3" data-m="4"></path>'],
+  usuarios: ['users', '', '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87" data-m="0"></path><path d="M16 3.13a4 4 0 0 1 0 7.75" data-m="1"></path>'],
+  sucursal: ['map-pin', 'data-m="0"', '<path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"></path><circle pathLength="1" cx="12" cy="10" r="3" data-m="1"></circle>'],
+  escudo: ['shield-check', '', '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path pathLength="1" d="m9 12 2 2 4-4" data-m="0"></path>'],
+  globo: ['earth', '', '<path pathLength="1" d="M21.54 15H17a2 2 0 0 0-2 2v4.54" data-m="0"></path><path pathLength="1" d="M7 3.34V5a3 3 0 0 0 3 3a2 2 0 0 1 2 2c0 1.1.9 2 2 2a2 2 0 0 0 2-2c0-1.1.9-2 2-2h3.17" data-m="1"></path><path pathLength="1" d="M11 21.95V18a2 2 0 0 0-2-2a2 2 0 0 1-2-2v-1a2 2 0 0 0-2-2H2.05" data-m="2"></path><circle pathLength="1" cx="12" cy="12" r="10" data-m="3"></circle>'],
+  lapiz: ['square-pen', '', '<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z" data-m="0"></path>'],
+  play: ['play', 'data-m="0"', '<polygon points="6 3 20 12 6 21 6 3" data-m="1"></polygon>'],
+  pausa: ['pause', '', '<rect height="16" rx="1" width="4" x="6" y="4" data-m="0"></rect><rect height="16" rx="1" width="4" x="14" y="4" data-m="1"></rect>'],
+  repetir: ['refresh-cw', 'data-m="0"', '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path>'],
+  celular: ['smartphone-charging', '', '<rect height="20" rx="2" ry="2" width="14" x="5" y="2"></rect><path d="M12.667 8 10 12h4l-2.667 4" data-m="0"></path>'],
+  alerta: ['badge-alert', 'data-m="0"', '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path><line x1="12" x2="12" y1="8" y2="12"></line><line x1="12" x2="12.01" y1="16" y2="16"></line>'],
+  tienda: ['cart', 'data-m="0"', '<path d="M6.29977 5H21L19 12H7.37671M20 16H8L6 3H3M9 20C9 20.5523 8.55228 21 8 21C7.44772 21 7 20.5523 7 20C7 19.4477 7.44772 19 8 19C8.55228 19 9 19.4477 9 20ZM20 20C20 20.5523 19.5523 21 19 21C18.4477 21 18 20.5523 18 20C18 19.4477 18.4477 19 19 19C19.5523 19 20 19.4477 20 20Z"></path>'],
+  herramienta: ['wrench', 'data-m="0"', '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"></path>'],
+  ropa: ['palette', '', '<path pathLength="1" d="M12 2a1 1 0 0 0 0 20l.25 0a1.75 1.75 0 0 0 1.4-2.8l-.3-.4a1.75 1.75 0 0 1 1.4-2.8h2.25a5 5 0 0 0 5-5 10 9 0 0 0-10-9z" data-m="0"></path><g data-m="1"><circle cx="6.5" cy="12.5" fill="currentColor" r=".5" data-m="2"></circle><circle cx="8.5" cy="7.5" fill="currentColor" r=".5" data-m="3"></circle><circle cx="13.5" cy="6.5" fill="currentColor" r=".5" data-m="4"></circle><circle cx="17.5" cy="10.5" fill="currentColor" r=".5" data-m="5"></circle></g>'],
+  farmacia: ['heart-pulse', '', '<g data-m="0"><path pathLength="1" d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5" data-m="1"></path></g><path pathLength="1" d="M3.22 13H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27" data-m="2"></path>'],
+  cafe: ['coffee', '', '<path d="M10 2v2" data-m="0"></path><path d="M14 2v2" data-m="1"></path><path d="M6 2v2" data-m="2"></path><path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"></path>'],
+  pan: ['flame', '', '<path pathLength="1" d="M8.9 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" fill="none" data-m="0"></path>'],
+  camion: ['truck', '', '<line stroke-linecap="round" stroke-width="2" x1="0" x2="5" y1="8" y2="8" data-m="0"></line><line stroke-linecap="round" stroke-width="2" x1="-1" x2="6" y1="11" y2="11" data-m="1"></line><line stroke-linecap="round" stroke-width="2" x1="0" x2="4" y1="14" y2="14" data-m="2"></line><g data-m="3"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path><path d="M15 18H9"></path><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"></path></g><g data-m="4"><g data-m="5"><circle cx="7" cy="18" r="2"></circle><line stroke-width="1.5" x1="7" x2="7" y1="16.5" y2="19.5"></line><line stroke-width="1.5" x1="5.5" x2="8.5" y1="18" y2="18"></line></g></g><g data-m="6"><g data-m="7"><circle cx="17" cy="18" r="2"></circle><line stroke-width="1.5" x1="17" x2="17" y1="16.5" y2="19.5"></line><line stroke-width="1.5" x1="15.5" x2="18.5" y1="18" y2="18"></line></g></g>'],
+  llave: ['car', '', '<line stroke-linecap="round" stroke-width="2" x1="0" x2="5" y1="8" y2="8" data-m="0"></line><line stroke-linecap="round" stroke-width="2" x1="-1" x2="6" y1="11" y2="11" data-m="1"></line><line stroke-linecap="round" stroke-width="2" x1="0" x2="4" y1="14" y2="14" data-m="2"></line><g data-m="3"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path></g><g data-m="4"><circle cx="7" cy="17" r="2"></circle></g><g data-m="5"><path d="M9 17h6"></path></g><g data-m="6"><circle cx="17" cy="17" r="2"></circle></g>'],
+  fabrica: ['cog', 'data-m="0"', '<path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"></path><path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z"></path><path d="M12 2v2"></path><path d="M12 22v-2"></path><path d="m17 20.66-1-1.73"></path><path d="M11 10.27 7 3.34"></path><path d="m20.66 17-1.73-1"></path><path d="m3.34 7 1.73 1"></path><path d="M14 12h8"></path><path d="M2 12h2"></path><path d="m20.66 7-1.73 1"></path><path d="m3.34 17 1.73-1"></path><path d="m17 3.34-1 1.73"></path><path d="m11 13.73-4 6.93"></path>'],
+  tijera: ['droplet', '', '<path pathLength="1" d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z" data-m="0"></path>'],
+  maletin: ['briefcase-business', 'data-m="0"', '<path d="M12 12h.01"></path><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"></path><path d="M22 13a18.15 18.15 0 0 1-20 0"></path><rect height="14" rx="2" width="20" x="2" y="6"></rect>'],
+  fiado: ['book-text', 'data-m="0"', '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"></path><path d="M8 11h8"></path><path d="M8 7h6"></path>'],
+  stock: ['boxes', '', '<path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z m4.03 3.58 -4.74 -2.85 m4.74 2.85 5-3 m-5 3v5.17" data-m="0"></path><path d="M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z m5 3-5-3 m5 3 4.74-2.85 M17 16.5v5.17" data-m="1"></path><path d="M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z M12 8 7.26 5.15 m4.74 2.85 4.74-2.85 M12 13.5V8" data-m="2"></path>'],
+  caja: ['receipt', 'data-m="0"', '<path pathLength="1" d="M12 17V7" data-m="1"></path><path pathLength="1" d="M16 8h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8" data-m="2"></path><path d="M4 3a1 1 0 0 1 1-1 1.3 1.3 0 0 1 .7.2l.933.6a1.3 1.3 0 0 0 1.4 0l.934-.6a1.3 1.3 0 0 1 1.4 0l.933.6a1.3 1.3 0 0 0 1.4 0l.933-.6a1.3 1.3 0 0 1 1.4 0l.934.6a1.3 1.3 0 0 0 1.4 0l.933-.6A1.3 1.3 0 0 1 19 2a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1 1.3 1.3 0 0 1-.7-.2l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.934.6a1.3 1.3 0 0 1-1.4 0l-.933-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-1.4 0l-.934-.6a1.3 1.3 0 0 0-1.4 0l-.933.6a1.3 1.3 0 0 1-.7.2 1 1 0 0 1-1-1z"></path>'],
+  margen: ['chart-no-axes-column-decreasing', '', '<path pathLength="1" d="M6 20V4" data-m="0"></path><path pathLength="1" d="M12 20V10" data-m="1"></path><path pathLength="1" d="M18 20v-4" data-m="2"></path>'],
+  merma: ['hourglass', '', '<g data-m="0"><path d="M5 22h14"></path><path d="M5 2h14"></path><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path></g>'],
+  monedas: ['hand-coins', '', '<path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17"></path><path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"></path><path d="m2 16 6 6"></path><circle cx="16" cy="9" r="2.9" data-m="0"></circle><circle cx="6" cy="5" r="3" data-m="1"></circle>'],
+  tiempo: ['timer', '', '<line x1="10" x2="14" y1="2" y2="2" data-m="0"></line><line x1="12" x2="15" y1="14" y2="11" data-m="1"></line><circle cx="12" cy="14" r="8"></circle>'],
+  celularCheck: ['laptop-minimal-check', '', '<path d="M2 20h20"></path><rect height="12" rx="2" width="18" x="3" y="4"></rect><path pathLength="1" d="m9 10 2 2 4-4" data-m="0"></path>'],
 };
 
-export const nombresIconos = Object.keys(trazos);
+export const nombresIconos = Object.keys(svg);
 
 export function icono(nombre, clase = 'ico') {
-  const d = trazos[nombre];
-  if (!d) throw new Error(`Ícono desconocido: ${nombre}`);
-  return `<svg class="${clase}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`;
+  const def = svg[nombre];
+  if (!def) throw new Error(`Ícono desconocido: ${nombre}`);
+  const [la, raiz, cuerpo] = def;
+  return `<svg class="${clase} la la-${la}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"${raiz ? ` ${raiz}` : ''}>${cuerpo}</svg>`;
 }
 
+// WhatsApp no está en Lucide: es la marca, se usa su glifo oficial.
 export const iconoWhatsapp = (clase = 'ico') =>
   `<svg class="${clase}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.08-.3-.15-1.26-.47-2.39-1.48-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.91-2.2-.25-.59-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48s1.06 2.88 1.21 3.07c.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.41.25-.7.25-1.29.18-1.41-.08-.13-.27-.2-.57-.35M12.05 21.8h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.89 9.89-9.89a9.82 9.82 0 0 1 9.88 9.9c0 5.45-4.44 9.88-9.88 9.88m8.41-18.3A11.82 11.82 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.69 1.45h.01c6.55 0 11.89-5.34 11.89-11.89a11.82 11.82 0 0 0-3.48-8.41"/></svg>`;
-
-// Hera: robot verde de SmartBusiness. Misma silueta en todas partes para que
-// se reconozca en dos segundos. Los ojos parpadean con CSS (.hera-ojo).
-export const hera = (clase = 'hera') => `<svg class="${clase}" viewBox="0 0 120 120" role="img" aria-label="Hera, la asistente con inteligencia artificial de SmartBusiness">
-  <line x1="60" y1="12" x2="60" y2="26" stroke="#00795F" stroke-width="4" stroke-linecap="round"/>
-  <circle class="hera-antena" cx="60" cy="10" r="6" fill="#00A27F"/>
-  <rect x="10" y="50" width="10" height="22" rx="5" fill="#005E4A"/>
-  <rect x="100" y="50" width="10" height="22" rx="5" fill="#005E4A"/>
-  <rect x="16" y="24" width="88" height="74" rx="30" fill="#00795F"/>
-  <rect x="16" y="24" width="88" height="74" rx="30" fill="url(#hera-brillo)"/>
-  <rect x="27" y="38" width="66" height="44" rx="20" fill="#0B2F27"/>
-  <g class="hera-ojos">
-    <rect class="hera-ojo" x="41" y="50" width="11" height="15" rx="5.5" fill="#7CF2CF"/>
-    <rect class="hera-ojo" x="68" y="50" width="11" height="15" rx="5.5" fill="#7CF2CF"/>
-  </g>
-  <path d="M51 72q9 6 18 0" fill="none" stroke="#7CF2CF" stroke-width="3.5" stroke-linecap="round"/>
-  <defs><linearGradient id="hera-brillo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
-</svg>`;
-
-export const logo = `<svg class="logo-marca" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="9" fill="#00795F"/><path d="M21 11.5c-.8-1.6-2.6-2.5-4.9-2.5-3 0-5 1.5-5 3.7 0 5 10.3 2.6 10.3 7.6 0 2.3-2.2 3.8-5.3 3.8-2.5 0-4.4-1-5.3-2.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>`;

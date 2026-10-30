@@ -92,7 +92,7 @@ console.log('\nPáginas');
   }
   comprobar('cada página tiene un h1, título único, canonical y JSON-LD válido, sin "undefined"', problemasPagina.length === 0, problemasPagina.slice(0, 3));
   comprobar('las descripciones caben en el resultado de Google (≤ 160)', paginas.every(([, h]) => (h.match(/name="description" content="([^"]+)"/)?.[1].replace(/&quot;/g, '"').length || 0) <= 160));
-  comprobar('el botón Empezar funciona sin JavaScript (lleva a WhatsApp)', paginas.every(([, h]) => /<a class="btn btn-primario[^"]*" href="https:\/\/wa\.me\/5359079144\?text=[^"]+" data-empezar>/.test(h)));
+  comprobar('el botón Empezar funciona sin JavaScript (lleva a WhatsApp)', paginas.every(([, h]) => /<a class="btn btn-[a-z]+" href="https:\/\/wa\.me\/5359079144\?text=[^"]+" data-empezar>/.test(h)));
 }
 
 console.log('\nPalabras clave');

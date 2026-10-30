@@ -29,6 +29,27 @@ dispositivos; cómo lleva el control hoy → qué sistema usa; lo que más le
 preocupa → cuántos le deben / en qué monedas cobra; objetivo; cuándo empezar;
 WhatsApp. Luego muestra un diagnóstico y los dos caminos.
 
+## Diseño
+
+- **Sin barra de navegación.** El logo vive dentro del hero; en las páginas
+  internas, las migas de pan van a su lado.
+- **El ticket de caja** es el hilo visual: en el hero, Hera "imprime" las
+  fugas de un negocio de ejemplo (la única animación de la página), y el
+  diagnóstico del formulario sale con el mismo formato.
+- **Montserrat**, alojada en `src/assets/fuentes/` (no depende de Google).
+- **Íconos de [lucide-animated](https://lucide-animated.com)** (MIT,
+  github.com/pqoqubbw/icons): sus SVG están en `src/iconos.mjs` y sus
+  animaciones al pasar el puntero, portadas a CSS (`.la-*` en `estilos.css`),
+  sin React. Donde no hay ícono exacto se usó el más cercano del catálogo
+  (carrito para tiendas, paleta para ropa, gota para belleza, engranaje para
+  fábricas, llama para panaderías).
+- Criterios de [Impeccable](https://github.com/pbakaus/impeccable): sin rótulos
+  sobre los títulos, sin filas de tarjetas iguales, sin vidrio decorativo y con
+  la selección, el cursor de texto y los focos teñidos de la marca.
+- **Hera** está en `src/assets/img/` (240 × 330 px). Con versiones de al menos
+  480 × 660 px se verá nítida en pantallas de alta densidad: basta con
+  reemplazar los archivos con el mismo nombre.
+
 ## Comandos
 
 ```bash
