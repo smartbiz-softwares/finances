@@ -42,48 +42,20 @@ export const config = {
     publicado: '2026-11-01',
   },
 
-  // Casos de éxito. Mientras real sea false se muestran con la etiqueta
-  // "Ejemplo ilustrativo" y no se publican como reseñas en los datos
-  // estructurados. Sustituir por clientes reales (con su permiso) y poner
-  // real: true.
-  casos: [
-    {
-      real: false,
-      negocio: 'Ferretería de barrio',
-      persona: 'Dueño',
-      ciudad: 'La Habana',
-      sector: 'ferreteria',
-      antes: 'Contaba el almacén a ojo y compraba tornillos que ya tenía.',
-      despues: 'Ve el stock de cada producto desde el celular y compra solo lo que falta.',
-      cifra: '−30%',
-      cifraTexto: 'de compras repetidas en el primer mes',
-      cita: 'Antes compraba por miedo a quedarme sin nada. Ahora compro mirando el teléfono.',
-    },
-    {
-      real: false,
-      negocio: 'Minimarket familiar',
-      persona: 'Dueña',
-      ciudad: 'Montevideo',
-      sector: 'tienda-almacen-minimarket',
-      antes: 'Tenía un cuaderno con 40 clientes que le debían y no sabía cuánto sumaban.',
-      despues: 'Cada fiado tiene nombre, monto y fecha, y cobra con recordatorios.',
-      cifra: '80%',
-      cifraTexto: 'de los fiados cobrados en tres semanas',
-      cita: 'No era que me robaran. Era que no me acordaba de quién me debía.',
-    },
-    {
-      real: false,
-      negocio: 'Cafetería con dos locales',
-      persona: 'Socio',
-      ciudad: 'Ciudad de Panamá',
-      sector: 'restaurante-cafeteria',
-      antes: 'Cerrar la caja de los dos locales le llevaba casi tres horas cada noche.',
-      despues: 'Cierra las dos cajas en 20 minutos y ve cuánto ganó cada local.',
-      cifra: '20 min',
-      cifraTexto: 'para cerrar caja, antes casi 3 horas',
-      cita: 'Por fin sé cuál de los dos locales me da de comer.',
-    },
-  ],
+  // Casos de éxito reales. Mientras haya menos de 3, la página completa los
+  // huecos con un esqueleto del diseño. Para publicar uno, añade un objeto así
+  // (con permiso del cliente) y vuelve a compilar:
+  //   {
+  //     negocio: 'Minimarket La Esquina',
+  //     persona: 'María Pérez, dueña',
+  //     ciudad: 'Montevideo',
+  //     sector: 'tienda-almacen-minimarket',   // slug de src/datos/sectores.mjs
+  //     cita: 'No era que me robaran. Era que no me acordaba de quién me debía.',
+  //     cifra: '80%',
+  //     cifraTexto: 'de los fiados cobrados en tres semanas',
+  //     despues: 'Cada fiado tiene nombre, monto y fecha, y cobra con recordatorios.',
+  //   },
+  casos: [],
 };
 
 export const whatsappUrl = (texto = '') =>

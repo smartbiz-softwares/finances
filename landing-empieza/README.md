@@ -92,9 +92,10 @@ todas quedan en `landing-empieza/solicitudes/solicitudes.jsonl` (fuera de git).
 
 ## Antes de publicar: revisar
 
-- **Casos de éxito** (`src/config.mjs → casos`): hoy son ejemplos y se
-  muestran con la etiqueta "Ejemplo ilustrativo". Sustituir por clientes
-  reales (con su permiso) y poner `real: true`.
+- **Casos de éxito** (`src/config.mjs → casos`): la lista está vacía y la
+  sección muestra un esqueleto del diseño. Cada caso real que añadas (con
+  permiso del cliente; el formato está comentado ahí mismo) ocupa un hueco;
+  con tres, el esqueleto desaparece.
 - **Video** (`config.video.youtubeId`): mientras esté vacío se muestra la demo
   animada del episodio "El fiado fantasma". Al poner el ID de YouTube se
   muestra el video y se publica su `VideoObject` para Google.

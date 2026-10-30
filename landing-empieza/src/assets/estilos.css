@@ -365,7 +365,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .caso-quien { font-weight: 700; font-size: 0.9375rem; }
 .caso-cambio { color: var(--gris); }
 .caso-cambio b { color: var(--verde); }
-.etiqueta { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--menta); color: var(--verde-hondo); font-size: 0.75rem; font-weight: 700; vertical-align: 1px; }
+/* Esqueleto de un caso: misma composición que uno real, sin brillo (no está
+   "cargando", está reservado). */
+.caso-esqueleto .esqueleto { display: block; height: 18px; border-radius: 8px; }
+.caso-esqueleto .esqueleto::after { display: none; }
+.caso-esq-cita { display: grid; gap: 12px; }
+.caso-esq-cita .esqueleto { height: 26px; }
+.caso-esq-cita .esqueleto:nth-child(2) { width: 92%; }
+.caso-esq-cita .esqueleto:nth-child(3) { width: 58%; }
+.caso-esq-pie { display: grid; gap: 10px; align-content: end; }
+.caso-esq-pie .esqueleto:nth-child(1) { width: 55%; height: 14px; }
+.caso-esq-pie .esqueleto:nth-child(2) { width: 100%; height: 14px; }
+.caso-esq-pie .esqueleto:nth-child(3) { width: 72%; height: 14px; }
 @media (min-width: 960px) { .caso { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 48px; align-items: end; } }
 
 /* Índice de sectores */

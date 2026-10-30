@@ -249,22 +249,28 @@ function seccionPasos() {
 function seccionCasos(filtroSector) {
   let casos = config.casos;
   if (filtroSector) casos = [...casos.filter(c => c.sector === filtroSector), ...casos.filter(c => c.sector !== filtroSector)];
-  const hayEjemplos = casos.some(c => !c.real);
+  // Huecos sin caso real: el esqueleto del diseño, hasta tener tres historias.
+  const huecos = Math.max(0, 3 - casos.length);
+  const esqueleto = `<figure class="caso caso-esqueleto" aria-hidden="true">
+        <div class="caso-esq-cita"><span class="esqueleto"></span><span class="esqueleto"></span><span class="esqueleto"></span></div>
+        <div class="caso-esq-pie"><span class="esqueleto"></span><span class="esqueleto"></span><span class="esqueleto"></span></div>
+      </figure>`;
   return `<section class="seccion" id="casos" aria-labelledby="casos-t">
   <div class="contenedor">
-    ${encabezado('<span id="casos-t">Lo que cambia cuando ves tus números</span>', hayEjemplos ? 'Mientras publicamos los casos de nuestros clientes, estos ejemplos muestran el cambio que buscamos contigo.' : '')}
+    ${encabezado('<span id="casos-t">Lo que cambia cuando ves tus números</span>', casos.length ? '' : 'Muy pronto, las historias de los negocios que ya trabajan con nosotros.')}
     <div class="casos">
       ${casos
         .map(
           c => `<figure class="caso">
         <blockquote><p>“${esc(c.cita)}”</p></blockquote>
         <figcaption>
-          <p class="caso-quien">${esc(c.persona)}, ${esc(c.negocio.toLowerCase())} · ${esc(c.ciudad)}${c.real ? '' : ' <span class="etiqueta">Ejemplo ilustrativo</span>'}</p>
+          <p class="caso-quien">${esc(c.persona)} · ${esc(c.negocio)} · ${esc(c.ciudad)}</p>
           <p class="caso-cambio"><b>${esc(c.cifra)}</b> ${esc(c.cifraTexto)}. ${esc(c.despues)}</p>
         </figcaption>
       </figure>`,
         )
         .join('')}
+      ${esqueleto.repeat(huecos)}
     </div>
   </div>
 </section>`;
