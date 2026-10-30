@@ -8,8 +8,9 @@
 //   node landing-empieza/servidor.mjs          (puerto 4100 por defecto)
 //
 // Usa el mismo SMTP que HeraWallet (SMTP_HOST, SMTP_PORT, SMTP_USER,
-// SMTP_PASS, SMTP_FROM). Todo se guarda en solicitudes/ (fuera de git), así
-// ninguna solicitud se pierde aunque falle el correo.
+// SMTP_PASS, SMTP_FROM). Todo se guarda en una base SQLite en
+// solicitudes/empieza.db (fuera de git), así ninguna solicitud se pierde aunque
+// falle el correo.
 
 import { createServer } from 'node:http';
 import { readFile, stat, writeFile } from 'node:fs/promises';
@@ -215,7 +216,7 @@ async function recibirSolicitud(req, res) {
   }
   const enviado = await enviarCorreo(construirCorreo(v.datos, fecha));
   if (enviado) console.log(`[empieza] ${v.datos.tipo} de ${v.datos.nombre} enviada a ${DESTINO}`);
-  else console.warn('[empieza] Sin correo: la solicitud quedó guardada en solicitudes/');
+  else console.warn('[empieza] Sin correo: la solicitud quedó guardada en la base');
   return json(res, 200, { ok: true, correo: enviado, id: guardada?.id });
 }
 
@@ -234,7 +235,7 @@ async function revisarCitas() {
   if (revisando) return;
   revisando = true;
   try {
-    const reservas = listarReservas(almacen.solicitudes, almacen.estado, ZONA);
+    const reservas = listarReservas(almacen.reservas(), almacen.estado(), ZONA);
     for (const r of citasPorAvisar(reservas, new Date(), HORAS_AVISO)) {
       if (await enviarCorreo(correoRecordatorio(r, HORAS_AVISO, PANEL_URL))) {
         await almacen.actualizar(r.id, { avisoEnviado: new Date().toISOString() });
@@ -246,6 +247,18 @@ async function revisarCitas() {
   }
 }
 setInterval(revisarCitas, 60e3).unref();
+
+// Respaldo diario de la base en solicitudes/respaldos/ (guarda 14 días).
+async function respaldar() {
+  try {
+    console.log(`[empieza] Respaldo: ${await almacen.respaldar(14)}`);
+  } catch (err) {
+    console.error('[empieza] No se pudo respaldar la base:', err.message);
+  }
+}
+setTimeout(respaldar, 30e3).unref();
+setInterval(respaldar, 24 * 3600e3).unref();
+for (const senal of ['SIGINT', 'SIGTERM']) process.on(senal, () => { almacen.cerrar(); process.exit(0); });
 setTimeout(revisarCitas, 5e3).unref();
 
 const panel = crearPanel({

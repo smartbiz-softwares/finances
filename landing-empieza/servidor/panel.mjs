@@ -69,14 +69,16 @@ export function crearPanel({ almacen, zona, clave, apiKey, secreto, origenes = [
     const pagina = Math.max(Number(q.get('pagina')) || 1, 1);
     return { total: lista.length, pagina, limite, items: lista.slice((pagina - 1) * limite, pagina * limite) };
   };
-  const solicitudesVistas = () => almacen.solicitudes.map(s => vistaSolicitud(s, almacen.estado));
+  const solicitudesVistas = (desde, hasta) => {
+    const estado = almacen.estado();
+    return almacen.solicitudesEntre(desde, hasta).map(s => vistaSolicitud(s, estado));
+  };
   const filtrarSolicitudes = q => {
     const { desde, hasta } = rango(q);
     const tipo = q.get('tipo');
     const estado = q.get('estado');
     const texto = (q.get('q') || '').toLowerCase();
-    return solicitudesVistas()
-      .filter(s => s.fecha >= desde && s.fecha < hasta)
+    return solicitudesVistas(desde, hasta)
       .filter(s => !tipo || s.tipo === tipo)
       .filter(s => !estado || s.estado === estado || s.estadoReserva === estado)
       .filter(s => !texto || JSON.stringify([s.nombre, s.negocio, s.telefono, s.ciudad, s.respuestas, s.notas]).toLowerCase().includes(texto))
@@ -147,28 +149,31 @@ export function crearPanel({ almacen, zona, clave, apiKey, secreto, origenes = [
 
     if (ruta === '/api/v1/resumen' && req.method === 'GET') {
       const r = rango(q);
-      return json(res, 200, analizar({ eventos: almacen.eventos, solicitudes: almacen.solicitudes, desde: r.desde, hasta: r.hasta, zona })), true;
+      // Se lee también el período anterior, para la comparación.
+      const antes = new Date(2 * Date.parse(r.desde) - Date.parse(r.hasta)).toISOString();
+      return json(res, 200, analizar({ eventos: almacen.eventosEntre(antes, r.hasta), solicitudes: almacen.solicitudesEntre(antes, r.hasta), desde: r.desde, hasta: r.hasta, zona })), true;
     }
 
     if (ruta === '/api/v1/solicitudes' && req.method === 'GET') return json(res, 200, paginar(filtrarSolicitudes(q), q)), true;
 
     if (ruta === '/api/v1/reservas' && req.method === 'GET') {
       // Sin fechas: todas las reservas. Con fechas: las que caen en ese rango.
-      const todas = listarReservas(almacen.solicitudes, almacen.estado, zona);
+      const todas = listarReservas(almacen.reservas(), almacen.estado(), zona);
       const r = q.has('desde') || q.has('dias') || q.has('hasta') ? rango(q) : null;
       const lista = r ? todas.filter(x => x.inicio >= r.desde && x.inicio < r.hasta) : todas;
       return json(res, 200, { total: lista.length, items: lista }), true;
     }
 
     if (m && req.method === 'GET') {
-      const s = almacen.solicitudes.find(x => x.id === m[2]);
+      const s = almacen.solicitud(m[2]);
       if (!s) return json(res, 404, { error: 'No existe' }), true;
-      const v = m[1] === 'reservas' ? listarReservas([s], almacen.estado, zona)[0] : vistaSolicitud(s, almacen.estado);
-      return json(res, 200, v || vistaSolicitud(s, almacen.estado)), true;
+      const estado = almacen.estado();
+      const v = m[1] === 'reservas' ? listarReservas([s], estado, zona)[0] : vistaSolicitud(s, estado);
+      return json(res, 200, v || vistaSolicitud(s, estado)), true;
     }
 
     if (m && req.method === 'PATCH') {
-      const s = almacen.solicitudes.find(x => x.id === m[2]);
+      const s = almacen.solicitud(m[2]);
       if (!s) return json(res, 404, { error: 'No existe' }), true;
       let cuerpo;
       try { cuerpo = await leerJson(req, 8192); } catch { return json(res, 400, { error: 'Formato inválido' }), true; }
@@ -193,15 +198,17 @@ export function crearPanel({ almacen, zona, clave, apiKey, secreto, origenes = [
         if (nuevoDia || nuevaHora) cambios.avisoEnviado = null;
       }
       await almacen.actualizar(s.id, cambios);
-      const v = m[1] === 'reservas' ? listarReservas([s], almacen.estado, zona)[0] : vistaSolicitud(s, almacen.estado);
+      const estado = almacen.estado();
+      const v = m[1] === 'reservas' ? listarReservas([s], estado, zona)[0] : vistaSolicitud(s, estado);
       return json(res, 200, v), true;
     }
 
     if (ruta === '/api/v1/eventos' && req.method === 'GET') {
       const r = rango(q);
-      const nombre = q.get('nombre');
-      const lista = almacen.eventos.filter(e => e.f >= r.desde && e.f < r.hasta && (!nombre || e.e === nombre)).slice().reverse();
-      return json(res, 200, paginar(lista, q)), true;
+      const limite = Math.min(Math.max(Number(q.get('limite')) || 50, 1), 500);
+      const pagina = Math.max(Number(q.get('pagina')) || 1, 1);
+      const { total, items } = almacen.eventosPagina({ desde: r.desde, hasta: r.hasta, nombre: q.get('nombre') || null, limite, pagina });
+      return json(res, 200, { total, pagina, limite, items }), true;
     }
 
     if (ruta === '/api/v1/exportar/solicitudes.csv' && req.method === 'GET') {

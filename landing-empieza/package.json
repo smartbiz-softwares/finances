@@ -12,6 +12,7 @@
     "test": "node landing.prueba.mjs"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.1",
     "dotenv": "^17.2.3",
     "nodemailer": "^10.0.16"
   }

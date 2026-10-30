@@ -97,9 +97,25 @@ En `/panel` (protegido con `EMPIEZA_PANEL_CLAVE`):
 - **API** `/api/v1/*` con `Authorization: Bearer <EMPIEZA_API_KEY>` para el
   masterpanel; especificación en `/api/v1/openapi.json`.
 
-Los datos viven en `solicitudes/` (`solicitudes.jsonl`, `eventos.jsonl`,
-`estado.json`), fuera de git. Haz copia de esa carpeta junto con tus otros
-respaldos. La telemetría es anónima: un id aleatorio por visitante, sin
+Los datos viven en una base **SQLite**, `solicitudes/empieza.db` (fuera de
+git), con tres tablas:
+
+| Tabla | Qué guarda |
+| --- | --- |
+| `solicitudes` | una fila por solicitud o reserva; columnas para filtrar (fecha, tipo, nombre, teléfono, negocio, día y hora de la cita) y el resto en `datos` (JSON) |
+| `eventos` | la telemetría, indexada por fecha y por nombre de evento |
+| `seguimiento` | lo que cambias en el panel: estado, notas, cambios de cita y aviso enviado |
+
+Cada día se guarda una copia consistente en `solicitudes/respaldos/` (las
+últimas 14), sin parar el servidor. Para consultarla a mano:
+
+```bash
+sqlite3 solicitudes/empieza.db "SELECT fecha, nombre, telefono FROM solicitudes ORDER BY fecha DESC LIMIT 10;"
+```
+
+Si venías de la versión con archivos (`solicitudes.jsonl`, `eventos.jsonl`,
+`estado.json`), el primer arranque los importa a la base y los renombra a
+`*.migrado`. La telemetría es anónima: un id aleatorio por visitante, sin
 cookies de seguimiento, sin IP en los eventos, sin nombres ni teléfonos, y no
 se envía nada si el navegador pide "no rastrear".
 
@@ -115,7 +131,7 @@ npm run dev
 Abre <http://localhost:4100>. `npm run dev` compila las 250 páginas en `dist/`
 y arranca el servidor. Para que las solicitudes lleguen por correo, copia
 `.env.example` como `.env` y completa el SMTP; sin él, quedan guardadas en
-`solicitudes/solicitudes.jsonl`.
+la base `solicitudes/empieza.db`.
 
 ## Comandos
 
@@ -160,7 +176,7 @@ npm run landing:servidor
    Console y Bing Webmaster Tools.
 
 Si el correo falla o el SMTP no está configurado, ninguna solicitud se pierde:
-todas quedan en `landing-empieza/solicitudes/solicitudes.jsonl` (fuera de git).
+todas quedan en la base `landing-empieza/solicitudes/empieza.db` (fuera de git).
 
 ## Antes de publicar: revisar
 

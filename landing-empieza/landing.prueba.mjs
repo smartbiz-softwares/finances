@@ -185,10 +185,31 @@ console.log('\nAlmacén');
   const dir = await mkdtemp(join(tmpdir(), 'empieza-'));
   const a1 = await crearAlmacen(dir);
   const s = await a1.agregarSolicitud({ fecha: '2026-10-30T10:00:00Z', tipo: 'formulario', nombre: 'Ana' });
-  await Promise.all([a1.agregarEventos([{ e: 'vista' }]), a1.agregarEventos([{ e: 'vista' }]), a1.actualizar(s.id, { estado: 'contactada' })]);
+  const ev = { f: '2026-10-30T10:00:00Z', e: 'vista', s: 'sesion0001', v: 'visita0001', r: '/', d: { ruta: '/' } };
+  await Promise.all([a1.agregarEventos([ev]), a1.agregarEventos([{ ...ev, f: '2026-10-30T11:00:00Z' }]), a1.actualizar(s.id, { estado: 'contactada' })]);
+  await a1.actualizar(s.id, { notas: 'Llamar el lunes' });
+  a1.cerrar();
   const a2 = await crearAlmacen(dir);
-  comprobar('lo guardado sobrevive a un reinicio', a2.solicitudes.length === 1 && a2.eventos.length === 2 && a2.estado[s.id]?.estado === 'contactada');
+  comprobar('lo guardado sobrevive a un reinicio', a2.solicitudes().length === 1 && a2.eventosEntre('2026-10-30', '2026-10-31').length === 2);
+  comprobar('el seguimiento acumula cambios sin borrar los anteriores', a2.estado()[s.id]?.estado === 'contactada' && a2.estado()[s.id]?.notas === 'Llamar el lunes', a2.estado());
+  comprobar('los eventos vuelven con su forma original', JSON.stringify(a2.eventosEntre('2026-10-30', '2026-10-31')[0].d) === '{"ruta":"/"}');
+  const pag = a2.eventosPagina({ desde: '2026-10-30', hasta: '2026-10-31', limite: 1, pagina: 1 });
+  comprobar('la paginación de eventos cuenta el total y trae el más nuevo', pag.total === 2 && pag.items[0].f === '2026-10-30T11:00:00Z');
+  comprobar('el respaldo crea una copia de la base', /^empieza-\d{4}-\d{2}-\d{2}\.db$/.test(await a2.respaldar()));
+  a2.cerrar();
   await rm(dir, { recursive: true, force: true });
+
+  // Migración desde la versión con archivos .jsonl
+  const viejo = await mkdtemp(join(tmpdir(), 'empieza-'));
+  const { writeFile } = await import('node:fs/promises');
+  await writeFile(join(viejo, 'solicitudes.jsonl'), JSON.stringify({ fecha: '2026-10-29T10:00:00Z', tipo: 'reserva', whatsapp: '5359079144', nombre: 'Pedro', reservaDia: '2026-11-02', reservaHora: '10:00' }) + '\n');
+  await writeFile(join(viejo, 'eventos.jsonl'), JSON.stringify(ev) + '\n');
+  const a3 = await crearAlmacen(viejo);
+  const migrada = a3.solicitudes()[0];
+  comprobar('migra solicitudes y eventos de los archivos anteriores', migrada?.nombre === 'Pedro' && a3.eventosEntre('2026-10-30', '2026-10-31').length === 1);
+  comprobar('una reserva migrada conserva su cita', a3.reservas()[0]?.reservaDia === '2026-11-02');
+  a3.cerrar();
+  await rm(viejo, { recursive: true, force: true });
 }
 
 console.log(`\n${pruebas - fallos}/${pruebas} pruebas pasan.`);
