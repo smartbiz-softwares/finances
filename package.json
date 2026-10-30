@@ -17,7 +17,9 @@
     "apk:release": "npm run build:app && npx cap sync android && cd android && ./gradlew assembleRelease",
     "app:open": "npx cap open android",
     "app:publicar": "scripts/publicar-app.sh",
-    "desplegar": "scripts/desplegar.sh"
+    "desplegar": "scripts/desplegar.sh",
+    "landing:build": "node landing-empieza/build.mjs",
+    "landing:servidor": "node landing-empieza/servidor.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

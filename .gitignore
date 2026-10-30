@@ -30,3 +30,6 @@ dist.roto.*/
 
 # Secretos de sesión generados por el servidor si faltan en .env
 .secretos-sesion.json
+
+# Landing empieza.smartbiz.com.uy: respaldo de las solicitudes (datos de clientes)
+landing-empieza/solicitudes/

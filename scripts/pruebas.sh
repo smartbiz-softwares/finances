@@ -7,7 +7,7 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 fallidas=()
-for archivo in server/*.prueba.ts src/*.prueba.ts; do
+for archivo in server/*.prueba.ts src/*.prueba.ts landing-empieza/*.prueba.mjs; do
   [[ -f "$archivo" ]] || continue
   if salida="$(npx tsx "$archivo" 2>&1)"; then
     printf '  ok     %s\n' "$archivo"
