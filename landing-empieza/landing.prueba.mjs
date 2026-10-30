@@ -13,6 +13,13 @@ import { problemas } from './src/datos/problemas.mjs';
 import { paises } from './src/datos/paises.mjs';
 import { paginaInicio, paginaSector, paginaProblema, paginaCombo, paginaPais, paginaCalculadora, paginaComparativa, paginaGlosario, paginaSectorPais, rutas, calcularFugas, calcDefecto } from './src/plantillas.mjs';
 import { glosario } from './src/datos/glosario.mjs';
+import { validarEventos, analizar } from './servidor/telemetria.mjs';
+import { listarReservas, citasPorAvisar } from './servidor/reservas.mjs';
+import { inicioCita } from './servidor/zona.mjs';
+import { crearAlmacen } from './servidor/almacen.mjs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { generarPalabrasClave } from './src/palabras-clave.mjs';
 
 let fallos = 0;
@@ -117,6 +124,71 @@ console.log('\nCalculadora');
   comprobar('el anual es doce meses', Math.round(r.anual) === Math.round(r.total * 12));
   const cero = calcularFugas({ ventas: 0, fiado: 0, incobrable: 0, inventario: 0, merma: 0, caja: 0, horas: 0, valorHora: 0 });
   comprobar('todo en cero da cero', cero.total === 0);
+}
+
+console.log('\nTelemetría');
+{
+  const ahora = new Date('2026-10-30T15:00:00Z');
+  const lote = { eventos: [
+    { e: 'vista', s: 'sesion0001', v: 'visita0001', r: '/', d: { ruta: '/', disp: 'celular', inventado: 'x' } },
+    { e: 'respuesta', s: 'sesion0001', v: 'visita0001', d: { paso: 'nombre', valor: 'María' } },
+    { e: 'respuesta', s: 'sesion0001', v: 'visita0001', d: { paso: 'sector', valor: 'ferreteria' } },
+    { e: 'borrarTodo', s: 'sesion0001', v: 'visita0001' },
+    { e: 'vista', s: 'X', v: 'visita0001' },
+  ] };
+  const ok = validarEventos(lote, ahora);
+  comprobar('solo pasan eventos conocidos con ids válidos', ok.length === 2, ok.map(e => e.e));
+  comprobar('descarta propiedades que no están en el esquema', !('inventado' in ok[0].d));
+  comprobar('nunca guarda lo que se escribe a mano (nombre)', !ok.some(e => e.d.paso === 'nombre'));
+  comprobar('la hora es la del servidor', ok[0].f === ahora.toISOString());
+
+  const ev = [
+    { f: '2026-10-29T15:00:00Z', e: 'vista', s: 'a', v: 'va', d: { ruta: '/', disp: 'celular' } },
+    { f: '2026-10-29T15:01:00Z', e: 'empezar', s: 'a', v: 'va', d: { origen: 'hero' } },
+    { f: '2026-10-29T15:02:00Z', e: 'paso', s: 'a', v: 'va', d: { paso: 'sector' } },
+    { f: '2026-10-29T15:03:00Z', e: 'paso', s: 'a', v: 'va', d: { paso: 'internet' } },
+    { f: '2026-10-29T16:00:00Z', e: 'vista', s: 'b', v: 'vb', d: { ruta: '/', disp: 'computadora' } },
+    { f: '2026-10-29T16:01:00Z', e: 'empezar', s: 'b', v: 'vb', d: {} },
+    { f: '2026-10-29T16:02:00Z', e: 'resultado', s: 'b', v: 'vb', d: {} },
+  ];
+  const so = [{ fecha: '2026-10-29T16:02:00Z', tipo: 'formulario', respuestas: [{ pregunta: 'Lo que más le preocupa', respuesta: 'A, B', valores: ['Fiados', 'Caja'] }] }];
+  const a = analizar({ eventos: ev, solicitudes: so, desde: '2026-10-29T04:00:00Z', hasta: '2026-10-30T04:00:00Z', zona: 'America/Havana' });
+  comprobar('cuenta visitantes y solicitudes', a.totales.visitantes === 2 && a.totales.solicitudes === 1, a.totales);
+  comprobar('el embudo baja de 2 visitas a 1 que terminó', a.embudo[0].sesiones === 2 && a.embudo.find(x => x.id === 'envio').sesiones === 1);
+  comprobar('el abandono apunta a la última pregunta vista', a.abandono[0]?.nombre === 'internet', a.abandono);
+  comprobar('las respuestas múltiples se cuentan por opción', a.formulario[0].respuestas.length === 2);
+  comprobar('la serie diaria usa el día del negocio', a.serie.length === 1 && a.serie[0].dia === '2026-10-29', a.serie);
+}
+
+console.log('\nAvisos de citas');
+{
+  const zona = 'America/Havana';
+  comprobar('la cita se convierte bien a UTC (Cuba, horario de verano)', inicioCita('2026-10-30', '10:00', zona).toISOString() === '2026-10-30T14:00:00.000Z', inicioCita('2026-10-30', '10:00', zona).toISOString());
+  const sol = [
+    { id: 'cita00000001', tipo: 'reserva', reservaDia: '2026-10-30', reservaHora: '16:00' },
+    { id: 'cita00000002', tipo: 'reserva', reservaDia: '2026-10-31', reservaHora: '16:00' },
+    { id: 'cita00000003', tipo: 'reserva', reservaDia: '2026-10-30', reservaHora: '17:00' },
+  ];
+  const estado = { cita00000003: { estadoReserva: 'cancelada' } };
+  const ahora = new Date('2026-10-30T16:30:00Z'); // 12:30 en Cuba: faltan 3 h 30 para la de las 16:00
+  const avisar = citasPorAvisar(listarReservas(sol, estado, zona), ahora, 5);
+  comprobar('avisa la cita que entra en las 5 h', avisar.length === 1 && avisar[0].id === 'cita00000001', avisar.map(r => r.id));
+  comprobar('no avisa la de mañana ni la cancelada', !avisar.some(r => r.id !== 'cita00000001'));
+  const ya = citasPorAvisar(listarReservas(sol, { cita00000001: { avisoEnviado: 'x' } }, zona), ahora, 5);
+  comprobar('no repite un aviso ya enviado', !ya.some(r => r.id === 'cita00000001'));
+  const movida = listarReservas(sol, { cita00000001: { dia: '2026-11-02', hora: '09:00' } }, zona).find(r => r.id === 'cita00000001');
+  comprobar('un cambio de día desde el panel manda sobre lo original', movida.dia === '2026-11-02' && movida.hora12 === '9:00 a. m.');
+}
+
+console.log('\nAlmacén');
+{
+  const dir = await mkdtemp(join(tmpdir(), 'empieza-'));
+  const a1 = await crearAlmacen(dir);
+  const s = await a1.agregarSolicitud({ fecha: '2026-10-30T10:00:00Z', tipo: 'formulario', nombre: 'Ana' });
+  await Promise.all([a1.agregarEventos([{ e: 'vista' }]), a1.agregarEventos([{ e: 'vista' }]), a1.actualizar(s.id, { estado: 'contactada' })]);
+  const a2 = await crearAlmacen(dir);
+  comprobar('lo guardado sobrevive a un reinicio', a2.solicitudes.length === 1 && a2.eventos.length === 2 && a2.estado[s.id]?.estado === 'contactada');
+  await rm(dir, { recursive: true, force: true });
 }
 
 console.log(`\n${pruebas - fallos}/${pruebas} pruebas pasan.`);

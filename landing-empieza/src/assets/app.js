@@ -36,6 +36,67 @@
     }
   }
 
+  // --- Telemetría anónima ------------------------------------------------------
+  // Un id de visitante y otro de sesión, aleatorios; nada personal. Si el
+  // navegador pide "no rastrear", no se envía nada.
+  const tele = (() => {
+    const nuevoId = () => (Math.random().toString(36).slice(2, 10) + Date.now().toString(36)).slice(0, 24);
+    const id = (almacen, k) => {
+      try {
+        let v = almacen.getItem(k);
+        if (!/^[a-z0-9]{8,32}$/.test(v || '')) { v = nuevoId(); almacen.setItem(k, v); }
+        return v;
+      } catch { return nuevoId(); }
+    };
+    const activo = navigator.doNotTrack !== '1' && navigator.globalPrivacyControl !== true;
+    const visitante = id(window.localStorage, 'sb-v');
+    const sesion = id(window.sessionStorage, 'sb-s');
+    const cola = [];
+    const enviar = () => {
+      if (!cola.length || !activo) return void (cola.length = 0);
+      const cuerpo = JSON.stringify({ eventos: cola.splice(0, 50) });
+      if (!(navigator.sendBeacon && navigator.sendBeacon('/api/t', new Blob([cuerpo], { type: 'application/json' })))) {
+        fetch('/api/t', { method: 'POST', body: cuerpo, headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {});
+      }
+    };
+    setInterval(enviar, 4000);
+    const alSalir = [];
+    addEventListener('pagehide', () => { alSalir.forEach(f => f()); enviar(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { alSalir.forEach(f => f()); enviar(); } });
+    return {
+      sesion,
+      t(e, d = {}) { if (activo) cola.push({ e, s: sesion, v: visitante, r: location.pathname, d }); },
+      alSalir: f => alSalir.push(f),
+    };
+  })();
+  const t = tele.t;
+
+  {
+    const u = new URLSearchParams(location.search);
+    let ref = '';
+    try { ref = document.referrer ? new URL(document.referrer).hostname : ''; } catch { /* sin referente */ }
+    if (ref === location.hostname) ref = '';
+    const ancho = innerWidth;
+    t('vista', { ruta: location.pathname, ref, fuente: u.get('utm_source') || '', medio: u.get('utm_medium') || '', campana: u.get('utm_campaign') || '', disp: ancho < 760 ? 'celular' : ancho < 1100 ? 'tablet' : 'computadora', ancho });
+    // Hasta dónde baja cada persona.
+    const marcas = [25, 50, 75, 100];
+    const vistos = new Set();
+    addEventListener('scroll', () => {
+      const p = ((scrollY + innerHeight) / document.documentElement.scrollHeight) * 100;
+      for (const m of marcas) if (p >= m - 1 && !vistos.has(m)) { vistos.add(m); t('scroll', { pct: m }); }
+    }, { passive: true });
+  }
+  const origenDe = el =>
+    el.closest('[data-empezar-fijo]') ? 'fijo' : el.closest('.wa-flotante') ? 'flotante' : el.closest('.hero') ? 'hero' : el.closest('#calculadora') ? 'calculadora'
+      : el.closest('.cta') ? 'cierre' : el.closest('#como-empezar') ? 'pasos' : el.closest('#preguntas') ? 'preguntas' : el.closest('.pie') ? 'pie' : el.closest('.hoja') ? 'formulario' : 'otro';
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-camino="whatsapp"]')) t('camino', { camino: 'whatsapp' });
+    const em = e.target.closest('[data-empezar]');
+    if (em) t('empezar', { origen: origenDe(em) });
+    const wa = e.target.closest('[data-whatsapp], a[href*="wa.me/"]');
+    if (wa && !em) t('whatsapp', { origen: origenDe(wa) });
+  }, true);
+
   // --- Avisos breves (toasts) -------------------------------------------------
   const cajaAvisos = $('[data-avisos]');
   function aviso(texto, icono = 'check') {
@@ -90,6 +151,7 @@
       };
       const total = res.fiado + res.merma + res.caja + res.tiempo;
       fugasCalculadas = res;
+      ultimoTotal = total;
       for (const [k, n] of Object.entries({ ...res, total, anual: total * 12 })) {
         $$(`[data-resultado="${k}"]`, seccion).forEach((el, i) => animar(el, `${k}-${i}`, n));
       }
@@ -97,6 +159,9 @@
       const mayor = Object.entries(res).sort((a, b) => b[1] - a[1])[0][0];
       $$('.ticket-filas li', seccion).forEach(li => li.classList.toggle('destacada', !!$(`[data-resultado="${mayor}"]`, li) && res[mayor] > 0));
     };
+    let usada = false, informada = false, ultimoTotal = 0;
+    form.addEventListener('input', () => { usada = true; informada = false; });
+    tele.alSalir(() => { if (usada && !informada) { informada = true; t('calculadora', { total: Math.round(ultimoTotal) }); } });
     form.addEventListener('input', actualizar);
     form.addEventListener('submit', e => e.preventDefault());
     actualizar();
@@ -108,8 +173,12 @@
     const items = $$('.pregunta', lista);
     const vacio = $('[data-sin-resultados]', lista);
     const normal = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    let espera;
     buscador.addEventListener('input', () => {
-      const q = normal(buscador.value.trim());
+      clearTimeout(espera);
+      const texto = buscador.value.trim();
+      if (texto.length >= 3) espera = setTimeout(() => t('faq', { q: texto }), 1200);
+      const q = normal(texto);
       let visibles = 0;
       for (const it of items) {
         const ok = !q || q.split(/\s+/).every(w => normal(it.textContent).includes(w));
@@ -182,6 +251,7 @@
       mostrarPaso(paso);
     };
     const terminar = () => {
+      t('demo', { accion: 'fin' });
       el.removeAttribute('data-reproduciendo');
       el.setAttribute('data-terminado', '');
       play.innerHTML = I.repetir;
@@ -213,6 +283,7 @@
     play.addEventListener('click', e => {
       e.stopPropagation();
       if (pausado) return reanudar();
+      t('demo', { accion: 'play' });
       el.removeAttribute('data-terminado');
       el.setAttribute('data-reproduciendo', '');
       paso = -1;
@@ -542,7 +613,8 @@
       if (p.tipo === 'contacto' || p.tipo === 'revisar') continue;
       const v = estado.r[p.id];
       if (v == null || v === '' || (Array.isArray(v) && !v.length)) continue;
-      filas.push({ id: p.id, pregunta: p.corto, respuesta: etiqueta(p, v) });
+      const valores = Array.isArray(v) ? v.map(x => etiqueta(p, x)) : undefined;
+      filas.push({ id: p.id, pregunta: p.corto, respuesta: etiqueta(p, v), ...(valores ? { valores } : {}) });
     }
     return filas;
   }
@@ -589,6 +661,7 @@
         icono: 'escudo',
       });
       if (!salir) return;
+      t('cerrar', { paso: pasoActual()?.id || '' });
       cerrarHoja();
       return aviso('Guardamos tus respuestas para después');
     }
@@ -740,6 +813,7 @@
     const n = lista.findIndex(p => p.id === paso.id) + 1;
     fijarProgreso(n / (lista.length + 1));
     bAtras.hidden = estado.historial.length <= 1;
+    t('paso', { paso: paso.id, n });
     const vista = mostrarVista(htmlPaso(paso, n, lista.length), dir);
     conectarPaso(vista, paso);
   }
@@ -947,6 +1021,7 @@
           r[`${paso.id}Otro`] = t;
         } else delete r[`${paso.id}Otro`];
         r[paso.id] = paso.tipo === 'multiple' ? marcados : marcados[0];
+        t('respuesta', { paso: paso.id, valor: paso.tipo === 'multiple' ? marcados : marcados[0] });
       }
       persistir();
 
@@ -1011,6 +1086,7 @@
 
   async function mostrarResultado(conAnalisis, dir = 1) {
     estado.etapa = 'resultado';
+    if (conAnalisis) t('resultado', { tamano: tamano(estado.r) });
     persistir();
     bAtras.hidden = false;
     fijarProgreso(1);
@@ -1041,7 +1117,7 @@
               <span class="camino-contenido"><b>Reservar un día para armar mi negocio</b><small>Elige día y hora. Sesión de acompañamiento de 1 hora.</small></span>
               ${I.flecha}
             </button>
-            <a class="camino${recomiendaAgenda ? '' : ' recomendado'}" href="${esc(urlWhatsapp())}" target="_blank" rel="noopener" data-whatsapp>
+            <a class="camino${recomiendaAgenda ? '' : ' recomendado'}" href="${esc(urlWhatsapp())}" target="_blank" rel="noopener" data-whatsapp data-camino="whatsapp">
               ${recomiendaAgenda ? '' : '<span class="camino-insignia">Recomendado para ti</span>'}
               <span class="camino-icono">${D.whatsapp}</span>
               <span class="camino-contenido"><b>Hablar ahora por WhatsApp</b><small>Te responde una persona del equipo · ${esc(C.whatsappVisible)}</small></span>
@@ -1094,6 +1170,7 @@
     escalonar([$('.caminos-titulo', caminos), ...$$('.camino', caminos)]);
     $('[data-ir-agenda]', vista).addEventListener('click', async e => {
       const b = e.currentTarget;
+      t('camino', { camino: 'agenda' });
       cargando(b, true);
       await esperar(260);
       mostrarAgenda();
@@ -1237,6 +1314,7 @@
           },
         });
         if (ok) {
+          t('reserva');
           mostrarListo();
           aviso(estado.reserva.enviada ? 'Reserva recibida' : 'Falta confirmarla por WhatsApp', estado.reserva.enviada ? 'check' : 'alerta');
         }
@@ -1325,6 +1403,9 @@
       ciudad: r.ciudad || '',
       respuestas: resumen(),
       reserva: tipo === 'reserva' ? estado.reserva?.texto : '',
+      reservaDia: tipo === 'reserva' ? estado.reserva?.dia : '',
+      reservaHora: tipo === 'reserva' ? estado.reserva?.hora : '',
+      sesion: tele.sesion,
       tamano: tamano(r),
       pagina: location.pathname,
       sitio: r.sitio || '',

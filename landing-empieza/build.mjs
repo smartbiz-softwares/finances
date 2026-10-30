@@ -135,8 +135,9 @@ const robots = `# ${config.marca} · empieza.smartbiz.com.uy
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /panel/
 
-${bots.map(b => `User-agent: ${b}\nAllow: /\nDisallow: /api/`).join('\n\n')}
+${bots.map(b => `User-agent: ${b}\nAllow: /\nDisallow: /api/\nDisallow: /panel/`).join('\n\n')}
 
 Sitemap: ${config.dominio}/sitemap.xml
 `;
@@ -226,6 +227,7 @@ await escribir('robots.txt', robots);
 await escribir('llms.txt', llms);
 await escribir('llms-full.txt', llmsCompleto);
 await cp(join(raiz, 'src/assets'), join(dist, 'assets'), { recursive: true });
+await cp(join(raiz, 'src/panel'), join(dist, 'panel'), { recursive: true });
 await escribir('assets/datos.js', datosJs);
 
 const claves = generarPalabrasClave();

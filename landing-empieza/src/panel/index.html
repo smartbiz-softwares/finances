@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light">
+<title>Panel · SmartBusiness Empieza</title>
+<link rel="icon" href="/assets/img/favicon-32.png" type="image/png">
+<link rel="preload" href="/assets/fuentes/montserrat-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/panel/panel.css">
+<script src="/panel/panel.js" defer></script>
+</head>
+<body>
+<div class="entrada-panel" data-entrar hidden>
+  <form class="tarjeta-entrar" data-form-entrar>
+    <img src="/assets/img/hera.webp" width="120" height="165" alt="">
+    <h1>Panel de Empieza</h1>
+    <p>Solicitudes, reservas y métricas de empieza.smartbiz.com.uy.</p>
+    <label for="clave">Contraseña del panel</label>
+    <input id="clave" name="clave" type="password" autocomplete="current-password" required>
+    <p class="error" data-error-entrar hidden></p>
+    <button class="btn btn-primario" type="submit"><span class="btn-texto">Entrar</span><span class="btn-spinner" aria-hidden="true"></span></button>
+  </form>
+</div>
+
+<div class="app" data-app hidden>
+  <aside class="lateral">
+    <a class="marca" href="/" target="_blank" rel="noopener"><img src="/assets/img/logo.webp" width="32" height="32" alt=""><span>Empieza</span></a>
+    <nav class="menu" aria-label="Secciones del panel">
+      <a href="#resumen" data-seccion="resumen">Resumen</a>
+      <a href="#formulario" data-seccion="formulario">Formulario</a>
+      <a href="#solicitudes" data-seccion="solicitudes">Solicitudes</a>
+      <a href="#calendario" data-seccion="calendario">Calendario</a>
+      <a href="#contenido" data-seccion="contenido">Contenido</a>
+      <a href="#api" data-seccion="api">API</a>
+    </nav>
+    <button class="salir" type="button" data-salir>Salir</button>
+  </aside>
+
+  <main class="principal">
+    <header class="barra-periodo" data-barra-periodo>
+      <h1 data-titulo>Resumen</h1>
+      <div class="periodo" role="group" aria-label="Período">
+        <button type="button" data-dias="7">7 días</button>
+        <button type="button" data-dias="30" aria-pressed="true">30 días</button>
+        <button type="button" data-dias="90">90 días</button>
+        <button type="button" data-dias="365">12 meses</button>
+        <label class="rango-fechas"><span class="sr">Desde</span><input type="date" data-desde></label>
+        <label class="rango-fechas"><span class="sr">Hasta</span><input type="date" data-hasta></label>
+      </div>
+      <a class="btn btn-secundario btn-chico" data-exportar href="#" download>Exportar CSV</a>
+    </header>
+    <div class="contenido" data-contenido aria-live="polite"></div>
+  </main>
+</div>
+
+<aside class="cajon" data-cajon hidden aria-modal="true" role="dialog" aria-labelledby="cajon-titulo">
+  <div class="cajon-panel">
+    <button class="cerrar-cajon" type="button" data-cerrar-cajon aria-label="Cerrar">×</button>
+    <div data-cajon-cuerpo></div>
+  </div>
+</aside>
+<div class="tooltip" data-tooltip role="tooltip" hidden></div>
+<div class="avisos" data-avisos role="status" aria-live="polite"></div>
+</body>
+</html>

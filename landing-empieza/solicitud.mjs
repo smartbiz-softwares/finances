@@ -18,7 +18,15 @@ export function validarSolicitud(cuerpo) {
   const nombre = texto(cuerpo.nombre, 80);
   if (nombre.length < 2) return { ok: false, error: 'Falta el nombre' };
   const respuestas = Array.isArray(cuerpo.respuestas)
-    ? cuerpo.respuestas.slice(0, 40).map(r => ({ pregunta: texto(r?.pregunta, 60), respuesta: texto(r?.respuesta, 400) })).filter(r => r.pregunta && r.respuesta)
+    ? cuerpo.respuestas
+        .slice(0, 40)
+        .map(r => {
+          const x = { pregunta: texto(r?.pregunta, 60), respuesta: texto(r?.respuesta, 400) };
+          // Cada opción elegida por separado: las métricas cuentan opciones, no frases.
+          if (Array.isArray(r?.valores)) x.valores = r.valores.slice(0, 12).map(v => texto(v, 80)).filter(Boolean);
+          return x;
+        })
+        .filter(r => r.pregunta && r.respuesta)
     : [];
   return {
     ok: true,
@@ -32,6 +40,11 @@ export function validarSolicitud(cuerpo) {
       negocio: texto(cuerpo.negocio, 80),
       ciudad: texto(cuerpo.ciudad, 60),
       reserva: tipo === 'reserva' ? texto(cuerpo.reserva, 120) : '',
+      ...(tipo === 'reserva' && /^\d{4}-\d{2}-\d{2}$/.test(cuerpo.reservaDia) && /^([01]\d|2[0-3]):[0-5]\d$/.test(cuerpo.reservaHora)
+        ? { reservaDia: cuerpo.reservaDia, reservaHora: cuerpo.reservaHora }
+        : {}),
+      // Une la solicitud con la telemetría anónima de esa visita.
+      sesion: /^[a-z0-9]{8,32}$/.test(cuerpo.sesion || '') ? cuerpo.sesion : '',
       tamano: TAMANOS[cuerpo.tamano] || '',
       pagina: texto(cuerpo.pagina, 200),
       respuestas,

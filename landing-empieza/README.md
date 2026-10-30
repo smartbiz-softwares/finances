@@ -75,6 +75,34 @@ WhatsApp. Luego muestra un diagnóstico y los dos caminos.
   DefinedTermSet (glosario). Sitemap con imágenes de Hera, hreflang y
   archivos versionados por contenido (caché de un año).
 
+## Panel de métricas, calendario y API
+
+En `/panel` (protegido con `EMPIEZA_PANEL_CLAVE`):
+
+- **Resumen:** visitantes, visitas, cuántos tocan Empezar, solicitudes,
+  reservas, clics a WhatsApp y conversión, cada uno comparado con el período
+  anterior; visitantes y solicitudes por día; embudo completo; en qué pregunta
+  abandonan; de dónde llegan (incluye campañas `utm_*`); dispositivos; horas y
+  días con más visitas; qué botón Empezar se toca.
+- **Formulario:** cómo responde tu público cada pregunta, tamaños, sectores y
+  países, y qué camino eligen (reservar o WhatsApp).
+- **Solicitudes:** búsqueda y filtros, detalle con todas las respuestas,
+  estado (nueva, contactada, cliente, descartada), notas y exportación a CSV.
+- **Calendario:** mes interactivo con todas las reservas; arrastra una cita a
+  otro día para moverla (con deshacer); cambia estado, día, hora y notas.
+- **Contenido:** páginas más vistas y de entrada, uso de la calculadora,
+  búsquedas en las preguntas, demo y hasta dónde baja la gente.
+- **Aviso por correo** a `EMPIEZA_CORREO_DESTINO` unas `EMPIEZA_AVISO_HORAS`
+  (5) horas antes de cada cita; si la mueves, el aviso se reprograma.
+- **API** `/api/v1/*` con `Authorization: Bearer <EMPIEZA_API_KEY>` para el
+  masterpanel; especificación en `/api/v1/openapi.json`.
+
+Los datos viven en `solicitudes/` (`solicitudes.jsonl`, `eventos.jsonl`,
+`estado.json`), fuera de git. Haz copia de esa carpeta junto con tus otros
+respaldos. La telemetría es anónima: un id aleatorio por visitante, sin
+cookies de seguimiento, sin IP en los eventos, sin nombres ni teléfonos, y no
+se envía nada si el navegador pide "no rastrear".
+
 ## Montar en local
 
 Necesitas [Node.js](https://nodejs.org) 18 o superior. Desde esta carpeta:
@@ -84,7 +112,7 @@ npm install
 npm run dev
 ```
 
-Abre <http://localhost:4100>. `npm run dev` compila las 115 páginas en `dist/`
+Abre <http://localhost:4100>. `npm run dev` compila las 250 páginas en `dist/`
 y arranca el servidor. Para que las solicitudes lleguen por correo, copia
 `.env.example` como `.env` y completa el SMTP; sin él, quedan guardadas en
 `solicitudes/solicitudes.jsonl`.
