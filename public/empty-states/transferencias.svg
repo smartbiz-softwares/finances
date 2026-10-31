@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320" fill="none">
+<defs><filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#0f4f42" flood-opacity=".12"/></filter></defs>
+<ellipse cx="240" cy="168" rx="170" ry="128" fill="#ecf8f4"/>
+<ellipse cx="240" cy="282" rx="130" ry="10" fill="#0f4f42" opacity=".06"/>
+<g fill="#14a083" opacity=".5"><circle cx="92" cy="80" r="5"/><circle cx="398" cy="110" r="4"/><circle cx="378" cy="238" r="6" opacity=".6"/></g>
+<path d="M110 220l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#14a083" opacity=".45"/>
+<path d="M376 48l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="#14a083" opacity=".45"/>
+<rect x="108" y="120" width="110" height="110" rx="20" fill="#fff" filter="url(#sh)"/><rect x="262" y="120" width="110" height="110" rx="20" fill="#fff" filter="url(#sh)"/>
+<path d="M138 160l25-12 25 12v30l-25 12-25-12z" fill="#14a083"/><path d="M138 160l25 12 25-12M163 172v30" stroke="#fff" stroke-width="3" stroke-linejoin="round" opacity=".7"/>
+<rect x="292" y="150" width="50" height="50" rx="8" fill="none" stroke="#c9d8d4" stroke-width="3" stroke-dasharray="6 6"/>
+<path d="M200 96h82l-14-14M282 254h-82l14 14" stroke="#0f7a63" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>

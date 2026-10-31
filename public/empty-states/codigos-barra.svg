@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320" fill="none">
+<defs><filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#0f4f42" flood-opacity=".12"/></filter></defs>
+<ellipse cx="240" cy="168" rx="170" ry="128" fill="#ecf8f4"/>
+<ellipse cx="240" cy="282" rx="130" ry="10" fill="#0f4f42" opacity=".06"/>
+<g fill="#14a083" opacity=".5"><circle cx="92" cy="80" r="5"/><circle cx="398" cy="110" r="4"/><circle cx="378" cy="238" r="6" opacity=".6"/></g>
+<path d="M110 220l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#14a083" opacity=".45"/>
+<path d="M376 48l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="#14a083" opacity=".45"/>
+<rect x="130" y="90" width="220" height="150" rx="18" fill="#fff" filter="url(#sh)"/>
+<rect x="156" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="164" y="112" width="6" height="88" fill="#1f2a2e" opacity=".85"/><rect x="175" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="183" y="112" width="9" height="88" fill="#1f2a2e" opacity=".85"/><rect x="197" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="205" y="112" width="4" height="88" fill="#1f2a2e" opacity=".85"/><rect x="214" y="112" width="8" height="88" fill="#1f2a2e" opacity=".85"/><rect x="227" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="235" y="112" width="5" height="88" fill="#1f2a2e" opacity=".85"/><rect x="245" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="253" y="112" width="9" height="88" fill="#1f2a2e" opacity=".85"/><rect x="267" y="112" width="4" height="88" fill="#1f2a2e" opacity=".85"/><rect x="276" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="284" y="112" width="7" height="88" fill="#1f2a2e" opacity=".85"/><rect x="296" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/><rect x="304" y="112" width="5" height="88" fill="#1f2a2e" opacity=".85"/><rect x="314" y="112" width="9" height="88" fill="#1f2a2e" opacity=".85"/><rect x="328" y="112" width="3" height="88" fill="#1f2a2e" opacity=".85"/>
+<rect x="176" y="212" width="128" height="8" rx="4" fill="#c9d8d4"/>
+<rect x="140" y="152" width="200" height="5" rx="2.5" fill="#e0533f" opacity=".85"/>
+<path d="M300 210l50-14 18 62-36 10z" fill="#0f7a63" filter="url(#sh)"/><rect x="290" y="198" width="66" height="22" rx="8" fill="#14a083" transform="rotate(-16 323 209)"/></svg>

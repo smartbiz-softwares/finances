@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320" fill="none">
+<defs><filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#0f4f42" flood-opacity=".12"/></filter></defs>
+<ellipse cx="240" cy="168" rx="170" ry="128" fill="#ecf8f4"/>
+<ellipse cx="240" cy="282" rx="130" ry="10" fill="#0f4f42" opacity=".06"/>
+<g fill="#14a083" opacity=".5"><circle cx="92" cy="80" r="5"/><circle cx="398" cy="110" r="4"/><circle cx="378" cy="238" r="6" opacity=".6"/></g>
+<path d="M110 220l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#14a083" opacity=".45"/>
+<path d="M376 48l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="#14a083" opacity=".45"/>
+<rect x="150" y="70" width="180" height="190" rx="18" fill="#fff" filter="url(#sh)"/>
+<rect x="172" y="94" width="136" height="88" rx="10" fill="none" stroke="#c9d8d4" stroke-width="3" stroke-dasharray="8 8"/>
+<rect x="172" y="200" width="110" height="10" rx="5" fill="#c9d8d4"/><rect x="172" y="222" width="76" height="10" rx="5" fill="#dde7e4"/>
+<path d="M130 236h220l-22 44H152z" fill="#0f7a63"/><path d="M130 236h68l8 16h68l8-16h68" stroke="#14a083" stroke-width="0" /><path d="M198 236q42 30 84 0" fill="#14a083"/>
+<g filter="url(#sh)"><circle cx="330" cy="82" r="24" fill="#0f7a63"/></g><path d="M330 72v20M320 82h20" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/></svg>

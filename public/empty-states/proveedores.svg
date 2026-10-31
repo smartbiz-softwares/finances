@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320" fill="none">
+<defs><filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#0f4f42" flood-opacity=".12"/></filter></defs>
+<ellipse cx="240" cy="168" rx="170" ry="128" fill="#ecf8f4"/>
+<ellipse cx="240" cy="282" rx="130" ry="10" fill="#0f4f42" opacity=".06"/>
+<g fill="#14a083" opacity=".5"><circle cx="92" cy="80" r="5"/><circle cx="398" cy="110" r="4"/><circle cx="378" cy="238" r="6" opacity=".6"/></g>
+<path d="M110 220l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#14a083" opacity=".45"/>
+<path d="M376 48l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="#14a083" opacity=".45"/>
+<rect x="110" y="132" width="170" height="104" rx="12" fill="#0f7a63" filter="url(#sh)"/>
+<path d="M286 160h56l34 40v36h-90z" fill="#14a083"/><rect x="300" y="172" width="38" height="26" rx="5" fill="#fff" opacity=".75"/>
+<rect x="134" y="160" width="80" height="10" rx="5" fill="#fff" opacity=".5"/><rect x="134" y="182" width="52" height="10" rx="5" fill="#fff" opacity=".35"/>
+<circle cx="156" cy="244" r="22" fill="#1f2a2e"/><circle cx="156" cy="244" r="8" fill="#fff"/><circle cx="330" cy="244" r="22" fill="#1f2a2e"/><circle cx="330" cy="244" r="8" fill="#fff"/>
+<path d="M70 170h28M60 196h38M80 222h18" stroke="#14a083" stroke-width="6" stroke-linecap="round" opacity=".45"/>
+<g filter="url(#sh)"><circle cx="290" cy="96" r="24" fill="#0f7a63"/></g><path d="M290 86v20M280 96h20" stroke="#fff" stroke-width="4.5" stroke-linecap="round"/></svg>
