@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="512" viewBox="0 0 1280 512">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f7faf9"/><stop offset="1" stop-color="#e9f0f4"/></linearGradient>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#0f3f36" flood-opacity=".13"/></filter>
+<filter id="sh2" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0f3f36" flood-opacity=".18"/></filter>
+</defs>
+<rect width="1280" height="512" rx="36" fill="url(#bg)"/>
+<circle cx="640" cy="560" r="300" fill="#14a083" opacity=".06"/>
+<g font-family="Inter, sans-serif">
+<path transform="translate(90 110) scale(1.3)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.6"/><path transform="translate(1210 420) scale(1.1)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.6"/><path transform="translate(420 70) scale(0.8)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.5"/><path transform="translate(870 470) scale(0.9)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.45"/>
+<g stroke="#14a083" stroke-width="3" stroke-linecap="round" opacity=".6"><path d="M386 118l-12-14M402 108l-4-18M370 132l-18-6"/></g>
+<g transform="rotate(-7 250 290)">
+<rect x="110" y="150" width="290" height="250" rx="26" fill="#fff" filter="url(#sh)"/>
+<rect x="134" y="174" width="52" height="52" rx="14" fill="#ecf8f4" /><g transform="translate(160 200)" fill="none" stroke="#0f7a63" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M-12-4v14h24V-4"/><path d="M-14-12h28l2 7a5 5 0 0 1-10 2 5 5 0 0 1-10 0 5 5 0 0 1-10-2z"/><path d="M-4 10V3h8v7"/></g>
+<text x="200" y="196" font-size="20" fill="#1f2a2e" font-weight="600" text-anchor="start">Almacén Central</text><text x="200" y="220" font-size="15" fill="#6b7a80" font-weight="500" text-anchor="start">La Habana</text>
+<rect x="134" y="246" width="242" height="74" rx="14" fill="#f4f8f7" />
+<text x="150" y="272" font-size="12" fill="#6b7a80" font-weight="600" text-anchor="start">INVERSIÓN</text><text x="150" y="302" font-size="24" fill="#1f2a2e" font-weight="700" text-anchor="start">$2.45M</text>
+<text x="262" y="272" font-size="12" fill="#6b7a80" font-weight="600" text-anchor="start">VALOR VENTA</text><text x="262" y="302" font-size="24" fill="#0f7a63" font-weight="700" text-anchor="start">$3.58M</text>
+<rect x="134" y="340" width="242" height="10" rx="5" fill="#e9efed" /><rect x="134" y="340" width="150" height="10" rx="5" fill="#0f7a63" />
+<rect x="134" y="362" width="120" height="22" rx="11" fill="#d6f1ea" /><text x="194" y="378" font-size="13" fill="#0f7a63" font-weight="700" text-anchor="middle">8,542 u.</text>
+</g><g transform="rotate(7 1030 290)">
+<path d="M910 150h250v226l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9l-9 9-9-9V150z" fill="#fff" filter="url(#sh)"/>
+<text x="1035" y="190" font-size="16" fill="#1f2a2e" font-weight="800" text-anchor="middle">TICKET DE VENTA</text>
+<path d="M934 206h202" stroke="#d3dedb" stroke-width="2" stroke-dasharray="5 5"/>
+<text x="934" y="236" font-size="15" fill="#6b7a80" font-weight="500" text-anchor="start">Refresco 1L</text><text x="1136" y="236" font-size="15" fill="#1f2a2e" font-weight="700" text-anchor="end">14</text><text x="934" y="264" font-size="15" fill="#6b7a80" font-weight="500" text-anchor="start">Pan de molde</text><text x="1136" y="264" font-size="15" fill="#1f2a2e" font-weight="700" text-anchor="end">9</text><text x="934" y="292" font-size="15" fill="#6b7a80" font-weight="500" text-anchor="start">Aceite 1L</text><text x="1136" y="292" font-size="15" fill="#1f2a2e" font-weight="700" text-anchor="end">6</text>
+<path d="M934 314h202" stroke="#d3dedb" stroke-width="2" stroke-dasharray="5 5"/>
+<text x="934" y="344" font-size="16" fill="#1f2a2e" font-weight="800" text-anchor="start">TOTAL</text><text x="1136" y="344" font-size="18" fill="#0f7a63" font-weight="800" text-anchor="end">$14,200</text>
+</g>
+<g transform="translate(1150 128)" filter="url(#sh)"><circle r="34" fill="#0f7a63"/></g>
+<path d="M1150 112v32M1136 128l14 16 14-16" stroke="#fff" stroke-width="0"/>
+<g transform="translate(1150 128)" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M-9-2h18v12h-18z"/><path d="M-11-8h22v6h-22zM0-8v18"/><path d="M0-8c-3-6-10-6-8-1M0-8c3-6 10-6 8-1"/></g><g>
+<rect x="450" y="70" width="380" height="370" rx="30" fill="#fff" filter="url(#sh2)"/>
+<text x="480" y="118" font-size="22" fill="#1f2a2e" font-weight="600" text-anchor="start">Panel de Control</text><rect x="722" y="96" width="82" height="30" rx="15" fill="#d6f1ea" /><text x="763" y="117" font-size="14" fill="#0f7a63" font-weight="700" text-anchor="middle">↗ 28.6%</text>
+<rect x="480" y="140" width="320" height="190" rx="20" fill="#ecf8f4" />
+<text x="504" y="176" font-size="13" fill="#0f7a63" font-weight="700" text-anchor="start">UTILIDAD</text><text x="504" y="226" font-size="48" fill="#0f7a63" font-weight="600" text-anchor="start">$5.5K</text>
+<rect x="504" y="240" width="90" height="24" rx="12" fill="#fff" /><text x="549" y="257" font-size="13" fill="#0f7a63" font-weight="700" text-anchor="middle">↗ 283%</text>
+<path d="M500 332 L540 326 L580 328 L620 314 L660 318 L700 300 L740 292 L780 274L780 330L500 330Z" fill="#14a083" opacity=".15"/><path d="M500 332 L540 326 L580 328 L620 314 L660 318 L700 300 L740 292 L780 274" stroke="#0f7a63" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="480" y="346" width="154" height="70" rx="16" fill="#f4f8f7" /><text x="498" y="372" font-size="12" fill="#6b7a80" font-weight="600" text-anchor="start">INGRESOS</text><text x="498" y="402" font-size="22" fill="#1f2a2e" font-weight="700" text-anchor="start">$19.4K</text>
+<rect x="646" y="346" width="154" height="70" rx="16" fill="#f4f8f7" /><text x="664" y="372" font-size="12" fill="#6b7a80" font-weight="600" text-anchor="start">GASTOS</text><text x="664" y="402" font-size="22" fill="#1f2a2e" font-weight="700" text-anchor="start">$13.8K</text>
+</g>
+</g></svg>
