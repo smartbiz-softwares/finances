@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Recibo de {{empresa_nombre}}</title>
+</head>
+<!-- Correo HTML: tablas y estilos en línea para que se vea igual en Gmail, Outlook y Apple Mail. -->
+<body style="margin:0;padding:0;background:#EEF3F0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#13261E;">
+<div style="display:none;max-height:0;overflow:hidden;">Recibo {{recibo_numero}} · {{total}} pagado el {{fecha_pago}}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EEF3F0;">
+<tr><td align="center" style="padding:40px 16px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+  <!-- Marca -->
+  <tr><td style="padding:0 4px 24px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      <td style="vertical-align:middle;"><img src="{{logo_url}}" width="40" height="40" alt="" style="display:block;border:0;border-radius:50%;"></td>
+      <td style="vertical-align:middle;padding-left:12px;font-size:20px;font-weight:700;letter-spacing:-0.3px;color:#0A4F39;">Smart<span style="color:#0E7352;font-weight:500;">Business</span></td>
+    </tr></table>
+  </td></tr>
+
+  <!-- Resumen -->
+  <tr><td style="background:#FFFFFF;border-radius:16px;border-top:5px solid #0E7352;padding:32px 32px 28px;">
+    <p style="margin:0 0 6px;font-size:14px;color:#5B6F66;">Recibo de {{empresa_nombre}}</p>
+    <p style="margin:0;font-size:38px;line-height:1.1;font-weight:700;color:#13261E;">{{total}}</p>
+    <p style="margin:8px 0 0;font-size:14px;color:#5B6F66;">
+      <span style="display:inline-block;background:#E3F3EC;color:#0A6B4A;font-weight:600;font-size:12px;padding:3px 10px;border-radius:999px;">Pagado</span>
+      &nbsp;{{fecha_pago}}
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px;"><tr>
+      <td style="background:#0E7352;border-radius:8px;"><a href="{{enlace_factura}}" style="display:inline-block;padding:11px 18px;font-size:14px;font-weight:600;color:#FFFFFF;text-decoration:none;">Descargar factura</a></td>
+      <td style="width:10px;"></td>
+      <td style="border:1px solid #BFD6CB;border-radius:8px;"><a href="{{enlace_recibo}}" style="display:inline-block;padding:10px 18px;font-size:14px;font-weight:600;color:#0A4F39;text-decoration:none;">Descargar recibo</a></td>
+    </tr></table>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;border-top:1px solid #E4ECE8;font-size:14px;">
+      <tr><td style="padding:14px 0 6px;color:#5B6F66;">Número de recibo</td><td align="right" style="padding:14px 0 6px;">{{recibo_numero}}</td></tr>
+      <tr><td style="padding:6px 0;color:#5B6F66;">Número de factura</td><td align="right" style="padding:6px 0;">{{factura_numero}}</td></tr>
+      <tr><td style="padding:6px 0 0;color:#5B6F66;">Método de pago</td><td align="right" style="padding:6px 0 0;">{{metodo_pago}}</td></tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="height:16px;"></td></tr>
+
+  <!-- Detalle -->
+  <tr><td style="background:#FFFFFF;border-radius:16px;padding:28px 32px;">
+    <p style="margin:0 0 18px;font-size:16px;font-weight:700;">Recibo #{{recibo_numero}}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+      {{filas_correo}}
+      <tr><td colspan="2" style="border-top:1px solid #E4ECE8;padding-top:14px;"></td></tr>
+      <tr><td style="padding:4px 0;color:#5B6F66;">Subtotal</td><td align="right" style="padding:4px 0;">{{subtotal}}</td></tr>
+      {{fila_impuestos_correo}}
+      <tr><td style="padding:12px 0 0;font-weight:700;">Importe pagado</td><td align="right" style="padding:12px 0 0;font-weight:700;color:#0A6B4A;">{{total}}</td></tr>
+    </table>
+  </td></tr>
+
+  <!-- Pie -->
+  <tr><td style="padding:24px 8px 0;font-size:13px;line-height:1.6;color:#5B6F66;text-align:center;">
+    ¿Preguntas sobre este cobro? Escríbenos a
+    <a href="mailto:{{empresa_correo}}" style="color:#0E7352;font-weight:600;text-decoration:none;">{{empresa_correo}}</a>.<br>
+    <span style="color:#8A9C94;">{{empresa_nombre}} · {{empresa_direccion_linea}}</span>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

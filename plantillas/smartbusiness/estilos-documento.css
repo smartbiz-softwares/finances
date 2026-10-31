@@ -1,0 +1,67 @@
+/* Estilos compartidos por factura.html y recibo.html (tamaño carta, listos para PDF). */
+@page { size: Letter; margin: 0; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #13261E;
+  font-size: 12.5px;
+  line-height: 1.5;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.hoja { width: 8.5in; min-height: 11in; position: relative; padding: 0 0.7in 0.9in; }
+.banda { height: 10px; background: linear-gradient(90deg, #0A4F39, #0E7352 55%, #23A06F); margin: 0 -0.7in; }
+
+.cabecera { display: flex; justify-content: space-between; align-items: flex-start; padding-top: 0.5in; }
+.marca { display: flex; align-items: center; gap: 12px; }
+.marca img { width: 48px; height: 48px; border-radius: 50%; }
+.marca .nombre { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; color: #0A4F39; }
+.marca .nombre span { color: #0E7352; font-weight: 500; }
+.tipo { text-align: right; }
+.tipo h1 { margin: 0; font-size: 30px; letter-spacing: -0.6px; }
+.tipo .estado {
+  display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+  text-transform: uppercase; padding: 3px 10px; border-radius: 999px;
+}
+.estado.pagado { background: #E3F3EC; color: #0A6B4A; }
+.estado.pendiente { background: #FFF4DE; color: #8A5A00; }
+
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 3px 18px; margin-top: 28px; }
+.meta dt { color: #5B6F66; }
+.meta dd { margin: 0; font-weight: 600; }
+
+.partes { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 28px; }
+.partes h3 { margin: 0 0 6px; font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase; color: #0E7352; }
+.partes p { margin: 0; }
+.partes strong { display: block; margin-bottom: 2px; }
+
+.destacado {
+  margin-top: 30px; padding: 18px 22px; border-radius: 12px; background: #F2F7F4;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.destacado .monto { font-size: 24px; font-weight: 700; letter-spacing: -0.4px; }
+.destacado .texto { color: #5B6F66; }
+.destacado a { color: #FFFFFF; background: #0E7352; padding: 9px 16px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+
+table.conceptos { width: 100%; border-collapse: collapse; margin-top: 28px; }
+.conceptos th {
+  text-align: left; font-size: 10.5px; letter-spacing: 0.6px; text-transform: uppercase; color: #5B6F66;
+  font-weight: 600; padding: 0 0 8px; border-bottom: 2px solid #0E7352;
+}
+.conceptos td { padding: 12px 0; border-bottom: 1px solid #E4ECE8; vertical-align: top; }
+.conceptos .num { text-align: right; white-space: nowrap; }
+.conceptos .periodo { color: #5B6F66; font-size: 11.5px; }
+
+.totales { margin-left: auto; width: 46%; margin-top: 14px; border-collapse: collapse; }
+.totales td { padding: 5px 0; }
+.totales td:last-child { text-align: right; }
+.totales .final td { border-top: 1px solid #13261E; padding-top: 9px; font-weight: 700; font-size: 14px; }
+
+h2.seccion { margin: 40px 0 0; font-size: 16px; }
+
+.pie {
+  position: absolute; left: 0.7in; right: 0.7in; bottom: 0.45in;
+  border-top: 1px solid #E4ECE8; padding-top: 12px;
+  display: flex; justify-content: space-between; color: #8A9C94; font-size: 11px;
+}

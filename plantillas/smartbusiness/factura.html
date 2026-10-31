@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Factura {{factura_numero}}</title>
+<style>{{estilos}}</style>
+</head>
+<body>
+<div class="hoja">
+  <div class="banda"></div>
+
+  <div class="cabecera">
+    <div class="marca">
+      <img src="{{logo_url}}" alt="">
+      <div class="nombre">Smart<span>Business</span></div>
+    </div>
+    <div class="tipo">
+      <h1>Factura</h1>
+      <span class="estado pendiente">Por pagar</span>
+    </div>
+  </div>
+
+  <dl class="meta">
+    <dt>Número de factura</dt><dd>{{factura_numero}}</dd>
+    <dt>Fecha de emisión</dt><dd>{{factura_fecha_emision}}</dd>
+    <dt>Fecha de vencimiento</dt><dd>{{factura_fecha_vencimiento}}</dd>
+  </dl>
+
+  <div class="partes">
+    <div>
+      <h3>De</h3>
+      <p><strong>{{empresa_nombre}}</strong>{{empresa_direccion}}<br>{{empresa_correo}}</p>
+    </div>
+    <div>
+      <h3>Facturar a</h3>
+      <p><strong>{{cliente_nombre}}</strong>{{cliente_direccion}}<br>{{cliente_correo}}</p>
+    </div>
+  </div>
+
+  <div class="destacado">
+    <div>
+      <div class="monto">{{total}} {{moneda}}</div>
+      <div class="texto">vence el {{factura_fecha_vencimiento}}</div>
+    </div>
+    <a href="{{enlace_pago}}">Pagar en línea</a>
+  </div>
+
+  <table class="conceptos">
+    <thead><tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Precio unitario</th><th class="num">Importe</th></tr></thead>
+    <tbody>{{filas_documento}}</tbody>
+  </table>
+
+  <table class="totales">
+    <tr><td>Subtotal</td><td>{{subtotal}}</td></tr>
+    {{fila_impuestos_documento}}
+    <tr class="final"><td>Importe a pagar</td><td>{{total}} {{moneda}}</td></tr>
+  </table>
+
+  <div class="pie">
+    <span>{{empresa_nombre}} · {{empresa_web}}</span>
+    <span>Factura {{factura_numero}} · Página 1 de 1</span>
+  </div>
+</div>
+</body>
+</html>

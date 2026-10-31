@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Recibo {{recibo_numero}}</title>
+<style>{{estilos}}</style>
+</head>
+<body>
+<div class="hoja">
+  <div class="banda"></div>
+
+  <div class="cabecera">
+    <div class="marca">
+      <img src="{{logo_url}}" alt="">
+      <div class="nombre">Smart<span>Business</span></div>
+    </div>
+    <div class="tipo">
+      <h1>Recibo</h1>
+      <span class="estado pagado">Pagado</span>
+    </div>
+  </div>
+
+  <dl class="meta">
+    <dt>Número de factura</dt><dd>{{factura_numero}}</dd>
+    <dt>Número de recibo</dt><dd>{{recibo_numero}}</dd>
+    <dt>Fecha de pago</dt><dd>{{fecha_pago}}</dd>
+  </dl>
+
+  <div class="partes">
+    <div>
+      <h3>De</h3>
+      <p><strong>{{empresa_nombre}}</strong>{{empresa_direccion}}<br>{{empresa_correo}}</p>
+    </div>
+    <div>
+      <h3>Facturar a</h3>
+      <p><strong>{{cliente_nombre}}</strong>{{cliente_direccion}}<br>{{cliente_correo}}</p>
+    </div>
+  </div>
+
+  <div class="destacado">
+    <div>
+      <div class="monto">{{total}} pagado</div>
+      <div class="texto">el {{fecha_pago}}</div>
+    </div>
+  </div>
+
+  <table class="conceptos">
+    <thead><tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Precio unitario</th><th class="num">Importe</th></tr></thead>
+    <tbody>{{filas_documento}}</tbody>
+  </table>
+
+  <table class="totales">
+    <tr><td>Subtotal</td><td>{{subtotal}}</td></tr>
+    {{fila_impuestos_documento}}
+    <tr><td>Total</td><td>{{total}}</td></tr>
+    <tr class="final"><td>Importe pagado</td><td>{{total}}</td></tr>
+  </table>
+
+  <h2 class="seccion">Historial de pagos</h2>
+  <table class="conceptos" style="margin-top:12px">
+    <thead><tr><th>Método de pago</th><th>Fecha</th><th class="num">Importe pagado</th><th class="num">Número de recibo</th></tr></thead>
+    <tbody><tr><td>{{metodo_pago}}</td><td>{{fecha_pago}}</td><td class="num">{{total}}</td><td class="num">{{recibo_numero}}</td></tr></tbody>
+  </table>
+
+  <div class="pie">
+    <span>{{empresa_nombre}} · {{empresa_web}}</span>
+    <span>Recibo {{recibo_numero}} · Página 1 de 1</span>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "empresa_nombre": "SmartBusiness",
+  "empresa_direccion": "8260 Northwest 5th Terrace, 341<br>Miami, Florida 33126<br>Estados Unidos",
+  "empresa_correo": "smartbusinesserp@gmail.com",
+  "empresa_web": "smartbusiness.app",
+
+  "cliente_nombre": "Cliente de ejemplo S.A.",
+  "cliente_direccion": "Calle Ejemplo 123<br>Ciudad, Estado 00000<br>País",
+  "cliente_correo": "cliente@ejemplo.com",
+
+  "factura_numero": "SB-2026-0005",
+  "factura_fecha_emision": "26 de septiembre de 2026",
+  "factura_fecha_vencimiento": "26 de septiembre de 2026",
+  "recibo_numero": "2628-9731-3030",
+  "fecha_pago": "1 de octubre de 2026",
+  "metodo_pago": "Mastercard •••• 9976",
+  "moneda": "USD",
+
+  "enlace_pago": "https://smartbusiness.app/pagar/SB-2026-0005",
+  "enlace_factura": "https://smartbusiness.app/facturas/SB-2026-0005.pdf",
+  "enlace_recibo": "https://smartbusiness.app/recibos/2628-9731-3030.pdf",
+  "logo_url": "logo.png",
+
+  "conceptos": [
+    {
+      "descripcion": "SmartBusiness ERP — Plan Pro",
+      "periodo": "26 sep – 26 oct 2026",
+      "cantidad": 1,
+      "precio": 20.0
+    }
+  ],
+  "impuestos": 0
+}
