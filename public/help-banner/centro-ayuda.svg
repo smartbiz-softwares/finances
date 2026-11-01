@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780">
+<defs>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f3f36" flood-opacity=".14"/></filter>
+<filter id="sh2" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#0f3f36" flood-opacity=".18"/></filter>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3f3ee"/><stop offset="1" stop-color="#eef6f3"/></linearGradient>
+</defs>
+
+<circle cx="760" cy="400" r="330" fill="#14a083" opacity=".07"/><circle cx="760" cy="400" r="230" fill="#14a083" opacity=".06"/>
+<g font-family="Inter, sans-serif">
+<path transform="translate(250 130) scale(1.6)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.55"/><path transform="translate(1250 140) scale(1.2)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.55"/><path transform="translate(1180 690) scale(1.4)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.45"/><path transform="translate(300 640) scale(1)" d="M0-14l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#14a083" opacity="0.45"/>
+<g fill="#14a083" opacity=".45"><circle cx="190" cy="420" r="7"/><circle cx="1290" cy="420" r="6"/><circle cx="560" cy="80" r="5"/></g>
+
+<!-- Guía principal -->
+<g>
+<rect x="430" y="110" width="560" height="560" rx="34" fill="#fff" filter="url(#sh2)"/>
+<rect x="466" y="146" width="140" height="34" rx="17" fill="#d6f1ea" /><text x="536" y="169" font-size="16" fill="#0f7a63" font-weight="700" text-anchor="middle">Guía · 3 min</text>
+<text x="466" y="232" font-size="30" fill="#1f2a2e" font-weight="700" text-anchor="start">Cómo hacer el cierre de caja</text>
+<rect x="466" y="262" width="488" height="200" rx="20" fill="#f3f7f6" />
+<!-- captura simulada -->
+<rect x="490" y="284" width="440" height="30" rx="10" fill="#fff" /><rect x="504" y="295" width="120" height="9" rx="4.5" fill="#d3dedb" /><rect x="860" y="292" width="56" height="14" rx="7" fill="#14a083" />
+<rect x="490" y="326" width="210" height="112" rx="12" fill="#fff" /><rect x="506" y="344" width="70" height="9" rx="4.5" fill="#d3dedb" /><text x="506" y="388" font-size="26" fill="#0f7a63" font-weight="700" text-anchor="start">$14,200</text><rect x="506" y="404" width="120" height="9" rx="4.5" fill="#e3ecea" />
+<rect x="716" y="326" width="214" height="112" rx="12" fill="#fff" /><rect x="732" y="344" width="120" height="9" rx="4.5" fill="#e3ecea" /><rect x="880" y="344" width="34" height="9" rx="4.5" fill="#d3dedb" /><rect x="732" y="372" width="120" height="9" rx="4.5" fill="#e3ecea" /><rect x="880" y="372" width="34" height="9" rx="4.5" fill="#d3dedb" /><rect x="732" y="400" width="120" height="9" rx="4.5" fill="#e3ecea" /><rect x="880" y="400" width="34" height="9" rx="4.5" fill="#d3dedb" />
+<circle cx="870" cy="300" r="26" fill="none" stroke="#e0a43a" stroke-width="4"/>
+<path d="M890 322l26 26" stroke="#e0a43a" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 9"/>
+<!-- pasos -->
+<circle cx="486" cy="510" r="14" fill="#0f7a63"/><path d="M480.4 510l3.9200000000000004 4.2 7.28-8.4" stroke="#fff" stroke-width="3.08" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="514" y="517" font-size="20" fill="#6b7a80" font-weight="500" text-anchor="start">Abre Ventas y Caja</text><circle cx="486" cy="558" r="14" fill="#0f7a63"/><path d="M480.4 558l3.9200000000000004 4.2 7.28-8.4" stroke="#fff" stroke-width="3.08" fill="none" stroke-linecap="round" stroke-linejoin="round"/><text x="514" y="565" font-size="20" fill="#6b7a80" font-weight="500" text-anchor="start">Cuenta el efectivo</text><circle cx="486" cy="606" r="13" fill="#fff" stroke="#0f7a63" stroke-width="3"/><text x="486" y="611" font-size="14" fill="#0f7a63" font-weight="800" text-anchor="middle">3</text><text x="514" y="613" font-size="20" fill="#1f2a2e" font-weight="700" text-anchor="start">Imprime el ticket</text>
+<rect x="800" y="600" width="154" height="44" rx="14" fill="#0f7a63" /><text x="877" y="628" font-size="17" fill="#fff" font-weight="700" text-anchor="middle">Siguiente →</text>
+</g>
+
+<!-- Buscador flotante -->
+<g transform="rotate(-5 260 300)">
+<rect x="110" y="250" width="330" height="72" rx="36" fill="#fff" filter="url(#sh)"/>
+<g transform="translate(152 286)" fill="none" stroke="#0f7a63" stroke-width="3.5" stroke-linecap="round"><circle r="12"/><path d="M9 9l10 10"/></g>
+<text x="186" y="293" font-size="20" fill="#1f2a2e" font-weight="500" text-anchor="start">crear producto</text><rect x="340" y="275" width="2.5" height="24" fill="#0f7a63"/>
+</g>
+<!-- Resultados -->
+<g transform="rotate(-5 260 420)">
+<rect x="130" y="340" width="290" height="150" rx="20" fill="#fff" filter="url(#sh)"/>
+<rect x="152" y="362" width="26" height="26" rx="7" fill="#0f7a63" opacity=".9"/><text x="190" y="382" font-size="17" fill="#1f2a2e" font-weight="500" text-anchor="start">Crear un producto</text><rect x="152" y="402" width="26" height="26" rx="7" fill="#14a083" opacity=".9"/><text x="190" y="422" font-size="17" fill="#1f2a2e" font-weight="500" text-anchor="start">Importar desde Excel</text><rect x="152" y="442" width="26" height="26" rx="7" fill="#8fd3c1" opacity=".9"/><text x="190" y="462" font-size="17" fill="#1f2a2e" font-weight="500" text-anchor="start">Códigos de barra</text>
+</g>
+
+<!-- Video tutorial -->
+<g transform="rotate(5 1130 290)">
+<rect x="1010" y="190" width="260" height="190" rx="24" fill="#fff" filter="url(#sh)"/>
+<rect x="1028" y="208" width="224" height="124" rx="16" fill="#0f7a63" />
+<path d="M1028 300l60-40 46 30 40-24 78 52v-2q0 16-16 16h-192q-16 0-16-16z" fill="#14a083" opacity=".7"/>
+<circle cx="1140" cy="270" r="28" fill="#fff"/><path d="M1132 256v28l22-14z" fill="#0f7a63"/>
+<rect x="1028" y="348" width="150" height="10" rx="5" fill="#d3dedb" /><rect x="1028" y="348" width="90" height="10" rx="5" fill="#14a083" /><text x="1252" y="360" font-size="14" fill="#6b7a80" font-weight="600" text-anchor="end">2:40</text>
+</g>
+
+<!-- Burbuja Hera -->
+<g>
+<rect x="990" y="470" width="350" height="120" rx="28" fill="#fff" filter="url(#sh)"/>
+<path d="M1040 590l-10 34 40-34z" fill="#fff"/>
+<circle cx="1052" cy="530" r="30" fill="#d6f1ea"/>
+<g transform="translate(1052 530)" fill="#0f7a63"><path d="M0-16l4.5 11.5L16 0 4.5 4.5 0 16l-4.5-11.5L-16 0l11.5-4.5z"/></g>
+<text x="1096" y="520" font-size="16" fill="#0f7a63" font-weight="700" text-anchor="start">Hera</text><text x="1096" y="552" font-size="19" fill="#1f2a2e" font-weight="600" text-anchor="start">¿Te explico paso a paso?</text>
+<g fill="#d3dedb"><circle cx="1100" cy="572" r="4"/><circle cx="1114" cy="572" r="4"/><circle cx="1128" cy="572" r="4"/></g>
+</g>
+
+<!-- Signo de ayuda -->
+<g filter="url(#sh)"><circle cx="420" cy="120" r="46" fill="#0f7a63"/></g>
+<text x="420" y="138" font-size="52" fill="#fff" font-weight="800" text-anchor="middle">?</text>
+</g></svg>
