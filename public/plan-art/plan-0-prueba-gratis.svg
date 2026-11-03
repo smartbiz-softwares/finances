@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="340" viewBox="0 0 600 340">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e1f4ee"/><stop offset=".6" stop-color="#f5fbf9"/><stop offset="1" stop-color="#e7eff9"/></linearGradient>
+<filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="11" flood-color="#062f26" flood-opacity="0.14"/></filter>
+<pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="#0f7a63" opacity="0.1"/></pattern>
+<clipPath id="c"><rect width="600" height="340" rx="28"/></clipPath>
+</defs>
+<g clip-path="url(#c)">
+<rect width="600" height="340" fill="url(#bg)"/><rect width="600" height="340" fill="url(#dots)"/>
+<circle cx="540" cy="30" r="130" fill="#14a083" opacity="0.07"/>
+<ellipse cx="300" cy="300" rx="230" ry="16" fill="#062f26" opacity="0.07"/>
+<path d="M70 70l5 12 12 5-12 5-5 12-5-12-12-5 12-5z" fill="#14a083" opacity=".45"/>
+<path d="M540 250l4 9 9 4-9 4-4 9-4-9-9-4 9-4z" fill="#14a083" opacity=".6"/>
+
+<g transform="rotate(-4 250 180)">
+<rect x="150" y="70" width="200" height="200" rx="26" fill="#fff" filter="url(#sh)"/>
+<path d="M150 96a26 26 0 0 1 26-26h148a26 26 0 0 1 26 26v26H150z" fill="#0f7a63"/>
+<rect x="190" y="52" width="16" height="40" rx="8" fill="#1f2a2e"/><rect x="294" y="52" width="16" height="40" rx="8" fill="#1f2a2e"/>
+<text x="250" y="222" font-family="Inter, sans-serif" font-size="88" font-weight="800" fill="#0f7a63" text-anchor="middle">30</text>
+<text x="250" y="252" font-family="Inter, sans-serif" font-size="18" font-weight="700" fill="#14a083" text-anchor="middle" letter-spacing="3">DÍAS</text>
+</g>
+<g transform="rotate(8 420 220)">
+<rect x="346" y="168" width="150" height="96" rx="14" fill="#9bd6c6" filter="url(#sh)"/>
+<rect x="346" y="188" width="150" height="18" fill="#5fbfa6"/>
+<rect x="362" y="222" width="30" height="22" rx="4" fill="#efbd4c"/>
+<rect x="404" y="228" width="70" height="8" rx="4" fill="#fff" opacity=".7"/>
+</g>
+<g filter="url(#sh)"><circle cx="476" cy="166" r="30" fill="#fff"/></g>
+<circle cx="476" cy="166" r="22" fill="none" stroke="#c0533f" stroke-width="6"/><path d="M461 181l30-30" stroke="#c0533f" stroke-width="6" stroke-linecap="round"/>
+<g transform="translate(120 230)" filter="url(#sh)"><rect x="-34" y="-20" width="68" height="54" rx="8" fill="#14a083"/><rect x="-40" y="-34" width="80" height="20" rx="6" fill="#0f7a63"/></g>
+<path d="M120 196v68" stroke="#efbd4c" stroke-width="10"/><rect x="80" y="219" width="80" height="9" fill="#efbd4c"/>
+<path d="M120 196c-8-16-30-18-26-4 2 6 14 6 26 4zM120 196c8-16 30-18 26-4-2 6-14 6-26 4z" fill="none" stroke="#efbd4c" stroke-width="7" stroke-linejoin="round"/></g></svg>
