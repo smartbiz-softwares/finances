@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs>
+<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#6d28d9"/></linearGradient>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#efe8ff"/><stop offset=".6" stop-color="#faf8ff"/><stop offset="1" stop-color="#e9f0fb"/></linearGradient>
+<filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#1b1035" flood-opacity="0.16"/></filter>
+<pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.5" fill="#6d28d9" opacity="0.1"/></pattern>
+<clipPath id="c"><rect width="600" height="240" rx="24"/></clipPath></defs><g transform="translate(150 146) scale(1)">
+
+<circle r="104" fill="#ede9fe" filter="url(#sh)"/>
+<circle r="92" fill="#fff"/>
+<circle r="74" fill="url(#g)"/>
+<circle r="74" fill="none" stroke="#fff" stroke-opacity=".25" stroke-width="2"/>
+<path d="M-60-30a74 74 0 0 1 50-42" stroke="#fff" stroke-opacity=".35" stroke-width="8" fill="none" stroke-linecap="round"/>
+<g fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" ><rect x="-26" y="-30" width="52" height="66" rx="10"/><path d="M-9-30v-10h18v10"/><circle cx="0" cy="-4" r="9"/><path d="M-14 22q14-16 28 0"/></g>
+<circle cx="0" cy="98" r="6" fill="#8b5cf6" stroke="#fff" stroke-width="3"/>
+</g></svg>
